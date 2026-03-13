@@ -67,6 +67,10 @@ export async function POST(req: Request) {
       process.env.SEEDREAM_SIZE ||
       (provider === "ark" ? "2K" : "2048x2048")
 
+    const imagePayload =
+      provider === "ark" ? `data:image/png;base64,${image}` : image
+    const responseFormat = provider === "ark" ? "b64_json" : "url"
+
     const response = await fetch(endpoint, {
       method: "POST",
       headers: {
@@ -76,9 +80,9 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         model: process.env.SEEDREAM_MODEL || DEFAULT_MODEL,
         prompt: `A masterpiece, 8k uhd, highly detailed, photorealistic architectural photography of a room, ${theme} interior design style, cozy atmosphere, professional rendering`,
-        image,
+        image: imagePayload,
         size,
-        response_format: "url",
+        response_format: responseFormat,
         watermark: false
       })
     })
