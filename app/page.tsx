@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Cat } from 'lucide-react';
+import { saveImage } from './lib/imageStore';
 
 const themes = ['日式原木风', '法式复古', '极简奶油', '奶油原木', '北欧清新', '侘寂风'];
 const loadingMessages = [
@@ -80,9 +81,16 @@ export default function Page() {
       }
 
       try {
-        sessionStorage.setItem('nookai_result_image', data.imageUrl);
+        const storedId = await saveImage(data.imageUrl);
+        router.push(`/result?id=${encodeURIComponent(storedId)}`);
+        return;
       } catch {
-        // Ignore storage errors and continue to navigation.
+        // Fallback to sessionStorage if IndexedDB is unavailable.
+        try {
+          sessionStorage.setItem('nookai_result_image', data.imageUrl);
+        } catch {
+          // Ignore storage errors and continue to navigation.
+        }
       }
       router.push('/result');
     } catch (err) {

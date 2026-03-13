@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Cat, X } from 'lucide-react';
+import { loadImage } from '../lib/imageStore';
 
 const spring = { type: 'spring', stiffness: 260, damping: 22 } as const;
 
@@ -29,14 +30,42 @@ export default function ResultClient() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const stored = sessionStorage.getItem('nookai_result_image');
-    if (stored) {
-      setImageUrl(stored);
-      return;
-    }
+
     const params = new URLSearchParams(window.location.search);
-    const img = params.get('img');
-    setImageUrl(img ? decodeURIComponent(img) : '');
+    const id = params.get('id');
+
+    let isActive = true;
+
+    const load = async () => {
+      if (id) {
+        try {
+          const storedImage = await loadImage(id);
+          if (storedImage && isActive) {
+            setImageUrl(storedImage);
+            return;
+          }
+        } catch {
+          // Ignore and fall back to sessionStorage/query param.
+        }
+      }
+
+      const stored = sessionStorage.getItem('nookai_result_image');
+      if (stored && isActive) {
+        setImageUrl(stored);
+        return;
+      }
+
+      const img = params.get('img');
+      if (isActive) {
+        setImageUrl(img ? decodeURIComponent(img) : '');
+      }
+    };
+
+    load();
+
+    return () => {
+      isActive = false;
+    };
   }, []);
 
   return (
