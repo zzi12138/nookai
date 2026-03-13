@@ -2,36 +2,25 @@ import { NextResponse } from "next/server"
 
 export const runtime = "nodejs"
 
-const OPENAI_IMAGES_EDIT_URL = "https://api.openai.com/v1/images/edits"
+const DEFAULT_BASE_URL = "https://operator.las.cn-beijing.volces.com"
+const DEFAULT_PATH = "/api/v1/online/images/generations"
+const DEFAULT_MODEL = "doubao-seedream-4-0-250828"
 
-type OpenAIImageResult = {
-  data?: Array<{ b64_json?: string; url?: string }>
+type SeedreamResponse = {
+  data?: Array<{ url?: string; b64_json?: string; size?: string }>
+  code?: number
+  message?: string
   error?: { message?: string } | string
-}
-
-function detectImageType(base64: string) {
-  if (base64.startsWith("/9j/")) {
-    return { mime: "image/jpeg", ext: "jpg" }
-  }
-  if (base64.startsWith("iVBORw0KGgo")) {
-    return { mime: "image/png", ext: "png" }
-  }
-  if (base64.startsWith("UklGR")) {
-    return { mime: "image/webp", ext: "webp" }
-  }
-  if (base64.startsWith("R0lGOD")) {
-    return { mime: "image/gif", ext: "gif" }
-  }
-  return { mime: "image/png", ext: "png" }
 }
 
 export async function POST(req: Request) {
   try {
     const { image, theme } = await req.json()
 
-    if (!process.env.OPENAI_API_KEY) {
+    const apiKey = process.env.VOLCENGINE_API_KEY || process.env.LAS_API_KEY
+    if (!apiKey) {
       return NextResponse.json(
-        { error: "Missing OPENAI_API_KEY" },
+        { error: "Missing VOLCENGINE_API_KEY (or LAS_API_KEY)" },
         { status: 500 }
       )
     }
@@ -43,33 +32,35 @@ export async function POST(req: Request) {
       )
     }
 
-    const { mime, ext } = detectImageType(image)
-    const buffer = Buffer.from(image, "base64")
-    const file = new Blob([buffer], { type: mime })
-
-    const form = new FormData()
-    form.append("model", "gpt-image-1")
-    form.append(
-      "prompt",
-      `A masterpiece, 8k uhd, highly detailed, photorealistic architectural photography of a room, ${theme} interior design style, cozy atmosphere, professional rendering`
+    const baseUrl = (process.env.VOLCENGINE_BASE_URL || DEFAULT_BASE_URL).replace(
+      /\/$/,
+      ""
     )
-    form.append("image", file, `input.${ext}`)
-    form.append("output_format", "png")
+    const path = process.env.VOLCENGINE_IMAGE_PATH || DEFAULT_PATH
+    const endpoint = `${baseUrl}${path.startsWith("/") ? "" : "/"}${path}`
 
-    const response = await fetch(OPENAI_IMAGES_EDIT_URL, {
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`
       },
-      body: form
+      body: JSON.stringify({
+        model: process.env.SEEDREAM_MODEL || DEFAULT_MODEL,
+        prompt: `A masterpiece, 8k uhd, highly detailed, photorealistic architectural photography of a room, ${theme} interior design style, cozy atmosphere, professional rendering`,
+        image,
+        size: "2048x2048",
+        response_format: "url",
+        watermark: false
+      })
     })
 
     const rawText = await response.text()
-    let result: OpenAIImageResult = {}
+    let result: SeedreamResponse = {}
 
     if (rawText) {
       try {
-        result = JSON.parse(rawText) as OpenAIImageResult
+        result = JSON.parse(rawText) as SeedreamResponse
       } catch {
         result = { error: rawText }
       }
@@ -79,16 +70,16 @@ export async function POST(req: Request) {
       const message =
         typeof result.error === "string"
           ? result.error
-          : result.error?.message
+          : result.error?.message || result.message
       return NextResponse.json(
         { error: message || "Generation failed" },
         { status: 500 }
       )
     }
 
-    const b64 = result.data?.[0]?.b64_json
     const url = result.data?.[0]?.url
-    const imageUrl = b64 ? `data:image/png;base64,${b64}` : url
+    const b64 = result.data?.[0]?.b64_json
+    const imageUrl = url || (b64 ? `data:image/jpeg;base64,${b64}` : undefined)
 
     if (!imageUrl) {
       return NextResponse.json(
@@ -99,7 +90,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ imageUrl })
   } catch (error) {
-    console.error("OpenAI image edit error:", error)
+    console.error("Seedream generate error:", error)
     const cause =
       error && typeof error === "object" && "cause" in error
         ? String((error as { cause?: unknown }).cause)
