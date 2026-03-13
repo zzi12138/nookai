@@ -2,8 +2,10 @@ import { NextResponse } from "next/server"
 
 export const runtime = "nodejs"
 
-const DEFAULT_BASE_URL = "https://operator.las.cn-beijing.volces.com"
-const DEFAULT_PATH = "/api/v1/images/generations"
+const LAS_DEFAULT_BASE_URL = "https://operator.las.cn-beijing.volces.com"
+const LAS_DEFAULT_PATH = "/api/v1/images/generations"
+const ARK_DEFAULT_BASE_URL = "https://ark.cn-beijing.volces.com"
+const ARK_DEFAULT_PATH = "/api/v3/images/generations"
 const DEFAULT_MODEL = "doubao-seedream-4-5-251128"
 
 type SeedreamResponse = {
@@ -13,17 +15,15 @@ type SeedreamResponse = {
   error?: { message?: string } | string
 }
 
+function buildEndpoint(baseUrl: string, path: string) {
+  const base = baseUrl.replace(/\/$/, "")
+  const suffix = path.startsWith("/") ? path : `/${path}`
+  return `${base}${suffix}`
+}
+
 export async function POST(req: Request) {
   try {
     const { image, theme } = await req.json()
-
-    const apiKey = process.env.VOLCENGINE_API_KEY || process.env.LAS_API_KEY
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: "Missing VOLCENGINE_API_KEY (or LAS_API_KEY)" },
-        { status: 500 }
-      )
-    }
 
     if (!image || !theme) {
       return NextResponse.json(
@@ -32,24 +32,52 @@ export async function POST(req: Request) {
       )
     }
 
-    const baseUrl = (process.env.VOLCENGINE_BASE_URL || DEFAULT_BASE_URL).replace(
-      /\/$/,
-      ""
-    )
-    const path = process.env.VOLCENGINE_IMAGE_PATH || DEFAULT_PATH
-    const endpoint = `${baseUrl}${path.startsWith("/") ? "" : "/"}${path}`
+    const arkKey = process.env.ARK_API_KEY
+    const lasKey = process.env.VOLCENGINE_API_KEY || process.env.LAS_API_KEY
+    const provider =
+      process.env.SEEDREAM_PROVIDER ||
+      (arkKey ? "ark" : "las")
+
+    if (provider === "ark" && !arkKey) {
+      return NextResponse.json(
+        { error: "Missing ARK_API_KEY" },
+        { status: 500 }
+      )
+    }
+
+    if (provider !== "ark" && !lasKey) {
+      return NextResponse.json(
+        { error: "Missing VOLCENGINE_API_KEY (or LAS_API_KEY)" },
+        { status: 500 }
+      )
+    }
+
+    const baseUrl =
+      provider === "ark"
+        ? process.env.ARK_BASE_URL || ARK_DEFAULT_BASE_URL
+        : process.env.VOLCENGINE_BASE_URL || LAS_DEFAULT_BASE_URL
+
+    const path =
+      provider === "ark"
+        ? process.env.ARK_IMAGE_PATH || ARK_DEFAULT_PATH
+        : process.env.VOLCENGINE_IMAGE_PATH || LAS_DEFAULT_PATH
+
+    const endpoint = buildEndpoint(baseUrl, path)
+    const size =
+      process.env.SEEDREAM_SIZE ||
+      (provider === "ark" ? "2K" : "2048x2048")
 
     const response = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`
+        Authorization: `Bearer ${provider === "ark" ? arkKey : lasKey}`
       },
       body: JSON.stringify({
         model: process.env.SEEDREAM_MODEL || DEFAULT_MODEL,
         prompt: `A masterpiece, 8k uhd, highly detailed, photorealistic architectural photography of a room, ${theme} interior design style, cozy atmosphere, professional rendering`,
         image,
-        size: "2048x2048",
+        size,
         response_format: "url",
         watermark: false
       })
@@ -77,7 +105,8 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error: message || fallback,
-          status: response.status
+          status: response.status,
+          provider
         },
         { status: 500 }
       )
@@ -89,12 +118,12 @@ export async function POST(req: Request) {
 
     if (!imageUrl) {
       return NextResponse.json(
-        { error: "No image returned" },
+        { error: "No image returned", provider },
         { status: 502 }
       )
     }
 
-    return NextResponse.json({ imageUrl })
+    return NextResponse.json({ imageUrl, provider })
   } catch (error) {
     console.error("Seedream generate error:", error)
     const cause =
