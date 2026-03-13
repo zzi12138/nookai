@@ -3,8 +3,8 @@ import { NextResponse } from "next/server"
 export const runtime = "nodejs"
 
 const DEFAULT_BASE_URL = "https://operator.las.cn-beijing.volces.com"
-const DEFAULT_PATH = "/api/v1/online/images/generations"
-const DEFAULT_MODEL = "doubao-seedream-4-0-250828"
+const DEFAULT_PATH = "/api/v1/images/generations"
+const DEFAULT_MODEL = "doubao-seedream-4-5-251128"
 
 type SeedreamResponse = {
   data?: Array<{ url?: string; b64_json?: string; size?: string }>
@@ -71,8 +71,14 @@ export async function POST(req: Request) {
         typeof result.error === "string"
           ? result.error
           : result.error?.message || result.message
+      const fallback = response.status
+        ? `Generation failed (HTTP ${response.status})`
+        : "Generation failed"
       return NextResponse.json(
-        { error: message || "Generation failed" },
+        {
+          error: message || fallback,
+          status: response.status
+        },
         { status: 500 }
       )
     }
