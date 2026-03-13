@@ -1,7 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Cat, X } from 'lucide-react';
 
@@ -25,10 +24,15 @@ const products = [
 ];
 
 export default function ResultClient() {
-  const searchParams = useSearchParams();
-  const img = searchParams.get('img');
-  const imageUrl = useMemo(() => (img ? decodeURIComponent(img) : ''), [img]);
+  const [imageUrl, setImageUrl] = useState('');
   const [active, setActive] = useState<typeof products[number] | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const img = params.get('img');
+    setImageUrl(img ? decodeURIComponent(img) : '');
+  }, []);
 
   return (
     <div className="min-h-screen bg-stone-50 pb-20">
