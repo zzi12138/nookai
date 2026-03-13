@@ -29,6 +29,11 @@ export default function ResultClient() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    const stored = sessionStorage.getItem('nookai_result_image');
+    if (stored) {
+      setImageUrl(stored);
+      return;
+    }
     const params = new URLSearchParams(window.location.search);
     const img = params.get('img');
     setImageUrl(img ? decodeURIComponent(img) : '');

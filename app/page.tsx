@@ -79,7 +79,12 @@ export default function Page() {
         throw new Error('未获取到效果图地址');
       }
 
-      router.push(`/result?img=${encodeURIComponent(data.imageUrl)}`);
+      try {
+        sessionStorage.setItem('nookai_result_image', data.imageUrl);
+      } catch {
+        // Ignore storage errors and continue to navigation.
+      }
+      router.push('/result');
     } catch (err) {
       const message = err instanceof Error ? err.message : '生成失败，请稍后再试';
       setError(message);
