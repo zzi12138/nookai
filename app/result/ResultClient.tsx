@@ -76,7 +76,7 @@ export default function ResultClient() {
 
   return (
     <div className="min-h-screen bg-stone-50 pb-20">
-      <div className="max-w-4xl mx-auto px-4 md:px-10 pt-6">
+      <div className="w-full max-w-6xl mx-auto px-4 md:px-12 lg:px-16 pt-6">
         <header className="flex items-center justify-between mb-6">
           <div>
             <p className="text-sm text-stone-500">NookAI 效果图</p>

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Cat } from 'lucide-react';
+import { Cat, Sparkles, Upload, Wand2 } from 'lucide-react';
 import { saveResult } from './lib/imageStore';
 
 const themes = ['日式原木风', '法式复古', '极简奶油', '奶油原木', '北欧清新', '侘寂风'];
@@ -125,57 +125,80 @@ export default function Page() {
   };
 
   return (
-    <div className="min-h-screen bg-amber-50">
-      <div className="max-w-screen-2xl mx-auto min-h-screen px-4 md:px-10 lg:px-16 pt-6 pb-12">
-        <header className="flex flex-wrap items-center justify-between gap-4 mb-8">
-          <div>
-            <p className="text-sm text-orange-400">NookAI (栖息小窝)</p>
-            <h1 className="text-2xl md:text-3xl font-semibold text-stone-800">
-              让出租屋也有家的温度
-            </h1>
-            <p className="mt-2 text-sm md:text-base text-stone-500">
-              轻量软装改造，暖光与小摆件，让空间更有氛围。
-            </p>
+    <div className="relative min-h-screen bg-[#f6f1ea] text-stone-900">
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -top-40 right-0 h-[420px] w-[420px] rounded-full bg-amber-200/70 blur-3xl" />
+        <div className="absolute bottom-[-140px] left-[-80px] h-[360px] w-[360px] rounded-full bg-emerald-200/50 blur-3xl" />
+        <div className="absolute left-1/3 top-1/4 h-[280px] w-[280px] rounded-full bg-rose-100/80 blur-3xl" />
+      </div>
+
+      <div className="relative z-10 flex min-h-screen w-full flex-col gap-12 px-4 pb-16 pt-10 md:px-12 lg:px-16">
+        <header className="flex flex-wrap items-center justify-between gap-6">
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-md">
+              <Cat className="text-amber-600" size={26} />
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-[0.3em] text-stone-400">NookAI Studio</p>
+              <h1 className="font-display text-2xl text-stone-800 md:text-3xl">
+                让出租屋也有家的温度
+              </h1>
+            </div>
           </div>
-          <div className="flex items-center gap-3 rounded-full bg-white/80 px-4 py-2 shadow-sm">
-            <Cat className="text-orange-500" size={28} />
-            <span className="text-sm text-stone-600">猫咪包工头在线</span>
+          <div className="flex items-center gap-2 rounded-full bg-white/80 px-4 py-2 text-xs text-stone-600 shadow-sm">
+            <Sparkles size={14} className="text-amber-500" />
+            三步生成氛围空间
           </div>
         </header>
 
-        <div className="grid gap-8 md:grid-cols-[1.35fr_0.65fr]">
+        <section className="grid gap-8 lg:grid-cols-[1.35fr_0.65fr]">
           <div className="space-y-6">
-            <motion.button
+            <div className="rounded-[32px] border border-white/70 bg-white/80 p-6 shadow-xl">
+              <p className="text-xs uppercase tracking-[0.2em] text-stone-400">Preview Stage</p>
+              <h2 className="font-display text-3xl text-stone-800 md:text-4xl">
+                一张照片，三分钟焕新房间氛围
+              </h2>
+              <p className="mt-4 text-sm text-stone-600 md:text-base">
+                上传你的空间照片，选择风格，猫咪包工头马上进行软装与灯光的氛围升级。
+              </p>
+              <div className="mt-6 flex flex-wrap gap-3 text-xs text-stone-500">
+                <span className="rounded-full bg-amber-100/60 px-3 py-1">上传照片</span>
+                <span className="rounded-full bg-emerald-100/60 px-3 py-1">选择风格</span>
+                <span className="rounded-full bg-rose-100/60 px-3 py-1">生成效果图</span>
+              </div>
+            </div>
+
+            <button
               type="button"
               onClick={handlePick}
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.99 }}
-              transition={spring}
-              className="group w-full rounded-3xl border-2 border-dashed border-orange-200 bg-white/85 p-5 shadow-sm"
+              className="group relative w-full overflow-hidden rounded-[28px] border border-amber-100 bg-white/90 p-5 text-left shadow-lg transition hover:-translate-y-0.5"
             >
               <div className="flex items-center justify-between text-sm text-stone-500">
-                <span>上传与预览</span>
-                <span className="text-xs text-orange-500">
+                <span className="flex items-center gap-2">
+                  <Upload size={16} className="text-amber-500" />
+                  上传与预览
+                </span>
+                <span className="text-xs text-amber-600">
                   {fileName ? `已选择：${fileName}` : '点击上传'}
                 </span>
               </div>
-              <div className="mt-4 overflow-hidden rounded-2xl border border-orange-100 bg-amber-50">
+              <div className="mt-4 overflow-hidden rounded-2xl border border-amber-100 bg-[#f7f2eb]">
                 {previewUrl ? (
                   <img
                     src={previewUrl}
                     alt="上传预览"
-                    className="w-full h-auto object-contain block"
+                    className="block h-auto w-full object-contain"
                   />
                 ) : (
-                  <div className="flex h-72 items-center justify-center text-center text-sm text-stone-500 md:h-[420px]">
+                  <div className="flex h-72 items-center justify-center text-center text-sm text-stone-500 md:h-[380px]">
                     喵~ 把你的出租屋照片交给我吧！
                   </div>
                 )}
               </div>
               <p className="mt-3 text-xs text-stone-500">
-                点击预览区上传图片，猫咪包工头马上开工。
+                支持 JPG / PNG，建议日光或暖光环境拍摄。
               </p>
-            </motion.button>
+            </button>
 
             <input
               ref={inputRef}
@@ -186,10 +209,11 @@ export default function Page() {
             />
           </div>
 
-          <div className="space-y-6">
-            <section className="rounded-3xl bg-white/85 p-5 shadow-sm">
-              <h2 className="text-sm font-medium text-stone-600 mb-3">选择你想要的风格</h2>
-              <div className="flex flex-wrap gap-3">
+          <div className="flex flex-col gap-6">
+            <section className="rounded-[28px] border border-white/70 bg-white/85 p-5 shadow-lg">
+              <h2 className="text-xs uppercase tracking-[0.2em] text-stone-400">Style Bar</h2>
+              <p className="mt-2 text-sm text-stone-600">选择你想要的风格气质</p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 {themes.map((item) => {
                   const active = item === theme;
                   return (
@@ -197,26 +221,34 @@ export default function Page() {
                       key={item}
                       type="button"
                       onClick={() => setTheme(item)}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
                       transition={spring}
-                      className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium shadow-sm transition-colors ${
+                      className={`flex items-center justify-between rounded-2xl border px-4 py-3 text-sm font-medium shadow-sm transition-colors ${
                         active
-                          ? 'bg-orange-400 text-white'
-                          : 'bg-white text-stone-600 border border-orange-100'
+                          ? 'border-amber-300 bg-amber-200/80 text-stone-800'
+                          : 'border-amber-100 bg-white text-stone-600'
                       }`}
                     >
                       {item}
+                      <span
+                        className={`h-3 w-3 rounded-full ${
+                          active ? 'bg-amber-500' : 'bg-stone-300'
+                        }`}
+                      />
                     </motion.button>
                   );
                 })}
               </div>
             </section>
 
-            <section className="rounded-3xl bg-white/85 p-5 shadow-sm">
-              <h2 className="text-sm font-medium text-stone-600 mb-2">开始改造</h2>
-              <p className="text-xs text-stone-500 mb-4">
-                选择风格后点击按钮，猫咪包工头将为你进行软装与灯光的氛围升级。
+            <section className="rounded-[28px] border border-white/70 bg-white/85 p-5 shadow-lg">
+              <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-stone-400">
+                <Wand2 size={14} className="text-amber-500" />
+                Generate
+              </div>
+              <p className="mt-3 text-sm text-stone-600">
+                猫咪包工头将根据照片与风格自动调整灯光、软装与色调。
               </p>
               <motion.button
                 type="button"
@@ -225,25 +257,57 @@ export default function Page() {
                 whileTap={{ scale: 0.98 }}
                 transition={spring}
                 disabled={!previewUrl || isLoading}
-                className={`w-full rounded-2xl px-6 py-3 text-sm font-semibold shadow-lg ${
+                className={`mt-5 w-full rounded-2xl px-6 py-3 text-sm font-semibold shadow-lg ${
                   previewUrl && !isLoading
-                    ? 'bg-orange-400 text-white'
+                    ? 'bg-stone-900 text-amber-100'
                     : 'bg-stone-200 text-stone-500'
                 }`}
               >
                 {previewUrl ? '开始生成效果图' : '请先上传照片'}
               </motion.button>
+              {error ? <p className="mt-3 text-sm text-red-500">{error}</p> : null}
             </section>
 
-            {error ? <p className="text-sm text-red-500">{error}</p> : null}
+            <section className="rounded-[28px] border border-white/70 bg-white/85 p-5 shadow-lg">
+              <h3 className="text-xs uppercase tracking-[0.2em] text-stone-400">Checklist</h3>
+              <ul className="mt-3 space-y-2 text-sm text-stone-600">
+                <li className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-amber-400" />
+                  选择清晰、无遮挡的空间照片
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                  选定风格后再生成更稳定
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-rose-400" />
+                  生成后可在结果页对比原图
+                </li>
+              </ul>
+            </section>
           </div>
-        </div>
+        </section>
+
+        <section className="rounded-[32px] border border-white/70 bg-white/80 p-6 shadow-xl">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-stone-400">Flow</p>
+              <h2 className="font-display text-2xl text-stone-800">上传 → 选择风格 → 生成</h2>
+            </div>
+            <span className="rounded-full bg-amber-100/70 px-3 py-1 text-xs text-stone-600">
+              生成后将跳转结果页
+            </span>
+          </div>
+          <p className="mt-4 text-sm text-stone-600">
+            点击左侧预览框上传照片，选择风格后再生成，保证结果更稳定且符合软装改造目标。
+          </p>
+        </section>
       </div>
 
       <AnimatePresence>
         {isLoading ? (
           <motion.div
-            className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/30 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-stone-900/40 backdrop-blur-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -252,7 +316,7 @@ export default function Page() {
               animate={{ y: [0, -14, 0] }}
               transition={{ duration: 1.1, repeat: Infinity, ease: 'easeInOut' }}
             >
-              <Cat size={48} className="text-orange-500" />
+              <Cat size={48} className="text-amber-300" />
             </motion.div>
             <AnimatePresence mode="wait">
               <motion.p

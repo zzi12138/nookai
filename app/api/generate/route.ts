@@ -79,7 +79,7 @@ export async function POST(req: Request) {
       },
       body: JSON.stringify({
         model: process.env.SEEDREAM_MODEL || DEFAULT_MODEL,
-        prompt: `Photorealistic interior refresh, ${theme} style. Preserve original room layout, geometry, camera angle, walls, floor, ceiling, windows, and built-in fixtures. Only add or adjust soft furnishings, lighting, textiles, decor, plants, and small movable items to create a cozy, low-budget rental-friendly atmosphere. Keep composition unchanged and avoid structural modifications.`,
+        prompt: `Photorealistic interior refresh in ${theme} style. Strictly preserve the original layout, geometry, camera angle, and composition. Do not change walls, floors, ceiling, doors, windows, or built-in fixtures. Do not move large furniture or alter room structure. Only add or adjust soft furnishings, lighting, textiles, decor, plants, and small movable items to create a cozy, low-budget rental-friendly atmosphere. Keep everything aligned with the original photo.`,
         image: imagePayload,
         size,
         response_format: responseFormat,
