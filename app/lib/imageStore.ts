@@ -32,13 +32,20 @@ function generateId() {
   return `img_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
 
-export async function saveImage(data: string): Promise<string> {
+export type StoredResult = {
+  original: string;
+  generated: string;
+  theme?: string;
+  createdAt: number;
+};
+
+export async function saveResult(result: Omit<StoredResult, 'createdAt'>): Promise<string> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const id = generateId();
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
-    const request = store.put({ data, createdAt: Date.now() }, id);
+    const request = store.put({ ...result, createdAt: Date.now() }, id);
 
     request.onsuccess = () => resolve(id);
     request.onerror = () => reject(request.error || new Error('Failed to save'));
@@ -49,7 +56,7 @@ export async function saveImage(data: string): Promise<string> {
   });
 }
 
-export async function loadImage(id: string): Promise<string | null> {
+export async function loadResult(id: string): Promise<StoredResult | null> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readonly');
@@ -57,8 +64,8 @@ export async function loadImage(id: string): Promise<string | null> {
     const request = store.get(id);
 
     request.onsuccess = () => {
-      const result = request.result as { data?: string } | undefined;
-      resolve(result?.data || null);
+      const result = request.result as StoredResult | undefined;
+      resolve(result || null);
     };
     request.onerror = () => reject(request.error || new Error('Failed to load'));
 

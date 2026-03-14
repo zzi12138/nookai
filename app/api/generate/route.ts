@@ -79,7 +79,7 @@ export async function POST(req: Request) {
       },
       body: JSON.stringify({
         model: process.env.SEEDREAM_MODEL || DEFAULT_MODEL,
-        prompt: `A masterpiece, 8k uhd, highly detailed, photorealistic architectural photography of a room, ${theme} interior design style, cozy atmosphere, professional rendering`,
+        prompt: `Photorealistic interior refresh, ${theme} style. Preserve original room layout, geometry, camera angle, walls, floor, ceiling, windows, and built-in fixtures. Only add or adjust soft furnishings, lighting, textiles, decor, plants, and small movable items to create a cozy, low-budget rental-friendly atmosphere. Keep composition unchanged and avoid structural modifications.`,
         image: imagePayload,
         size,
         response_format: responseFormat,
