@@ -126,7 +126,7 @@ export default function Page() {
 
   return (
     <div className="min-h-screen bg-amber-50">
-      <div className="max-w-6xl mx-auto min-h-screen px-4 md:px-8 pt-6 pb-12">
+      <div className="max-w-screen-2xl mx-auto min-h-screen px-4 md:px-10 lg:px-16 pt-6 pb-12">
         <header className="flex flex-wrap items-center justify-between gap-4 mb-8">
           <div>
             <p className="text-sm text-orange-400">NookAI (栖息小窝)</p>
@@ -143,23 +143,38 @@ export default function Page() {
           </div>
         </header>
 
-        <div className="grid gap-8 md:grid-cols-[1.2fr_0.8fr]">
+        <div className="grid gap-8 md:grid-cols-[1.35fr_0.65fr]">
           <div className="space-y-6">
             <motion.button
               type="button"
               onClick={handlePick}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.99 }}
               transition={spring}
-              className="w-full rounded-3xl border-2 border-dashed border-orange-200 bg-white/80 px-6 py-14 text-center shadow-sm"
+              className="group w-full rounded-3xl border-2 border-dashed border-orange-200 bg-white/85 p-5 shadow-sm"
             >
-              <p className="text-lg font-medium text-stone-700">
-                喵~ 把你的出租屋照片交给我吧！
+              <div className="flex items-center justify-between text-sm text-stone-500">
+                <span>上传与预览</span>
+                <span className="text-xs text-orange-500">
+                  {fileName ? `已选择：${fileName}` : '点击上传'}
+                </span>
+              </div>
+              <div className="mt-4 overflow-hidden rounded-2xl border border-orange-100 bg-amber-50">
+                {previewUrl ? (
+                  <img
+                    src={previewUrl}
+                    alt="上传预览"
+                    className="w-full h-auto object-contain block"
+                  />
+                ) : (
+                  <div className="flex h-72 items-center justify-center text-center text-sm text-stone-500 md:h-[420px]">
+                    喵~ 把你的出租屋照片交给我吧！
+                  </div>
+                )}
+              </div>
+              <p className="mt-3 text-xs text-stone-500">
+                点击预览区上传图片，猫咪包工头马上开工。
               </p>
-              <p className="mt-3 text-sm text-stone-500">点击上传，猫咪包工头马上开工</p>
-              {fileName ? (
-                <p className="mt-4 text-xs text-orange-500">已选择：{fileName}</p>
-              ) : null}
             </motion.button>
 
             <input
@@ -169,23 +184,6 @@ export default function Page() {
               className="hidden"
               onChange={handleFileChange}
             />
-
-            <div className="rounded-3xl bg-white/80 p-4 shadow-sm">
-              <p className="text-sm font-medium text-stone-600 mb-3">上传预览</p>
-              {previewUrl ? (
-                <div className="overflow-hidden rounded-2xl border border-orange-100 bg-amber-50">
-                  <img
-                    src={previewUrl}
-                    alt="上传预览"
-                    className="w-full h-auto object-contain block"
-                  />
-                </div>
-              ) : (
-                <div className="rounded-2xl border border-dashed border-orange-100 bg-amber-50/60 py-10 text-center text-sm text-stone-500">
-                  还没有照片，先上传一张吧～
-                </div>
-              )}
-            </div>
           </div>
 
           <div className="space-y-6">
