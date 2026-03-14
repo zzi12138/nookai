@@ -23,7 +23,7 @@ function buildEndpoint(baseUrl: string, path: string) {
 
 export async function POST(req: Request) {
   try {
-    const { image, theme } = await req.json()
+    const { image, theme, promptStrength } = await req.json()
 
     if (!image || !theme) {
       return NextResponse.json(
@@ -31,6 +31,9 @@ export async function POST(req: Request) {
         { status: 400 }
       )
     }
+    const strengthRaw =
+      typeof promptStrength === "number" ? promptStrength : 0.5
+    const strength = Math.min(0.55, Math.max(0.45, strengthRaw))
 
     const arkKey = process.env.ARK_API_KEY
     const lasKey = process.env.VOLCENGINE_API_KEY || process.env.LAS_API_KEY
@@ -70,6 +73,21 @@ export async function POST(req: Request) {
     const imagePayload =
       provider === "ark" ? `data:image/png;base64,${image}` : image
     const responseFormat = "url"
+    const themeDetails: Record<string, string> = {
+      日式原木风:
+        "light oak wood grain, low-profile furniture, shoji-inspired textures, warm ambient glow, linen textiles",
+      法式复古:
+        "ornate molding details, brass accents, vintage art frames, herringbone textures, soft warm lighting",
+      极简奶油:
+        "creamy monochrome palette, soft rounded edges, minimal decor, matte textures, diffused lighting",
+      奶油原木:
+        "buttery neutral palette, natural oak wood, boucle fabrics, cozy layered textiles, warm lamps",
+      北欧清新:
+        "scandinavian light wood, crisp whites, muted sage accents, clean lines, airy daylight",
+      侘寂风:
+        "wabi-sabi textures, raw plaster walls, earthy neutrals, ceramic decor, soft indirect lighting"
+    }
+    const themeStr = themeDetails[theme] || theme
 
     const response = await fetch(endpoint, {
       method: "POST",
@@ -79,7 +97,16 @@ export async function POST(req: Request) {
       },
       body: JSON.stringify({
         model: process.env.SEEDREAM_MODEL || DEFAULT_MODEL,
-        prompt: `Photorealistic interior refresh in ${theme} style. Strictly preserve the original layout, geometry, camera angle, and composition. Do not change walls, floors, ceiling, doors, windows, or built-in fixtures. Do not move large furniture or alter room structure. Only add or adjust soft furnishings, lighting, textiles, decor, plants, and small movable items to create a cozy, low-budget rental-friendly atmosphere. Keep everything aligned with the original photo.`,
+        prompt:
+          `A photorealistic interior design makeover, ${themeStr} style. ` +
+          "STRICTLY KEEP the original room structure and furniture layout. " +
+          "ONLY update soft furnishings, rugs, bedding, lighting, and wall textures. " +
+          "Masterpiece, 8k uhd, architectural photography, cinematic lighting, cozy atmosphere, highly detailed textures.",
+        negative_prompt:
+          "changed room structure, moved furniture, altered layout, added windows, missing walls, " +
+          "structural modifications, ugly, blurry, deformed, distorted, chaotic layout, " +
+          "messy, mutated, low resolution, bad proportions, unnatural lighting.",
+        prompt_strength: strength,
         image: imagePayload,
         size,
         response_format: responseFormat,

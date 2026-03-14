@@ -40,6 +40,7 @@ export default function Page() {
   const [fileName, setFileName] = useState('');
   const [previewUrl, setPreviewUrl] = useState('');
   const [imageBase64, setImageBase64] = useState('');
+  const [structureLock, setStructureLock] = useState(0.5);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -84,7 +85,7 @@ export default function Page() {
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: imageBase64, theme }),
+        body: JSON.stringify({ image: imageBase64, theme, promptStrength: structureLock }),
       });
 
       if (!response.ok) {
@@ -250,6 +251,24 @@ export default function Page() {
               <p className="mt-3 text-sm text-stone-600">
                 猫咪包工头将根据照片与风格自动调整灯光、软装与色调。
               </p>
+              <div className="mt-5 rounded-2xl border border-amber-100 bg-white px-4 py-4">
+                <div className="flex items-center justify-between text-xs text-stone-500">
+                  <span>结构锁定强度</span>
+                  <span className="font-semibold text-stone-700">{structureLock.toFixed(2)}</span>
+                </div>
+                <input
+                  type="range"
+                  min={0.45}
+                  max={0.55}
+                  step={0.01}
+                  value={structureLock}
+                  onChange={(event) => setStructureLock(Number(event.target.value))}
+                  className="mt-3 h-2 w-full cursor-pointer appearance-none rounded-full bg-amber-100 accent-amber-500"
+                />
+                <p className="mt-2 text-xs text-stone-400">
+                  数值越低越保留原结构，越高越偏向风格重绘。
+                </p>
+              </div>
               <motion.button
                 type="button"
                 onClick={handleGenerate}
