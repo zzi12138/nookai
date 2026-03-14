@@ -69,7 +69,7 @@ export async function POST(req: Request) {
 
     const imagePayload =
       provider === "ark" ? `data:image/png;base64,${image}` : image
-    const responseFormat = provider === "ark" ? "b64_json" : "url"
+    const responseFormat = "url"
 
     const response = await fetch(endpoint, {
       method: "POST",
