@@ -111,11 +111,14 @@ export async function POST(req: Request) {
           "Lighting must look natural and physically realistic. " +
           "The final image must keep the same camera angle, perspective, composition, and geometry as the original photo. " +
           "The result should look like the same room after decluttering and soft decoration only. " +
-          "same room, same architecture, same perspective, only decluttered and softly decorated",
+          "No cropping, no zooming, no perspective shift, no camera move, no lens change. " +
+          "same room, same architecture, same perspective, only decluttered and softly decorated.",
         negative_prompt:
-          "changed room structure, moved furniture, altered layout, added windows, missing walls, " +
-          "structural modifications, ugly, blurry, deformed, distorted, chaotic layout, " +
-          "messy, mutated, low resolution, bad proportions, unnatural lighting.",
+          "changed room structure, moved furniture, altered layout, rearranged furniture, " +
+          "camera moved, perspective shift, different camera angle, zoomed in, zoomed out, cropped, " +
+          "added windows, missing walls, structural modifications, new room, different room, " +
+          "ugly, blurry, deformed, distorted, chaotic layout, messy, mutated, low resolution, " +
+          "bad proportions, unnatural lighting.",
         prompt_strength: strength,
         image: imagePayload,
         size,
