@@ -31,6 +31,29 @@ function dataUrlToBase64(dataUrl: string) {
   return dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
 }
 
+async function resizeDataUrl(dataUrl: string, maxSize = 1280, quality = 0.85) {
+  return new Promise<string>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+      const targetW = Math.round(img.width * scale);
+      const targetH = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = targetW;
+      canvas.height = targetH;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Canvas unavailable'));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, targetW, targetH);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => reject(new Error('图片读取失败，请重试'));
+    img.src = dataUrl;
+  });
+}
+
 export default function Page() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -68,8 +91,9 @@ export default function Page() {
 
     try {
       const dataUrl = await fileToDataUrl(file);
-      setPreviewUrl(dataUrl);
-      setImageBase64(dataUrlToBase64(dataUrl));
+      const resized = await resizeDataUrl(dataUrl, 1280, 0.85);
+      setPreviewUrl(resized);
+      setImageBase64(dataUrlToBase64(resized));
     } catch (err) {
       const message = err instanceof Error ? err.message : '图片读取失败，请稍后再试';
       setError(message);
