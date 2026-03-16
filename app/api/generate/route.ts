@@ -98,10 +98,14 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         model: process.env.SEEDREAM_MODEL || DEFAULT_MODEL,
         prompt:
-          `A photorealistic interior design makeover, ${themeStr} style. ` +
-          "STRICTLY KEEP the original room structure and furniture layout. " +
-          "ONLY update soft furnishings, rugs, bedding, lighting, and wall textures. " +
-          "Masterpiece, 8k uhd, architectural photography, cinematic lighting, cozy atmosphere, highly detailed textures.",
+          `Photorealistic interior refresh in ${themeStr} style for a rental apartment. ` +
+          "STRICTLY preserve the original layout, geometry, camera angle, and composition. " +
+          "Do NOT repaint walls or change wall colors/materials; walls may ONLY have removable hangings (art/posters/shelves). " +
+          "Do NOT change floors, ceiling, doors, windows, or built-in fixtures. " +
+          "Do NOT move large furniture or alter room structure. " +
+          "First tidy and remove clutter, then add or adjust soft furnishings, lighting, textiles, decor, plants, and small movable items. " +
+          "Lighting must be natural, realistic, and physically plausible. " +
+          "Keep everything aligned with the original photo.",
         negative_prompt:
           "changed room structure, moved furniture, altered layout, added windows, missing walls, " +
           "structural modifications, ugly, blurry, deformed, distorted, chaotic layout, " +
