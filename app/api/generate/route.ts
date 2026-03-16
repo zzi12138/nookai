@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { put } from "@vercel/blob"
 
 export const runtime = "nodejs"
 
@@ -7,6 +8,7 @@ const LAS_DEFAULT_PATH = "/api/v1/images/generations"
 const ARK_DEFAULT_BASE_URL = "https://ark.cn-beijing.volces.com"
 const ARK_DEFAULT_PATH = "/api/v3/images/generations"
 const DEFAULT_MODEL = "doubao-seedream-4-5-251128"
+const ARK_I2I_MODEL = "doubao-seededit-3-0-i2i-250628"
 
 type SeedreamResponse = {
   data?: Array<{ url?: string; b64_json?: string; size?: string }>
@@ -32,8 +34,8 @@ export async function POST(req: Request) {
       )
     }
     const strengthRaw =
-      typeof promptStrength === "number" ? promptStrength : 0.5
-    const strength = Math.min(0.55, Math.max(0.45, strengthRaw))
+      typeof promptStrength === "number" ? promptStrength : 0.35
+    const strength = Math.min(0.4, Math.max(0.25, strengthRaw))
 
     const arkKey = process.env.ARK_API_KEY
     const lasKey = process.env.VOLCENGINE_API_KEY || process.env.LAS_API_KEY
@@ -68,11 +70,31 @@ export async function POST(req: Request) {
     const endpoint = buildEndpoint(baseUrl, path)
     const size =
       process.env.SEEDREAM_SIZE ||
-      (provider === "ark" ? "2K" : "2048x2048")
+      (provider === "ark" ? "adaptive" : "2048x2048")
 
-    const imagePayload =
-      provider === "ark" ? `data:image/png;base64,${image}` : image
+    let imagePayload: string = image
+    if (provider === "ark") {
+      if (image.startsWith("http://") || image.startsWith("https://")) {
+        imagePayload = image
+      } else {
+        const buffer = Buffer.from(image, "base64")
+        const blob = await put(
+          `nookai/${Date.now()}-${Math.random().toString(16).slice(2)}.png`,
+          buffer,
+          { access: "public", contentType: "image/png" }
+        )
+        imagePayload = blob.url
+      }
+    }
     const responseFormat = "url"
+    const model =
+      provider === "ark"
+        ? process.env.SEEDREAM_MODEL || ARK_I2I_MODEL
+        : process.env.SEEDREAM_MODEL || DEFAULT_MODEL
+    const guidanceScale =
+      typeof promptStrength === "number"
+        ? Math.min(7.5, Math.max(2.5, promptStrength * 7.5))
+        : 4.5
     const themeDetails: Record<string, string> = {
       日式原木风:
         "Japanese natural wood style. Calm Japanese-inspired interior with natural wood tones, minimal decoration, and a peaceful atmosphere. Color palette: light wood, beige, cream, warm neutrals. Decor: linen curtains, beige cushions, wooden trays, ceramic vases, simple wooden decor, paper lampshades. Plants: monstera, ficus, olive tree. Lighting: soft warm lighting with a relaxing and natural feeling. Mood: calm, minimal, natural, warm, peaceful.",
@@ -94,7 +116,7 @@ export async function POST(req: Request) {
         Authorization: `Bearer ${provider === "ark" ? arkKey : lasKey}`
       },
       body: JSON.stringify({
-        model: process.env.SEEDREAM_MODEL || DEFAULT_MODEL,
+        model,
         prompt:
           "Perform a realistic interior refresh of a rental apartment based on the provided photo. " +
           "Step 1 — Declutter the room first: Remove all clutter, trash, messy belongings, and random small objects. The room should appear clean, tidy, and organized before adding any decorations. " +
@@ -123,7 +145,8 @@ export async function POST(req: Request) {
         image: imagePayload,
         size,
         response_format: responseFormat,
-        watermark: false
+        watermark: false,
+        guidance_scale: provider === "ark" ? guidanceScale : undefined
       })
     })
 
