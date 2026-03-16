@@ -75,19 +75,17 @@ export async function POST(req: Request) {
     const responseFormat = "url"
     const themeDetails: Record<string, string> = {
       日式原木风:
-        "light oak wood grain, low-profile furniture, shoji-inspired textures, warm ambient glow, linen textiles",
-      法式复古:
-        "ornate molding details, brass accents, vintage art frames, herringbone textures, soft warm lighting",
-      极简奶油:
-        "creamy monochrome palette, soft rounded edges, minimal decor, matte textures, diffused lighting",
-      奶油原木:
-        "buttery neutral palette, natural oak wood, boucle fabrics, cozy layered textiles, warm lamps",
-      北欧清新:
-        "scandinavian light wood, crisp whites, muted sage accents, clean lines, airy daylight",
-      侘寂风:
-        "wabi-sabi textures, raw plaster walls, earthy neutrals, ceramic decor, soft indirect lighting"
+        "Japanese natural wood style. Calm Japanese-inspired interior with natural wood tones, minimal decoration, and a peaceful atmosphere. Color palette: light wood, beige, cream, warm neutrals. Decor: linen curtains, beige cushions, wooden trays, ceramic vases, simple wooden decor, paper lampshades. Plants: monstera, ficus, olive tree. Lighting: soft warm lighting with a relaxing and natural feeling. Mood: calm, minimal, natural, warm, peaceful.",
+      奶油温柔风:
+        "soft creamy minimal style. Soft creamy interior with warm neutral tones and cozy textures; comfortable, gentle, slightly elegant. Color palette: cream, soft beige, warm white, light neutral tones. Decor: boucle cushions, fluffy pillows, soft blankets, round mirrors, neutral art prints. Plants: pampas grass, small decorative plants. Lighting: warm ambient lighting from table lamps and soft lampshades. Mood: soft, cozy, warm, elegant, gentle.",
+      现代极简风:
+        "modern minimalist style. Clean modern minimalist interior with simple lines, neutral colors, uncluttered surfaces. Color palette: black, white, gray, neutral tones. Decor: minimal wall art, monochrome cushions, geometric rugs, simple desk accessories. Lighting: modern floor lamps or minimal table lamps. Decor remains minimal and organized. Mood: clean, modern, structured, balanced, minimal.",
+      文艺复古风:
+        "vintage artistic style. Cozy vintage-inspired interior with artistic details and warm lighting; creative, expressive, slightly nostalgic. Color palette: warm browns, muted colors, soft vintage tones. Decor: vintage posters, stacked books, retro table lamps, textured blankets, artistic objects. Optional props: film camera, record player, classic books. Lighting: warm yellow lighting creating a cozy artistic mood. Mood: artistic, nostalgic, warm, creative, cozy.",
+      绿植自然风:
+        "urban nature style. Nature-inspired interior with greenery, fresh textures, natural materials. Color palette: natural greens, beige, light wood, neutral colors. Decor: woven baskets, cotton textiles, natural fiber rugs, botanical prints. Plants: multiple indoor plants such as monstera, snake plant, ficus, and pothos. Lighting: bright natural light with a fresh atmosphere. Mood: fresh, natural, airy, relaxing, organic."
     }
-    const themeStr = themeDetails[theme] || theme
+    const themeStyle = themeDetails[theme] || theme
 
     const response = await fetch(endpoint, {
       method: "POST",
@@ -98,14 +96,22 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         model: process.env.SEEDREAM_MODEL || DEFAULT_MODEL,
         prompt:
-          `Photorealistic interior refresh in ${themeStr} style for a rental apartment. ` +
-          "STRICTLY preserve the original layout, geometry, camera angle, and composition. " +
-          "Do NOT repaint walls or change wall colors/materials; walls may ONLY have removable hangings (art/posters/shelves). " +
-          "Do NOT change floors, ceiling, doors, windows, or built-in fixtures. " +
-          "Do NOT move large furniture or alter room structure. " +
-          "First tidy and remove clutter, then add or adjust soft furnishings, lighting, textiles, decor, plants, and small movable items. " +
-          "Lighting must be natural, realistic, and physically plausible. " +
-          "Keep everything aligned with the original photo.",
+          "Perform a realistic interior refresh of a rental apartment based on the provided photo. " +
+          "Step 1 — Declutter the room first: Remove all clutter, trash, messy belongings, and random small objects. The room should appear clean, tidy, and organized before adding any decorations. " +
+          `Step 2 — Apply a soft furnishing makeover in ${themeStyle}. ` +
+          "Important constraints (must follow strictly): " +
+          "DO NOT repaint or modify the walls. Wall color and material must remain exactly the same. " +
+          "DO NOT replace or modify the floor. " +
+          "DO NOT change the ceiling. " +
+          "DO NOT modify doors or windows. " +
+          "DO NOT change built-in fixtures or architectural structures. " +
+          "DO NOT move large furniture or change the layout. " +
+          "Only removable decorations and small movable objects are allowed. " +
+          "Allowed elements include: textiles, lamps, plants, small decor objects, books, removable wall art, posters, rugs, blankets, pillows. " +
+          "Lighting must look natural and physically realistic. " +
+          "The final image must keep the same camera angle, perspective, composition, and geometry as the original photo. " +
+          "The result should look like the same room after decluttering and soft decoration only. " +
+          "same room, same architecture, same perspective, only decluttered and softly decorated",
         negative_prompt:
           "changed room structure, moved furniture, altered layout, added windows, missing walls, " +
           "structural modifications, ugly, blurry, deformed, distorted, chaotic layout, " +
