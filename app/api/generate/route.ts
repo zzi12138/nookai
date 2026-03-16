@@ -97,27 +97,29 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         model,
         prompt:
-          "Perform a realistic interior refresh of a rental apartment based on the provided photo. " +
-          "Step 1 — Declutter the room first: Remove all clutter, trash, messy belongings, and random small objects. The room should appear clean, tidy, and organized before adding any decorations. " +
-          `Step 2 — Apply a soft furnishing makeover in ${themeStyle}. ` +
-          "Important constraints (must follow strictly): " +
-          "DO NOT repaint or modify the walls. Wall color and material must remain exactly the same. " +
+          "Use the provided photo as the exact base image. SAME ROOM, SAME CAMERA. " +
+          "Keep identical layout, geometry, camera angle, lens, and composition. " +
+          "Do NOT crop, zoom, rotate, or change perspective. " +
+          "Step 1 — Declutter the room first: remove all clutter, trash, messy belongings, and random small objects so the room is clean and organized. " +
+          `Step 2 — Apply a soft furnishing makeover in ${themeStyle} using ONLY removable decor. ` +
+          "Hard constraints (must follow strictly): " +
+          "DO NOT repaint or modify walls; wall color/material must remain exactly the same. " +
           "DO NOT replace or modify the floor. " +
           "DO NOT change the ceiling. " +
           "DO NOT modify doors or windows. " +
           "DO NOT change built-in fixtures or architectural structures. " +
           "DO NOT move large furniture or change the layout. " +
           "Only removable decorations and small movable objects are allowed. " +
-          "Allowed elements include: textiles, lamps, plants, small decor objects, books, removable wall art, posters, rugs, blankets, pillows. " +
-          "Lighting must look natural and physically realistic. " +
-          "The final image must keep the same camera angle, perspective, composition, and geometry as the original photo. " +
-          "The result should look like the same room after decluttering and soft decoration only. " +
-          "No cropping, no zooming, no perspective shift, no camera move, no lens change. " +
-          "same room, same architecture, same perspective, only decluttered and softly decorated.",
+          "Allowed elements: textiles, lamps, plants, small decor objects, books, removable wall art, posters, rugs, blankets, pillows. " +
+          "Lighting must look natural, physically realistic, and consistent with the original lighting direction. " +
+          "The final image must look like the SAME ROOM after decluttering and soft decoration only. " +
+          "same room, same architecture, same perspective, no layout change.",
         negative_prompt:
           "changed room structure, moved furniture, altered layout, rearranged furniture, " +
-          "camera moved, perspective shift, different camera angle, zoomed in, zoomed out, cropped, " +
-          "added windows, missing walls, structural modifications, new room, different room, " +
+          "camera moved, perspective shift, different camera angle, different lens, focal length change, " +
+          "zoomed in, zoomed out, cropped, rotated, tilted, " +
+          "added windows, missing walls, new door, removed door, structural modifications, new room, different room, " +
+          "changed wall color, repainted walls, changed flooring, changed ceiling, " +
           "ugly, blurry, deformed, distorted, chaotic layout, messy, mutated, low resolution, " +
           "bad proportions, unnatural lighting.",
         prompt_strength: strength,
