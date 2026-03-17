@@ -184,10 +184,10 @@ export default function Page() {
 
   return (
     <div className="min-h-screen text-[var(--text)]">
-      <div className="mx-auto flex min-h-screen w-full max-w-[980px] flex-col gap-10 px-6 pb-20 pt-10">
-        <header className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-semibold text-[var(--text)]">Nook</p>
+      <div className="mx-auto w-full max-w-[920px] px-4 pt-8">
+        <header className="flex items-center justify-between text-sm text-[var(--text-muted)]">
+          <div className="text-left">
+            <p className="text-base font-semibold text-[var(--text)]">Nook</p>
             <p className="text-xs text-[var(--text-muted)]">租房软装 AI 工具</p>
           </div>
           <button
@@ -198,130 +198,118 @@ export default function Page() {
             {themeMode === 'dark' ? '深色' : '浅色'}主题
           </button>
         </header>
+      </div>
 
-        <section className="rounded-2xl bg-[var(--panel)] p-6 shadow-[var(--shadow)] md:p-8">
-          <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-            <div className="space-y-3">
-              <motion.button
-                type="button"
-                onClick={handlePick}
-                whileHover={{ scale: 1.01 }}
-                whileTap={{ scale: 0.99 }}
-                transition={spring}
-                className="group flex h-[300px] w-full items-center justify-center overflow-hidden rounded-2xl bg-[var(--panel-soft)] text-[var(--text-muted)] shadow-[0_10px_22px_rgba(12,6,2,0.12)]"
-              >
-                {previewUrl ? (
-                  <img
-                    src={previewUrl}
-                    alt="上传预览"
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="flex flex-col items-center gap-2 text-sm">
-                    <Upload size={18} className="text-[var(--text-muted)]" />
-                    <span>点击上传房间照片</span>
-                  </div>
-                )}
-              </motion.button>
-              <div className="flex items-center justify-between text-xs text-[var(--text-muted)]">
-                <span>{fileName ? `文件：${fileName}` : '未选择文件'}</span>
-                <span>JPG / PNG</span>
-              </div>
-            </div>
+      <main className="mx-auto max-w-[920px] px-4 py-12 text-center">
+        <div className="mb-10">
+          <motion.button
+            type="button"
+            onClick={handlePick}
+            whileHover={{ scale: 1.01 }}
+            whileTap={{ scale: 0.99 }}
+            transition={spring}
+            className="flex h-[260px] w-full flex-col items-center justify-center overflow-hidden rounded-2xl bg-[var(--panel)] shadow-[0_16px_30px_rgba(0,0,0,0.2)]"
+          >
+            {previewUrl ? (
+              <img
+                src={previewUrl}
+                alt="上传预览"
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <>
+                <p className="text-lg mb-2 text-[var(--text)]">上传你的房间</p>
+                <p className="text-sm text-[var(--text-muted)]">点击上传照片</p>
+              </>
+            )}
+          </motion.button>
+        </div>
 
-            <div className="flex flex-col gap-5">
-              <div>
-                <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">风格</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {themes.map((item) => {
-                    const active = item === theme;
-                    return (
-                      <button
-                        key={item}
-                        type="button"
-                        onClick={() => setTheme(item)}
-                        className={`rounded-full px-4 py-2 text-xs font-medium transition ${
-                          active
-                            ? 'bg-[var(--accent)] text-stone-900 shadow-[0_6px_14px_rgba(12,6,2,0.18)]'
-                            : 'bg-[var(--panel-soft)] text-[var(--text-muted)] hover:bg-[var(--panel)]'
-                        }`}
-                      >
-                        {item}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <motion.button
+        <div className="mb-8">
+          <p className="mb-3 text-sm text-[var(--text-muted)]">风格</p>
+          <div className="flex flex-wrap justify-center gap-2">
+            {themes.map((item) => {
+              const active = item === theme;
+              return (
+                <button
+                  key={item}
                   type="button"
-                  onClick={handleGenerate}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  transition={spring}
-                  disabled={!previewUrl || isLoading}
-                  className={`w-full rounded-full px-4 py-2 text-xs font-semibold transition ${
-                    previewUrl && !isLoading
-                      ? 'bg-[var(--accent-strong)] text-stone-900 shadow-[0_8px_18px_rgba(12,6,2,0.2)]'
-                      : 'bg-[var(--border)] text-[var(--text-muted)] opacity-70'
+                  onClick={() => setTheme(item)}
+                  className={`rounded-full px-4 py-1.5 text-sm transition ${
+                    active
+                      ? 'bg-[var(--accent)] text-black shadow-[0_8px_16px_rgba(0,0,0,0.18)]'
+                      : 'border border-[var(--border)] text-[var(--text-muted)]'
                   }`}
                 >
-                  {previewUrl ? '生成效果图' : '请先上传'}
-                </motion.button>
-                <p className="text-xs text-[var(--text-muted)]">
-                  只更换软装与灯光，墙面地板不变。
-                </p>
-                {error ? <p className="text-xs text-red-500">{error}</p> : null}
-              </div>
-            </div>
+                  {item}
+                </button>
+              );
+            })}
           </div>
-        </section>
+        </div>
 
-        <section className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-[var(--text-muted)]">
+        <div className="mb-14">
+          <motion.button
+            type="button"
+            onClick={handleGenerate}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            transition={spring}
+            disabled={!previewUrl || isLoading}
+            className={`rounded-xl px-8 py-3 text-sm font-semibold transition ${
+              previewUrl && !isLoading
+                ? 'bg-[var(--accent)] text-black shadow-[0_10px_20px_rgba(0,0,0,0.2)]'
+                : 'bg-[var(--border)] text-[var(--text-muted)] opacity-70'
+            }`}
+          >
+            {previewUrl ? '开始生成' : '请先上传'}
+          </motion.button>
+        </div>
+
+        <div>
+          <div className="mb-3 flex items-center justify-between text-sm text-[var(--text-muted)]">
             <span>结果预览</span>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => setResultView('original')}
-                className={`rounded-full border px-3 py-1 ${
+                className={`text-sm transition ${
                   resultView === 'original'
-                    ? 'border-[var(--accent-strong)] text-[var(--text)]'
-                    : 'border-[var(--border)] text-[var(--text-muted)]'
+                    ? 'text-[var(--accent)]'
+                    : 'text-[var(--text-muted)]'
                 }`}
               >
                 原图
               </button>
+              <span>/</span>
               <button
                 type="button"
                 onClick={() => setResultView('generated')}
                 disabled={!hasGenerated}
-                className={`rounded-full border px-3 py-1 ${
+                className={`text-sm transition ${
                   resultView === 'generated' && hasGenerated
-                    ? 'border-[var(--accent-strong)] text-[var(--text)]'
-                    : 'border-[var(--border)] text-[var(--text-muted)]'
+                    ? 'text-[var(--accent)]'
+                    : 'text-[var(--text-muted)]'
                 } ${hasGenerated ? '' : 'cursor-not-allowed opacity-60'}`}
               >
                 效果图
               </button>
             </div>
           </div>
-          <div className="overflow-hidden rounded-2xl bg-[var(--panel-soft)] shadow-[0_8px_20px_rgba(12,6,2,0.12)]">
+
+          <div className="flex h-[340px] items-center justify-center rounded-2xl bg-[var(--panel)] shadow-[0_14px_28px_rgba(0,0,0,0.18)]">
             {displayImage ? (
               <img
                 src={displayImage}
                 alt={resultView === 'original' ? '原始照片' : '生成效果图'}
-                className="h-[420px] w-full object-cover"
+                className="h-full w-full rounded-2xl object-cover"
               />
             ) : (
-              <div className="flex h-[420px] items-center justify-center text-sm text-[var(--text-muted)]">
-                生成后会在这里展示对比结果
-              </div>
+              <p className="text-[var(--text-muted)]">生成后展示</p>
             )}
           </div>
-        </section>
-      </div>
+        </div>
+      </main>
 
       <input
         ref={inputRef}
