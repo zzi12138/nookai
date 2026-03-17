@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { loadResult, type StoredResult } from '../lib/imageStore';
 import { useThemeMode } from '../lib/useThemeMode';
@@ -8,6 +9,7 @@ import { useThemeMode } from '../lib/useThemeMode';
 const spring = { type: 'spring', stiffness: 260, damping: 22 } as const;
 
 export default function ResultClient() {
+  const router = useRouter();
   const [imageUrl, setImageUrl] = useState('');
   const [originalUrl, setOriginalUrl] = useState('');
   const [theme, setTheme] = useState('');
@@ -93,13 +95,22 @@ export default function ResultClient() {
             <p className="text-sm font-semibold text-[var(--text)]">Nook</p>
             <p className="text-xs text-[var(--text-muted)]">生成结果</p>
           </div>
-          <button
-            type="button"
-            onClick={toggleTheme}
-            className="rounded-full border border-[var(--border)] bg-[var(--panel-soft)] px-3 py-1 text-xs text-[var(--text-muted)]"
-          >
-            {themeMode === 'dark' ? '深色' : '浅色'}主题
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => router.push('/')}
+              className="rounded-full border border-[var(--border)] bg-[var(--panel-soft)] px-3 py-1 text-xs text-[var(--text-muted)]"
+            >
+              重新生成
+            </button>
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="rounded-full border border-[var(--border)] bg-[var(--panel-soft)] px-3 py-1 text-xs text-[var(--text-muted)]"
+            >
+              {themeMode === 'dark' ? '深色' : '浅色'}主题
+            </button>
+          </div>
         </header>
 
         {imageUrl ? (
