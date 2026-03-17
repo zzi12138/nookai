@@ -54,6 +54,13 @@ const afterImage =
 
 const spring = { type: 'spring', stiffness: 240, damping: 18 } as const;
 
+const cardBase =
+  'rounded-2xl bg-white/85 shadow-[0_12px_30px_rgba(17,24,39,0.08)]';
+const softCard =
+  'rounded-2xl bg-white/70 shadow-[0_10px_24px_rgba(17,24,39,0.08)]';
+const primaryButton =
+  'inline-flex items-center gap-3 rounded-full bg-stone-900 px-6 py-3 text-sm font-semibold text-amber-100 shadow-[0_16px_30px_rgba(17,24,39,0.15)]';
+
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -190,22 +197,22 @@ export default function Page() {
   return (
     <div className="relative min-h-screen bg-[#f6f1ea] text-stone-900">
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -top-32 right-[-120px] h-[420px] w-[420px] rounded-full bg-amber-200/70 blur-3xl" />
+        <div className="absolute -top-32 right-[-120px] h-[420px] w-[420px] rounded-full bg-amber-200/60 blur-3xl" />
         <div className="absolute bottom-[-160px] left-[-120px] h-[420px] w-[420px] rounded-full bg-rose-200/50 blur-3xl" />
-        <div className="absolute left-1/3 top-1/4 h-[280px] w-[280px] rounded-full bg-emerald-200/50 blur-3xl" />
+        <div className="absolute left-1/3 top-1/4 h-[280px] w-[280px] rounded-full bg-emerald-200/40 blur-3xl" />
       </div>
 
-      <main className="relative z-10 flex min-h-screen w-full flex-col gap-16 px-6 pb-20 pt-10 md:px-12 lg:px-16">
-        <section className="grid items-center gap-12 lg:grid-cols-[1.1fr_0.9fr]">
+      <main className="relative z-10 mx-auto flex w-full max-w-6xl flex-col gap-20 px-6 pb-24 pt-12 md:px-12 lg:px-16">
+        <section className="grid items-center gap-12 lg:grid-cols-[1.05fr_0.95fr]">
           <div className="space-y-8">
-            <div className="inline-flex items-center gap-2 rounded-full bg-white/70 px-4 py-2 text-xs uppercase tracking-[0.3em] text-stone-500 shadow-sm">
+            <div className="inline-flex items-center gap-2 rounded-full bg-white/70 px-4 py-2 text-[11px] uppercase tracking-[0.3em] text-stone-500 shadow-sm">
               <Cat size={14} className="text-amber-600" />
               Nook for renters
             </div>
             <h1 className="font-display text-4xl text-stone-800 md:text-5xl lg:text-6xl">
               Nook helps renters craft a warm, premium home with soft decor only.
             </h1>
-            <p className="text-base text-stone-600 md:text-lg">
+            <p className="max-w-xl text-base text-stone-600 md:text-lg">
               Gentle, low-budget upgrades for young renters. Keep walls and floors untouched,
               refresh lighting, textiles, plants, and small decor to create a cozy atmosphere.
             </p>
@@ -216,18 +223,18 @@ export default function Page() {
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 transition={spring}
-                className="inline-flex items-center gap-3 rounded-full bg-stone-900 px-6 py-3 text-sm font-semibold text-amber-100 shadow-lg"
+                className={primaryButton}
               >
                 Upload your room
                 <ArrowUpRight size={16} />
               </motion.button>
-              <div className="flex items-center gap-2 rounded-full bg-white/70 px-4 py-3 text-xs text-stone-600 shadow-sm">
+              <div className="flex items-center gap-2 rounded-full bg-white/70 px-4 py-2 text-xs text-stone-600 shadow-sm">
                 <Sparkles size={14} className="text-amber-500" />
                 Japandi-inspired, calm and premium
               </div>
             </div>
-
-            <div className="rounded-3xl bg-white/80 p-5 shadow-lg">
+            <div className={`${softCard} p-5`}
+            >
               <p className="text-xs uppercase tracking-[0.2em] text-stone-400">Preview stage</p>
               <div className="mt-3 flex flex-wrap gap-3 text-sm text-stone-600">
                 <span className="rounded-full bg-amber-100/70 px-3 py-1">Upload</span>
@@ -246,7 +253,7 @@ export default function Page() {
             whileHover={{ scale: 1.01 }}
             whileTap={{ scale: 0.99 }}
             transition={spring}
-            className="group relative overflow-hidden rounded-[28px] bg-white/80 p-5 shadow-2xl"
+            className={`${cardBase} group overflow-hidden p-5`}
           >
             <div className="flex items-center justify-between text-sm text-stone-500">
               <span className="flex items-center gap-2">
@@ -261,7 +268,7 @@ export default function Page() {
               {previewUrl ? (
                 <img src={previewUrl} alt="Upload preview" className="h-full w-full object-cover" />
               ) : (
-                <div className="relative h-[420px] overflow-hidden">
+                <div className="relative aspect-[4/3] overflow-hidden md:aspect-[16/10]">
                   <img src={heroImage} alt="Interior" className="h-full w-full object-cover" />
                   <div className="absolute inset-0 bg-gradient-to-t from-stone-900/60 via-stone-900/10 to-transparent" />
                   <div className="absolute bottom-6 left-6 right-6 text-left text-white">
@@ -284,20 +291,18 @@ export default function Page() {
           />
         </section>
 
-        <section className="space-y-6">
+        <section className="space-y-8">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <p className="text-xs uppercase tracking-[0.3em] text-stone-400">Style gallery</p>
-              <h2 className="font-display text-3xl text-stone-800">
-                Pick a lifestyle mood board
-              </h2>
+              <h2 className="font-display text-3xl text-stone-800">Pick a lifestyle mood board</h2>
             </div>
             <p className="max-w-xl text-sm text-stone-500">
               Each style focuses on soft decoration: textiles, lighting, plants, and removable art.
             </p>
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-5">
+          <div className="grid gap-6 lg:grid-cols-3">
             {styleCards.map((card) => {
               const active = theme === card.label;
               return (
@@ -307,8 +312,8 @@ export default function Page() {
                   onClick={() => setTheme(card.label)}
                   whileHover={{ y: -4 }}
                   transition={spring}
-                  className={`rounded-3xl p-4 text-left shadow-lg ${
-                    active ? 'bg-white' : 'bg-white/70'
+                  className={`${cardBase} p-5 text-left ${
+                    active ? 'ring-1 ring-amber-200' : ''
                   }`}
                 >
                   <div className="grid grid-cols-3 gap-2">
@@ -345,8 +350,8 @@ export default function Page() {
           </div>
         </section>
 
-        <section className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="rounded-[28px] bg-white/80 p-6 shadow-xl">
+        <section className="grid gap-10 lg:grid-cols-[1.05fr_0.95fr]">
+          <div className={`${cardBase} p-6 md:p-8`}>
             <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-stone-400">
               <Wand2 size={16} className="text-amber-500" />
               AI generation
@@ -371,8 +376,8 @@ export default function Page() {
             </div>
           </div>
 
-          <div className="rounded-[28px] bg-stone-900 p-6 text-amber-100 shadow-xl">
-            <h3 className="text-xl font-semibold">Ready to generate?</h3>
+          <div className="rounded-2xl bg-stone-900 p-6 md:p-8 text-amber-100 shadow-[0_16px_36px_rgba(17,24,39,0.2)]">
+            <h3 className="text-2xl font-semibold">Ready to generate?</h3>
             <p className="mt-2 text-sm text-amber-100/80">
               We keep your room structure untouched and focus only on soft decor and lighting.
             </p>
@@ -383,7 +388,7 @@ export default function Page() {
               whileTap={{ scale: 0.98 }}
               transition={spring}
               disabled={!previewUrl || isLoading}
-              className={`mt-5 w-full rounded-2xl px-6 py-3 text-sm font-semibold shadow-lg ${
+              className={`mt-6 w-full rounded-2xl px-6 py-3 text-sm font-semibold shadow-lg ${
                 previewUrl && !isLoading
                   ? 'bg-amber-200 text-stone-900'
                   : 'bg-stone-700 text-stone-300'
@@ -395,7 +400,7 @@ export default function Page() {
           </div>
         </section>
 
-        <section className="rounded-[32px] bg-white/80 p-6 shadow-xl">
+        <section className={`${cardBase} p-6 md:p-8 space-y-6`}>
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-stone-400">Before / After</p>
@@ -405,21 +410,21 @@ export default function Page() {
               Drag to compare. Same room, softer mood.
             </p>
           </div>
-          <div className="mt-6 overflow-hidden rounded-3xl border border-white/70 bg-[#f7f1ea]">
+          <div className="overflow-hidden rounded-2xl border border-white/60 bg-[#f7f1ea]">
             <div className="relative">
-              <img src={beforeImage} alt="Before" className="h-[420px] w-full object-cover" />
+              <img src={beforeImage} alt="Before" className="h-[360px] w-full object-cover md:h-[420px]" />
               <div
                 className="absolute inset-0 overflow-hidden"
                 style={{ width: `${compareValue}%` }}
               >
-                <img src={afterImage} alt="After" className="h-[420px] w-full object-cover" />
+                <img src={afterImage} alt="After" className="h-[360px] w-full object-cover md:h-[420px]" />
               </div>
               <div
                 className="absolute inset-y-0"
                 style={{ left: `calc(${compareValue}% - 1px)` }}
               >
                 <div className="h-full w-[2px] bg-white shadow" />
-                <div className="absolute left-1/2 top-1/2 h-10 w-10 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow flex items-center justify-center">
+                <div className="absolute left-1/2 top-1/2 flex h-10 w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white shadow">
                   <div className="h-3 w-3 rounded-full bg-amber-500" />
                 </div>
               </div>
@@ -450,14 +455,14 @@ export default function Page() {
               copy: 'Natural, physically plausible light for a true-to-life feel.',
             },
           ].map((item) => (
-            <div key={item.title} className="rounded-3xl bg-white/80 p-6 shadow-lg">
+            <div key={item.title} className={`${cardBase} p-6`}>
               <h3 className="text-lg font-semibold text-stone-800">{item.title}</h3>
               <p className="mt-2 text-sm text-stone-500">{item.copy}</p>
             </div>
           ))}
         </section>
 
-        <section className="rounded-[32px] bg-stone-900 p-8 text-amber-100 shadow-2xl">
+        <section className="rounded-2xl bg-stone-900 p-8 text-amber-100 shadow-[0_18px_40px_rgba(17,24,39,0.2)]">
           <div className="flex flex-wrap items-center justify-between gap-6">
             <div>
               <h2 className="font-display text-3xl">Transform your rental room in seconds</h2>
