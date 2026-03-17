@@ -119,10 +119,77 @@ function stripDataUrl(value: string) {
   return value.includes(',') ? value.split(',')[1] : value;
 }
 
-function buildPrompt(theme: string) {
+type ConstraintToggles = {
+  lockWalls: boolean;
+  lockFloor: boolean;
+  lockCeiling: boolean;
+  lockDoorsWindows: boolean;
+  lockFixtures: boolean;
+  lockLayout: boolean;
+  lockLargeFurniture: boolean;
+  requireNaturalLight: boolean;
+  requireDeclutter: boolean;
+  avoidArtifacts: boolean;
+};
+
+const DEFAULT_CONSTRAINTS: ConstraintToggles = {
+  lockWalls: true,
+  lockFloor: true,
+  lockCeiling: true,
+  lockDoorsWindows: true,
+  lockFixtures: true,
+  lockLayout: true,
+  lockLargeFurniture: true,
+  requireNaturalLight: true,
+  requireDeclutter: true,
+  avoidArtifacts: true,
+};
+
+function normalizeConstraints(input?: Partial<ConstraintToggles>): ConstraintToggles {
+  const safeInput =
+    input && typeof input === 'object' ? input : ({} as Partial<ConstraintToggles>);
+  return {
+    ...DEFAULT_CONSTRAINTS,
+    ...safeInput,
+  };
+}
+
+function buildPrompt(theme: string, strength: number, constraints: ConstraintToggles) {
   const details =
     THEME_DETAILS[theme] ?? THEME_DETAILS.Japandi ?? THEME_DETAILS['日式原木风'];
   const themeStyle = details?.themeStyle ?? theme ?? 'Japanese natural wood style';
+
+  const hardRules: string[] = [];
+  if (constraints.lockWalls) {
+    hardRules.push(
+      'DO NOT repaint or modify the walls. Wall color and material must remain exactly the same.'
+    );
+  }
+  if (constraints.lockFloor) {
+    hardRules.push('DO NOT replace or modify the floor.');
+  }
+  if (constraints.lockCeiling) {
+    hardRules.push('DO NOT change the ceiling.');
+  }
+  if (constraints.lockDoorsWindows) {
+    hardRules.push('DO NOT modify doors or windows.');
+  }
+  if (constraints.lockFixtures) {
+    hardRules.push('DO NOT change built-in fixtures or architectural structures.');
+  }
+  if (constraints.lockLayout) {
+    hardRules.push('Keep the original layout, geometry, and camera framing.');
+  }
+  if (constraints.lockLargeFurniture) {
+    hardRules.push('Do not move large furniture. Only small movable decor is allowed.');
+  }
+
+  const avoidRules: string[] = [];
+  if (constraints.avoidArtifacts) {
+    avoidRules.push(
+      'ugly, blurry, deformed, distorted, low resolution, watermark, bad proportions, unnatural lighting'
+    );
+  }
 
   const styleSection = details
     ? `
@@ -141,48 +208,66 @@ ${details.mood}
 `
     : '';
 
+  const declutterSection = constraints.requireDeclutter
+    ? `
+Step 1 — Declutter the room first:
+Remove all clutter, trash, messy belongings, and random small objects. The room should appear clean, tidy, and organized before adding any decorations.
+`
+    : '';
+
+  const naturalLightLine = constraints.requireNaturalLight
+    ? 'Lighting must look natural and physically realistic.'
+    : 'Lighting can be adjusted to suit the style, but keep it believable.';
+
+  const hardRulesBlock = hardRules.length
+    ? `Important constraints (must follow strictly):\n\n${hardRules.join('\n\n')}\n`
+    : 'No hard constraints were requested. Keep changes subtle and renter-friendly.';
+
+  const avoidBlock = avoidRules.length ? `Avoid: ${avoidRules.join(', ')}.` : '';
+
+  const lockLine = `Structure lock strength: ${strength.toFixed(
+    2
+  )} (higher means preserve structure and materials).`;
+
+  const resultLine = constraints.requireDeclutter
+    ? 'The result should look like the same room after decluttering and soft decoration only.'
+    : 'The result should look like the same room after soft decoration only.';
+
+  const sameRoomLine = constraints.requireDeclutter
+    ? 'same room, same architecture, same perspective, only decluttered and softly decorated'
+    : 'same room, same architecture, same perspective, softly decorated';
+
   return `
 Use the provided photo as the exact base image.
 Keep identical layout, geometry, camera angle, and composition.
 
-Step 1 — Declutter the room first:
-Remove all clutter, trash, messy belongings, and random small objects. The room should appear clean, tidy, and organized before adding any decorations.
+${lockLine}
 
+${declutterSection}
 Step 2 — Apply a soft furnishing makeover in ${themeStyle}.
 
-Important constraints (must follow strictly):
-
-DO NOT repaint or modify the walls. Wall color and material must remain exactly the same.
-
-DO NOT replace or modify the floor.
-
-DO NOT change the ceiling.
-
-DO NOT modify doors or windows.
-
-DO NOT change built-in fixtures or architectural structures.
-
-DO NOT move large furniture or change the layout.
+${hardRulesBlock}
 
 Only removable decorations and small movable objects are allowed.
 
 Allowed elements include:
 textiles, lamps, plants, small decor objects, books, removable wall art, posters, rugs, blankets, pillows.
 
-Lighting must look natural and physically realistic.
+${naturalLightLine}
 
 The final image must keep the same camera angle, perspective, composition, and geometry as the original photo.
 
-The result should look like the same room after decluttering and soft decoration only.
+${resultLine}
 
-same room, same architecture, same perspective, only decluttered and softly decorated
+${sameRoomLine}
+${avoidBlock}
 ${styleSection}
 `.trim();
 }
 
 export async function POST(req: Request) {
   try {
-    const { image, theme } = await req.json();
+    const { image, theme, strength, constraints } = await req.json();
 
     if (!image) {
       return NextResponse.json({ error: 'Missing image' }, { status: 400 });
@@ -197,7 +282,13 @@ export async function POST(req: Request) {
     }
 
     const model = process.env.GEMINI_IMAGE_MODEL || 'gemini-3.1-flash-image-preview';
-    const prompt = buildPrompt(theme || 'Japandi');
+    const normalizedStrength =
+      typeof strength === 'number' ? Math.min(1, Math.max(0.1, strength)) : 0.5;
+    const prompt = buildPrompt(
+      theme || '日式原木风',
+      normalizedStrength,
+      normalizeConstraints(constraints)
+    );
     const base64Image = stripDataUrl(image);
 
     const response = await fetch(

@@ -70,8 +70,36 @@ export default function Page() {
   const [previewUrl, setPreviewUrl] = useState('');
   const [imageBase64, setImageBase64] = useState('');
   const [error, setError] = useState('');
+  const [constraints, setConstraints] = useState({
+    lockWalls: true,
+    lockFloor: true,
+    lockCeiling: true,
+    lockDoorsWindows: true,
+    lockFixtures: true,
+    lockLayout: true,
+    lockLargeFurniture: true,
+    requireNaturalLight: true,
+    requireDeclutter: true,
+    avoidArtifacts: true,
+  });
 
   const strengthPercent = Math.min(100, Math.max(0, ((strength - 0.1) / 0.9) * 100));
+  const constraintOptions = [
+    { key: 'lockWalls', label: '墙面不动' },
+    { key: 'lockFloor', label: '地面不动' },
+    { key: 'lockCeiling', label: '天花不动' },
+    { key: 'lockDoorsWindows', label: '门窗不动' },
+    { key: 'lockFixtures', label: '固定结构' },
+    { key: 'lockLayout', label: '布局保持' },
+    { key: 'lockLargeFurniture', label: '大件不挪' },
+    { key: 'requireNaturalLight', label: '自然光线' },
+    { key: 'requireDeclutter', label: '先清理杂物' },
+    { key: 'avoidArtifacts', label: '拒绝变形' },
+  ] as const;
+  const enabledCount = constraintOptions.reduce(
+    (sum, option) => sum + (constraints[option.key] ? 1 : 0),
+    0
+  );
 
   useEffect(() => {
     if (!isLoading) {
@@ -115,7 +143,12 @@ export default function Page() {
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: imageBase64, theme: selectedTheme, strength }),
+        body: JSON.stringify({
+          image: imageBase64,
+          theme: selectedTheme,
+          strength,
+          constraints,
+        }),
       });
 
       if (!response.ok) {
@@ -286,6 +319,42 @@ export default function Page() {
                 </div>
                 <p className="mt-2 text-xs text-stone-400">
                   数值越高，结构保持越强。
+                </p>
+              </div>
+
+              <div className="mt-4 rounded-2xl bg-orange-50/60 p-4">
+                <div className="flex items-center justify-between text-xs text-stone-500">
+                  <span>可开关约束（决定哪些“禁止项”生效）</span>
+                  <span className="text-stone-400">
+                    已开启 {enabledCount}/{constraintOptions.length}
+                  </span>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {constraintOptions.map((option) => {
+                    const active = constraints[option.key];
+                    return (
+                      <button
+                        key={option.key}
+                        type="button"
+                        onClick={() =>
+                          setConstraints((prev) => ({
+                            ...prev,
+                            [option.key]: !prev[option.key],
+                          }))
+                        }
+                        className={`rounded-full px-3 py-1 text-xs transition ${
+                          active
+                            ? 'bg-yellow-100 text-stone-700'
+                            : 'bg-white text-stone-400 shadow-sm'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-2 text-xs text-stone-400">
+                  关闭某项约束，即允许模型在该部分更自由发挥。
                 </p>
               </div>
 
