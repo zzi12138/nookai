@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { loadResult, type StoredResult } from '../lib/imageStore';
+import { useThemeMode } from '../lib/useThemeMode';
 
 const spring = { type: 'spring', stiffness: 260, damping: 22 } as const;
 
@@ -10,7 +11,8 @@ export default function ResultClient() {
   const [imageUrl, setImageUrl] = useState('');
   const [originalUrl, setOriginalUrl] = useState('');
   const [theme, setTheme] = useState('');
-  const [isPressing, setIsPressing] = useState(false);
+  const [viewMode, setViewMode] = useState<'generated' | 'original'>('generated');
+  const { theme: themeMode, toggleTheme } = useThemeMode();
 
   const tips = useMemo(() => {
     const map: Record<string, string[]> = {
@@ -77,44 +79,74 @@ export default function ResultClient() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!originalUrl) {
+      setViewMode('generated');
+    }
+  }, [originalUrl]);
+
   return (
-    <div className="min-h-screen bg-[#f6f0e8] text-stone-900 pb-20">
+    <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] pb-20">
       <div className="mx-auto w-full max-w-[980px] px-6 pt-10">
-        <header className="flex flex-wrap items-center justify-between gap-3 text-sm text-stone-500">
-          <div className="flex items-center gap-3">
-            <span className="text-base font-semibold text-stone-900">Nook</span>
-            <span className="text-xs text-stone-500">生成结果</span>
+        <header className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-[var(--text)]">Nook</p>
+            <p className="text-xs text-[var(--text-muted)]">生成结果</p>
           </div>
-          <span className="text-xs text-stone-400">按住按钮查看原图</span>
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="rounded-full border border-[var(--border)] bg-[var(--panel-soft)] px-3 py-1 text-xs text-[var(--text-muted)]"
+          >
+            {themeMode === 'dark' ? '深色' : '浅色'}主题
+          </button>
         </header>
 
         {imageUrl ? (
           <div className="mt-6 space-y-5">
-            <div className="rounded-2xl border border-stone-200/70 bg-white/70 p-5 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
-              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-500">
-                <span>{isPressing && originalUrl ? '原图' : '效果图'}</span>
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--panel)] p-5 shadow-[var(--shadow)]">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--text-muted)]">
+                <span>{viewMode === 'original' ? '原图' : '效果图'}</span>
                 <span>{theme ? `风格：${theme}` : '风格：未记录'}</span>
               </div>
-              <div className="mt-3 relative overflow-hidden rounded-2xl border border-stone-100">
+              <div className="mt-3 relative overflow-hidden rounded-2xl border border-[var(--border)]">
                 <img
-                  src={isPressing && originalUrl ? originalUrl : imageUrl}
-                  alt={isPressing ? '原始照片' : 'NookAI 生成效果图'}
+                  src={viewMode === 'original' && originalUrl ? originalUrl : imageUrl}
+                  alt={viewMode === 'original' ? '原始照片' : 'NookAI 生成效果图'}
                   className="w-full h-auto object-contain block"
                 />
               </div>
-              <motion.button
-                type="button"
-                onPointerDown={() => setIsPressing(true)}
-                onPointerUp={() => setIsPressing(false)}
-                onPointerLeave={() => setIsPressing(false)}
-                onPointerCancel={() => setIsPressing(false)}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.97 }}
-                transition={spring}
-                className="mt-4 w-full rounded-2xl border border-stone-200 bg-white/80 px-5 py-3 text-sm font-semibold text-stone-700"
-              >
-                按住查看原图
-              </motion.button>
+              <div className="mt-4 flex gap-2">
+                <motion.button
+                  type="button"
+                  onClick={() => setViewMode('original')}
+                  disabled={!originalUrl}
+                  whileHover={{ scale: 1.01 }}
+                  whileTap={{ scale: 0.98 }}
+                  transition={spring}
+                  className={`flex-1 rounded-2xl border px-5 py-3 text-sm font-semibold ${
+                    viewMode === 'original'
+                      ? 'border-[var(--accent-strong)] text-[var(--text)]'
+                      : 'border-[var(--border)] text-[var(--text-muted)]'
+                  } ${originalUrl ? '' : 'cursor-not-allowed opacity-60'}`}
+                >
+                  原图
+                </motion.button>
+                <motion.button
+                  type="button"
+                  onClick={() => setViewMode('generated')}
+                  whileHover={{ scale: 1.01 }}
+                  whileTap={{ scale: 0.98 }}
+                  transition={spring}
+                  className={`flex-1 rounded-2xl border px-5 py-3 text-sm font-semibold ${
+                    viewMode === 'generated'
+                      ? 'border-[var(--accent-strong)] text-[var(--text)]'
+                      : 'border-[var(--border)] text-[var(--text-muted)]'
+                  }`}
+                >
+                  效果图
+                </motion.button>
+              </div>
               {!originalUrl ? (
                 <p className="mt-2 text-xs text-amber-700">
                   未找到原图，请从上传页重新生成以保存原图。
@@ -122,9 +154,11 @@ export default function ResultClient() {
               ) : null}
             </div>
 
-            <div className="rounded-2xl border border-stone-200/70 bg-white/60 p-5">
-              <p className="text-xs uppercase tracking-[0.18em] text-stone-400">Suggestions</p>
-              <ul className="mt-3 space-y-2 text-sm text-stone-600">
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--panel-soft)] p-5">
+              <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">
+                建议
+              </p>
+              <ul className="mt-3 space-y-2 text-sm text-[var(--text-muted)]">
                 {tips.map((tip) => (
                   <li key={tip}>• {tip}</li>
                 ))}
@@ -132,7 +166,7 @@ export default function ResultClient() {
             </div>
           </div>
         ) : (
-          <div className="mt-6 rounded-2xl border border-dashed border-stone-200 bg-white/60 p-8 text-center text-sm text-stone-500">
+          <div className="mt-6 rounded-2xl border border-dashed border-[var(--border)] bg-[var(--panel-soft)] p-8 text-center text-sm text-[var(--text-muted)]">
             还没有效果图，请先返回上传页面。
           </div>
         )}

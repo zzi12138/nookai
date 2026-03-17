@@ -5,15 +5,22 @@ import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Upload } from 'lucide-react';
 import { saveResult } from './lib/imageStore';
+import { useThemeMode } from './lib/useThemeMode';
 
-const themes = ['Japandi', 'Cream Minimal', 'Vintage Warm', 'Nordic Light', 'Soft Loft'];
+const themes = ['日式原木风', '奶油温柔风', '文艺复古风', '现代极简风', '绿植自然风'];
 const loadingMessages = [
-  'AI 正在分析房间结构...',
-  '正在匹配最适合的软装风格...',
+  '正在清理杂物并保持原始结构...',
+  '正在匹配软装与自然光线...',
   '马上生成你的新空间...',
 ];
 
 const spring = { type: 'spring', stiffness: 240, damping: 18 } as const;
+
+type ResultSnapshot = {
+  original?: string;
+  generated?: string;
+  theme?: string;
+};
 
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -57,6 +64,7 @@ async function resizeDataUrl(dataUrl: string, maxSize = 1280, quality = 0.85) {
 export default function Page() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
+  const { theme: themeMode, toggleTheme } = useThemeMode();
   const [theme, setTheme] = useState(themes[0]);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingIndex, setLoadingIndex] = useState(0);
@@ -64,6 +72,14 @@ export default function Page() {
   const [previewUrl, setPreviewUrl] = useState('');
   const [imageBase64, setImageBase64] = useState('');
   const [error, setError] = useState('');
+  const [lastResult, setLastResult] = useState<ResultSnapshot | null>(null);
+  const [resultView, setResultView] = useState<'generated' | 'original'>('generated');
+
+  const hasGenerated = Boolean(lastResult?.generated);
+  const displayImage =
+    resultView === 'original'
+      ? lastResult?.original || previewUrl
+      : lastResult?.generated || '';
 
   useEffect(() => {
     if (!isLoading) {
@@ -75,6 +91,24 @@ export default function Page() {
     }, 2000);
     return () => clearInterval(id);
   }, [isLoading]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const stored = sessionStorage.getItem('nookai_result_image');
+    if (!stored) return;
+    try {
+      const parsed = JSON.parse(stored) as ResultSnapshot;
+      setLastResult(parsed);
+    } catch {
+      // Ignore invalid cache.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hasGenerated && previewUrl) {
+      setResultView('original');
+    }
+  }, [hasGenerated, previewUrl]);
 
   const handlePick = () => {
     if (isLoading) return;
@@ -122,6 +156,7 @@ export default function Page() {
       }
 
       try {
+        setLastResult({ original: previewUrl, generated: data.imageUrl, theme });
         const storedId = await saveResult({
           original: previewUrl,
           generated: data.imageUrl,
@@ -148,17 +183,23 @@ export default function Page() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f6f0e8] text-stone-900">
+    <div className="min-h-screen bg-[var(--bg)] text-[var(--text)]">
       <div className="mx-auto flex min-h-screen w-full max-w-[980px] flex-col gap-8 px-6 pb-20 pt-10">
-        <header className="flex flex-wrap items-center justify-between gap-3 text-sm text-stone-500">
-          <div className="flex items-center gap-3">
-            <span className="text-base font-semibold text-stone-900">Nook</span>
-            <span className="text-xs text-stone-500">租房软装 AI 工具</span>
+        <header className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-[var(--text)]">Nook</p>
+            <p className="text-xs text-[var(--text-muted)]">租房软装 AI 工具</p>
           </div>
-          <span className="text-xs text-stone-400">仅软装更新，不改硬装结构</span>
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="rounded-full border border-[var(--border)] bg-[var(--panel-soft)] px-3 py-1 text-xs text-[var(--text-muted)]"
+          >
+            {themeMode === 'dark' ? '深色' : '浅色'}主题
+          </button>
         </header>
 
-        <section className="rounded-2xl border border-stone-200/70 bg-white/70 p-6 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
+        <section className="rounded-2xl border border-[var(--border)] bg-[var(--panel)] p-6 shadow-[var(--shadow)] md:p-8">
           <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
             <div className="space-y-3">
               <motion.button
@@ -167,7 +208,7 @@ export default function Page() {
                 whileHover={{ scale: 1.01 }}
                 whileTap={{ scale: 0.99 }}
                 transition={spring}
-                className="group flex h-[300px] w-full items-center justify-center overflow-hidden rounded-2xl border border-dashed border-stone-300/80 bg-white/60 text-stone-400"
+                className="group flex h-[300px] w-full items-center justify-center overflow-hidden rounded-2xl border border-dashed border-[var(--border)] bg-[var(--panel-soft)] text-[var(--text-muted)]"
               >
                 {previewUrl ? (
                   <img
@@ -177,12 +218,12 @@ export default function Page() {
                   />
                 ) : (
                   <div className="flex flex-col items-center gap-2 text-sm">
-                    <Upload size={18} className="text-stone-400" />
+                    <Upload size={18} className="text-[var(--text-muted)]" />
                     <span>点击上传房间照片</span>
                   </div>
                 )}
               </motion.button>
-              <div className="flex items-center justify-between text-xs text-stone-400">
+              <div className="flex items-center justify-between text-xs text-[var(--text-muted)]">
                 <span>{fileName ? `文件：${fileName}` : '未选择文件'}</span>
                 <span>JPG / PNG</span>
               </div>
@@ -190,7 +231,7 @@ export default function Page() {
 
             <div className="flex flex-col gap-5">
               <div>
-                <p className="text-xs uppercase tracking-[0.18em] text-stone-400">Style</p>
+                <p className="text-xs uppercase tracking-[0.18em] text-[var(--text-muted)]">风格</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {themes.map((item) => {
                     const active = item === theme;
@@ -201,8 +242,8 @@ export default function Page() {
                         onClick={() => setTheme(item)}
                         className={`rounded-full border px-4 py-2 text-sm transition ${
                           active
-                            ? 'border-stone-900 bg-stone-900 text-amber-100'
-                            : 'border-stone-200 bg-white/80 text-stone-600'
+                            ? 'border-[var(--accent-strong)] bg-[var(--accent)] text-stone-900'
+                            : 'border-[var(--border)] bg-transparent text-[var(--text-muted)]'
                         }`}
                       >
                         {item}
@@ -222,39 +263,62 @@ export default function Page() {
                   disabled={!previewUrl || isLoading}
                   className={`w-full rounded-2xl px-5 py-3 text-sm font-semibold shadow-sm ${
                     previewUrl && !isLoading
-                      ? 'bg-stone-900 text-amber-100'
-                      : 'bg-stone-200 text-stone-500'
+                      ? 'bg-[var(--accent)] text-stone-900'
+                      : 'bg-[var(--border)] text-[var(--text-muted)]'
                   }`}
                 >
                   {previewUrl ? '生成效果图' : '请先上传'}
                 </motion.button>
-                <p className="text-xs text-stone-400">只更换软装与灯光，不动墙面地板。</p>
+                <p className="text-xs text-[var(--text-muted)]">
+                  只更换软装与灯光，墙面地板不变。
+                </p>
                 {error ? <p className="text-xs text-red-500">{error}</p> : null}
               </div>
             </div>
           </div>
         </section>
 
-        <section className="rounded-2xl border border-stone-200/70 bg-white/60 p-6">
-          <div className="flex items-center justify-between text-xs text-stone-500">
+        <section className="rounded-2xl border border-[var(--border)] bg-[var(--panel)] p-6 shadow-[var(--shadow)]">
+          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-[var(--text-muted)]">
             <span>结果预览</span>
-            <span>生成后进入结果页查看对比</span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setResultView('original')}
+                className={`rounded-full border px-3 py-1 ${
+                  resultView === 'original'
+                    ? 'border-[var(--accent-strong)] text-[var(--text)]'
+                    : 'border-[var(--border)] text-[var(--text-muted)]'
+                }`}
+              >
+                原图
+              </button>
+              <button
+                type="button"
+                onClick={() => setResultView('generated')}
+                disabled={!hasGenerated}
+                className={`rounded-full border px-3 py-1 ${
+                  resultView === 'generated' && hasGenerated
+                    ? 'border-[var(--accent-strong)] text-[var(--text)]'
+                    : 'border-[var(--border)] text-[var(--text-muted)]'
+                } ${hasGenerated ? '' : 'cursor-not-allowed opacity-60'}`}
+              >
+                效果图
+              </button>
+            </div>
           </div>
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <div className="overflow-hidden rounded-2xl bg-[#efe7dd]">
-              {previewUrl ? (
-                <img src={previewUrl} alt="原始照片" className="h-56 w-full object-cover" />
-              ) : (
-                <div className="flex h-56 items-center justify-center text-sm text-stone-400">
-                  原始照片
-                </div>
-              )}
-            </div>
-            <div className="overflow-hidden rounded-2xl bg-[#efe7dd]">
-              <div className="flex h-56 items-center justify-center text-sm text-stone-400">
-                生成结果
+          <div className="mt-4 overflow-hidden rounded-2xl bg-[var(--panel-soft)]">
+            {displayImage ? (
+              <img
+                src={displayImage}
+                alt={resultView === 'original' ? '原始照片' : '生成效果图'}
+                className="h-[420px] w-full object-cover"
+              />
+            ) : (
+              <div className="flex h-[420px] items-center justify-center text-sm text-[var(--text-muted)]">
+                生成后会在这里展示对比结果
               </div>
-            </div>
+            )}
           </div>
         </section>
       </div>
@@ -270,7 +334,7 @@ export default function Page() {
       <AnimatePresence>
         {isLoading ? (
           <motion.div
-            className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-stone-900/40 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
