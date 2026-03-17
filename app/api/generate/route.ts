@@ -160,28 +160,26 @@ function buildPrompt(theme: string, strength: number, constraints: ConstraintTog
   const themeStyle = details?.themeStyle ?? theme ?? 'Japanese natural wood style';
 
   const hardRules: string[] = [];
+  if (constraints.lockLayout) {
+    hardRules.push('No structural renovation. Keep the original layout and framing.');
+  }
   if (constraints.lockWalls) {
-    hardRules.push(
-      'DO NOT repaint or modify the walls. Wall color and material must remain exactly the same.'
-    );
+    hardRules.push('No wall destruction, repainting, or material changes.');
   }
   if (constraints.lockFloor) {
-    hardRules.push('DO NOT replace or modify the floor.');
+    hardRules.push('No floor replacement. Rugs may cover the original flooring.');
   }
   if (constraints.lockCeiling) {
-    hardRules.push('DO NOT change the ceiling.');
+    hardRules.push('No ceiling modification.');
   }
   if (constraints.lockDoorsWindows) {
-    hardRules.push('DO NOT modify doors or windows.');
+    hardRules.push('No door or window changes.');
   }
   if (constraints.lockFixtures) {
-    hardRules.push('DO NOT change built-in fixtures or architectural structures.');
-  }
-  if (constraints.lockLayout) {
-    hardRules.push('Keep the original layout, geometry, and camera framing.');
+    hardRules.push('No built-in furniture changes.');
   }
   if (constraints.lockLargeFurniture) {
-    hardRules.push('Do not move large furniture. Only small movable decor is allowed.');
+    hardRules.push('Do not move large furniture. Use small movable pieces only.');
   }
 
   const avoidRules: string[] = [];
@@ -208,20 +206,17 @@ ${details.mood}
 `
     : '';
 
-  const declutterSection = constraints.requireDeclutter
-    ? `
-Step 1 — Declutter the room first:
-Remove all clutter, trash, messy belongings, and random small objects. The room should appear clean, tidy, and organized before adding any decorations.
-`
-    : '';
+  const declutterLine = constraints.requireDeclutter
+    ? 'Clean composition, no clutter.'
+    : 'Keep the scene tidy, but light styling is allowed.';
 
   const naturalLightLine = constraints.requireNaturalLight
     ? 'Lighting must look natural and physically realistic.'
     : 'Lighting can be adjusted to suit the style, but keep it believable.';
 
   const hardRulesBlock = hardRules.length
-    ? `Important constraints (must follow strictly):\n\n${hardRules.join('\n\n')}\n`
-    : 'No hard constraints were requested. Keep changes subtle and renter-friendly.';
+    ? `Constraints (must follow strictly):\n${hardRules.join('\n')}\n`
+    : 'Constraints: Keep the changes renter-friendly and subtle.';
 
   const avoidBlock = avoidRules.length ? `Avoid: ${avoidRules.join(', ')}.` : '';
 
@@ -243,22 +238,50 @@ Keep identical layout, geometry, camera angle, and composition.
 
 ${lockLine}
 
-${declutterSection}
-Step 2 — Apply a soft furnishing makeover in ${themeStyle}.
-
+A high-quality interior render of a rental room makeover, focusing only on non-permanent, renter-friendly design solutions.
 ${hardRulesBlock}
 
-Only removable decorations and small movable objects are allowed.
+Style: ${themeStyle}, targeting young professionals, cozy, warm, visually pleasing, social-media-ready.
 
-Allowed elements include:
-textiles, lamps, plants, small decor objects, books, removable wall art, posters, rugs, blankets, pillows.
-
+Lighting:
+layered lighting design with warm soft spotlights, pendant lights, floor lamps, and wall lamps,
+creating depth, shadow, and emotional atmosphere, cinematic and cozy.
 ${naturalLightLine}
 
+Textiles:
+large area rug covering original flooring,
+sofa covered with aesthetic fabric,
+soft textures, neutral or warm tones.
+
+Furniture:
+small-scale movable furniture,
+compact sofa, lightweight bookshelf, small storage cabinet,
+flexible layout, space-saving.
+
+Decor:
+minimal but tasteful wall decorations,
+art paintings, small art objects,
+${declutterLine}
+desktop styled with small decor items.
+
+Greenery:
+indoor plants (real or fake),
+adding freshness and contrast,
+soft natural vibe.
+
+Entertainment:
+projector setup area,
+cozy viewing corner with soft seating,
+relaxed lifestyle feeling.
+
+Overall:
+warm lighting, cohesive color palette,
+clean, soft, cozy, aesthetic,
+feels like a low-cost but high-end transformation,
+designed for renters.
+
 The final image must keep the same camera angle, perspective, composition, and geometry as the original photo.
-
 ${resultLine}
-
 ${sameRoomLine}
 ${avoidBlock}
 ${styleSection}
