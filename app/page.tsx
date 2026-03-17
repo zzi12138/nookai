@@ -183,8 +183,8 @@ export default function Page() {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--bg)] text-[var(--text)]">
-      <div className="mx-auto flex min-h-screen w-full max-w-[980px] flex-col gap-8 px-6 pb-20 pt-10">
+    <div className="min-h-screen text-[var(--text)]">
+      <div className="mx-auto flex min-h-screen w-full max-w-[980px] flex-col gap-10 px-6 pb-20 pt-10">
         <header className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm font-semibold text-[var(--text)]">Nook</p>
@@ -199,7 +199,7 @@ export default function Page() {
           </button>
         </header>
 
-        <section className="rounded-2xl border border-[var(--border)] bg-[var(--panel)] p-6 shadow-[var(--shadow)] md:p-8">
+        <section className="rounded-2xl bg-[var(--panel)] p-6 shadow-[var(--shadow)] md:p-8">
           <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
             <div className="space-y-3">
               <motion.button
@@ -208,7 +208,7 @@ export default function Page() {
                 whileHover={{ scale: 1.01 }}
                 whileTap={{ scale: 0.99 }}
                 transition={spring}
-                className="group flex h-[300px] w-full items-center justify-center overflow-hidden rounded-2xl border border-dashed border-[var(--border)] bg-[var(--panel-soft)] text-[var(--text-muted)]"
+                className="group flex h-[300px] w-full items-center justify-center overflow-hidden rounded-2xl bg-[var(--panel-soft)] text-[var(--text-muted)] shadow-[0_10px_22px_rgba(12,6,2,0.12)]"
               >
                 {previewUrl ? (
                   <img
@@ -240,10 +240,10 @@ export default function Page() {
                         key={item}
                         type="button"
                         onClick={() => setTheme(item)}
-                        className={`rounded-full border px-4 py-2 text-sm transition ${
+                        className={`rounded-full px-4 py-2 text-xs font-medium transition ${
                           active
-                            ? 'border-[var(--accent-strong)] bg-[var(--accent)] text-stone-900'
-                            : 'border-[var(--border)] bg-transparent text-[var(--text-muted)]'
+                            ? 'bg-[var(--accent)] text-stone-900 shadow-[0_6px_14px_rgba(12,6,2,0.18)]'
+                            : 'bg-[var(--panel-soft)] text-[var(--text-muted)] hover:bg-[var(--panel)]'
                         }`}
                       >
                         {item}
@@ -261,10 +261,10 @@ export default function Page() {
                   whileTap={{ scale: 0.98 }}
                   transition={spring}
                   disabled={!previewUrl || isLoading}
-                  className={`w-full rounded-2xl px-5 py-3 text-sm font-semibold shadow-sm ${
+                  className={`w-full rounded-full px-4 py-2 text-xs font-semibold transition ${
                     previewUrl && !isLoading
-                      ? 'bg-[var(--accent)] text-stone-900'
-                      : 'bg-[var(--border)] text-[var(--text-muted)]'
+                      ? 'bg-[var(--accent-strong)] text-stone-900 shadow-[0_8px_18px_rgba(12,6,2,0.2)]'
+                      : 'bg-[var(--border)] text-[var(--text-muted)] opacity-70'
                   }`}
                 >
                   {previewUrl ? '生成效果图' : '请先上传'}
@@ -278,7 +278,7 @@ export default function Page() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-[var(--border)] bg-[var(--panel)] p-6 shadow-[var(--shadow)]">
+        <section className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-[var(--text-muted)]">
             <span>结果预览</span>
             <div className="flex gap-2">
@@ -307,7 +307,7 @@ export default function Page() {
               </button>
             </div>
           </div>
-          <div className="mt-4 overflow-hidden rounded-2xl bg-[var(--panel-soft)]">
+          <div className="overflow-hidden rounded-2xl bg-[var(--panel-soft)] shadow-[0_8px_20px_rgba(12,6,2,0.12)]">
             {displayImage ? (
               <img
                 src={displayImage}
