@@ -1,168 +1,269 @@
-import { NextResponse } from "next/server"
+import { NextResponse } from 'next/server';
 
-export const runtime = "nodejs"
+export const runtime = 'nodejs';
 
-const LAS_DEFAULT_BASE_URL = "https://operator.las.cn-beijing.volces.com"
-const LAS_DEFAULT_PATH = "/api/v1/images/generations"
-const ARK_DEFAULT_BASE_URL = "https://ark.cn-beijing.volces.com"
-const ARK_DEFAULT_PATH = "/api/v3/images/generations"
-const DEFAULT_MODEL = "doubao-seedream-4-5-251128"
+type ThemeDetails = {
+  themeStyle: string;
+  description: string;
+  palette: string;
+  decor: string;
+  plants: string;
+  lighting: string;
+  mood: string;
+};
 
-type SeedreamResponse = {
-  data?: Array<{ url?: string; b64_json?: string; size?: string }>
-  code?: number
-  message?: string
-  error?: { message?: string } | string
+const THEME_DETAILS: Record<string, ThemeDetails> = {
+  Japandi: {
+    themeStyle: 'Japanese natural wood style',
+    description:
+      'A calm Japanese-inspired interior with natural wood tones, minimal decoration, and a peaceful atmosphere.',
+    palette: 'light wood, beige, cream, warm neutrals',
+    decor: 'linen curtains, beige cushions, wooden trays, ceramic vases, simple wooden decor, paper lampshades',
+    plants: 'monstera, ficus, olive tree',
+    lighting: 'soft warm lighting with a relaxing and natural feeling',
+    mood: 'calm, minimal, natural, warm, peaceful',
+  },
+  '日式原木风': {
+    themeStyle: 'Japanese natural wood style',
+    description:
+      'A calm Japanese-inspired interior with natural wood tones, minimal decoration, and a peaceful atmosphere.',
+    palette: 'light wood, beige, cream, warm neutrals',
+    decor: 'linen curtains, beige cushions, wooden trays, ceramic vases, simple wooden decor, paper lampshades',
+    plants: 'monstera, ficus, olive tree',
+    lighting: 'soft warm lighting with a relaxing and natural feeling',
+    mood: 'calm, minimal, natural, warm, peaceful',
+  },
+  'Cream Minimal': {
+    themeStyle: 'soft creamy minimal style',
+    description:
+      'A soft creamy interior with warm neutral tones and cozy textures. The atmosphere should feel comfortable, gentle, and slightly elegant.',
+    palette: 'cream, soft beige, warm white, light neutral tones',
+    decor: 'boucle cushions, fluffy pillows, soft blankets, round mirrors, neutral art prints',
+    plants: 'pampas grass, small decorative plants',
+    lighting: 'warm ambient lighting from table lamps and soft lampshades',
+    mood: 'soft, cozy, warm, elegant, gentle',
+  },
+  '奶油温柔风': {
+    themeStyle: 'soft creamy minimal style',
+    description:
+      'A soft creamy interior with warm neutral tones and cozy textures. The atmosphere should feel comfortable, gentle, and slightly elegant.',
+    palette: 'cream, soft beige, warm white, light neutral tones',
+    decor: 'boucle cushions, fluffy pillows, soft blankets, round mirrors, neutral art prints',
+    plants: 'pampas grass, small decorative plants',
+    lighting: 'warm ambient lighting from table lamps and soft lampshades',
+    mood: 'soft, cozy, warm, elegant, gentle',
+  },
+  'Vintage Warm': {
+    themeStyle: 'vintage artistic style',
+    description:
+      'A cozy vintage-inspired interior filled with artistic details and warm lighting. The space should feel creative, expressive, and slightly nostalgic.',
+    palette: 'warm browns, muted colors, soft vintage tones',
+    decor: 'vintage posters, stacked books, retro table lamps, textured blankets, artistic objects',
+    plants: 'small decorative plants',
+    lighting: 'warm yellow lighting creating a cozy artistic mood',
+    mood: 'artistic, nostalgic, warm, creative, cozy',
+  },
+  '文艺复古风': {
+    themeStyle: 'vintage artistic style',
+    description:
+      'A cozy vintage-inspired interior filled with artistic details and warm lighting. The space should feel creative, expressive, and slightly nostalgic.',
+    palette: 'warm browns, muted colors, soft vintage tones',
+    decor: 'vintage posters, stacked books, retro table lamps, textured blankets, artistic objects',
+    plants: 'small decorative plants',
+    lighting: 'warm yellow lighting creating a cozy artistic mood',
+    mood: 'artistic, nostalgic, warm, creative, cozy',
+  },
+  'Nordic Light': {
+    themeStyle: 'modern minimalist style',
+    description:
+      'A clean modern minimalist interior with simple lines, neutral colors, and uncluttered surfaces.',
+    palette: 'black, white, gray, neutral tones',
+    decor: 'minimal wall art, monochrome cushions, geometric rugs, simple desk accessories',
+    plants: 'small decorative plants',
+    lighting: 'modern floor lamps or minimal table lamps',
+    mood: 'clean, modern, structured, balanced, minimal',
+  },
+  '现代极简风': {
+    themeStyle: 'modern minimalist style',
+    description:
+      'A clean modern minimalist interior with simple lines, neutral colors, and uncluttered surfaces.',
+    palette: 'black, white, gray, neutral tones',
+    decor: 'minimal wall art, monochrome cushions, geometric rugs, simple desk accessories',
+    plants: 'small decorative plants',
+    lighting: 'modern floor lamps or minimal table lamps',
+    mood: 'clean, modern, structured, balanced, minimal',
+  },
+  'Soft Loft': {
+    themeStyle: 'urban nature style',
+    description:
+      'A nature-inspired interior filled with greenery, fresh textures, and natural materials.',
+    palette: 'natural greens, beige, light wood, neutral colors',
+    decor: 'woven baskets, cotton textiles, natural fiber rugs, botanical prints',
+    plants: 'multiple indoor plants such as monstera, snake plant, ficus, and pothos',
+    lighting: 'bright natural light with a fresh atmosphere',
+    mood: 'fresh, natural, airy, relaxing, organic',
+  },
+  '绿植自然风': {
+    themeStyle: 'urban nature style',
+    description:
+      'A nature-inspired interior filled with greenery, fresh textures, and natural materials.',
+    palette: 'natural greens, beige, light wood, neutral colors',
+    decor: 'woven baskets, cotton textiles, natural fiber rugs, botanical prints',
+    plants: 'multiple indoor plants such as monstera, snake plant, ficus, and pothos',
+    lighting: 'bright natural light with a fresh atmosphere',
+    mood: 'fresh, natural, airy, relaxing, organic',
+  },
+};
+
+function stripDataUrl(value: string) {
+  return value.includes(',') ? value.split(',')[1] : value;
 }
 
-function buildEndpoint(baseUrl: string, path: string) {
-  const base = baseUrl.replace(/\/$/, "")
-  const suffix = path.startsWith("/") ? path : `/${path}`
-  return `${base}${suffix}`
+function buildPrompt(theme: string) {
+  const details =
+    THEME_DETAILS[theme] ?? THEME_DETAILS.Japandi ?? THEME_DETAILS['日式原木风'];
+  const themeStyle = details?.themeStyle ?? theme ?? 'Japanese natural wood style';
+
+  const styleSection = details
+    ? `
+Style description:
+${details.description}
+Color palette:
+${details.palette}
+Decor elements:
+${details.decor}
+Plants:
+${details.plants}
+Lighting:
+${details.lighting}
+Mood:
+${details.mood}
+`
+    : '';
+
+  return `
+Use the provided photo as the exact base image.
+Keep identical layout, geometry, camera angle, and composition.
+
+Step 1 — Declutter the room first:
+Remove all clutter, trash, messy belongings, and random small objects. The room should appear clean, tidy, and organized before adding any decorations.
+
+Step 2 — Apply a soft furnishing makeover in ${themeStyle}.
+
+Important constraints (must follow strictly):
+
+DO NOT repaint or modify the walls. Wall color and material must remain exactly the same.
+
+DO NOT replace or modify the floor.
+
+DO NOT change the ceiling.
+
+DO NOT modify doors or windows.
+
+DO NOT change built-in fixtures or architectural structures.
+
+DO NOT move large furniture or change the layout.
+
+Only removable decorations and small movable objects are allowed.
+
+Allowed elements include:
+textiles, lamps, plants, small decor objects, books, removable wall art, posters, rugs, blankets, pillows.
+
+Lighting must look natural and physically realistic.
+
+The final image must keep the same camera angle, perspective, composition, and geometry as the original photo.
+
+The result should look like the same room after decluttering and soft decoration only.
+
+same room, same architecture, same perspective, only decluttered and softly decorated
+${styleSection}
+`.trim();
 }
 
 export async function POST(req: Request) {
   try {
-    const { image, theme, promptStrength } = await req.json()
+    const { image, theme } = await req.json();
 
-    if (!image || !theme) {
-      return NextResponse.json(
-        { error: "Missing image or theme" },
-        { status: 400 }
-      )
+    if (!image) {
+      return NextResponse.json({ error: 'Missing image' }, { status: 400 });
     }
-    const strengthRaw =
-      typeof promptStrength === "number" ? promptStrength : 0.35
-    const strength = Math.min(0.4, Math.max(0.25, strengthRaw))
 
-    const arkKey = process.env.ARK_API_KEY
-    const lasKey = process.env.VOLCENGINE_API_KEY || process.env.LAS_API_KEY
-    const provider =
-      process.env.SEEDREAM_PROVIDER ||
-      (arkKey ? "ark" : "las")
-
-    if (provider === "ark" && !arkKey) {
+    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    if (!apiKey) {
       return NextResponse.json(
-        { error: "Missing ARK_API_KEY" },
+        { error: 'Missing GEMINI_API_KEY (or GOOGLE_API_KEY)' },
         { status: 500 }
-      )
+      );
     }
 
-    if (provider !== "ark" && !lasKey) {
-      return NextResponse.json(
-        { error: "Missing VOLCENGINE_API_KEY (or LAS_API_KEY)" },
-        { status: 500 }
-      )
-    }
+    const model = process.env.GEMINI_IMAGE_MODEL || 'gemini-3.1-flash-image-preview';
+    const prompt = buildPrompt(theme || 'Japandi');
+    const base64Image = stripDataUrl(image);
 
-    const baseUrl =
-      provider === "ark"
-        ? process.env.ARK_BASE_URL || ARK_DEFAULT_BASE_URL
-        : process.env.VOLCENGINE_BASE_URL || LAS_DEFAULT_BASE_URL
-
-    const path =
-      provider === "ark"
-        ? process.env.ARK_IMAGE_PATH || ARK_DEFAULT_PATH
-        : process.env.VOLCENGINE_IMAGE_PATH || LAS_DEFAULT_PATH
-
-    const endpoint = buildEndpoint(baseUrl, path)
-    const size =
-      process.env.SEEDREAM_SIZE ||
-      (provider === "ark" ? "2K" : "2048x2048")
-
-    const imagePayload =
-      provider === "ark" ? `data:image/png;base64,${image}` : image
-    const responseFormat = "url"
-    const model = process.env.SEEDREAM_MODEL || DEFAULT_MODEL
-    const themeDetails: Record<string, string> = {
-      日式原木风:
-        "Japanese natural wood style. Calm Japanese-inspired interior with natural wood tones, minimal decoration, and a peaceful atmosphere. Color palette: light wood, beige, cream, warm neutrals. Decor: linen curtains, beige cushions, wooden trays, ceramic vases, simple wooden decor, paper lampshades. Plants: monstera, ficus, olive tree. Lighting: soft warm lighting with a relaxing and natural feeling. Mood: calm, minimal, natural, warm, peaceful.",
-      奶油温柔风:
-        "soft creamy minimal style. Soft creamy interior with warm neutral tones and cozy textures; comfortable, gentle, slightly elegant. Color palette: cream, soft beige, warm white, light neutral tones. Decor: boucle cushions, fluffy pillows, soft blankets, round mirrors, neutral art prints. Plants: pampas grass, small decorative plants. Lighting: warm ambient lighting from table lamps and soft lampshades. Mood: soft, cozy, warm, elegant, gentle.",
-      现代极简风:
-        "modern minimalist style. Clean modern minimalist interior with simple lines, neutral colors, uncluttered surfaces. Color palette: black, white, gray, neutral tones. Decor: minimal wall art, monochrome cushions, geometric rugs, simple desk accessories. Lighting: modern floor lamps or minimal table lamps. Decor remains minimal and organized. Mood: clean, modern, structured, balanced, minimal.",
-      文艺复古风:
-        "vintage artistic style. Cozy vintage-inspired interior with artistic details and warm lighting; creative, expressive, slightly nostalgic. Color palette: warm browns, muted colors, soft vintage tones. Decor: vintage posters, stacked books, retro table lamps, textured blankets, artistic objects. Optional props: film camera, record player, classic books. Lighting: warm yellow lighting creating a cozy artistic mood. Mood: artistic, nostalgic, warm, creative, cozy.",
-      绿植自然风:
-        "urban nature style. Nature-inspired interior with greenery, fresh textures, natural materials. Color palette: natural greens, beige, light wood, neutral colors. Decor: woven baskets, cotton textiles, natural fiber rugs, botanical prints. Plants: multiple indoor plants such as monstera, snake plant, ficus, and pothos. Lighting: bright natural light with a fresh atmosphere. Mood: fresh, natural, airy, relaxing, organic."
-    }
-    const themeStyle = themeDetails[theme] || theme
-
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${provider === "ark" ? arkKey : lasKey}`
-      },
-      body: JSON.stringify({
-        model,
-        prompt: `Breathtaking interior design photography, featured in Architectural Digest and Pinterest. A stunning ${themeStyle} soft-furnishing makeover of this exact room. STRICTLY MAINTAIN identical layout, geometry, camera angle, and architectural structure. The room is perfectly decluttered, clean, and highly organized.\n\nMAGIC LIGHTING UPGRADE: Transform the atmosphere with warm cinematic lighting, soft golden sunbeams filtering through the window, cozy ambient glow from aesthetic floor lamps, creating an extremely inviting and relaxing vibe.\n\nONLY upgrade removable decor: high-end plush textiles, cozy fluffy rugs, aesthetic posters, trailing indoor plants, and tasteful art. Hyper-realistic, 8k resolution, ultra-detailed textures, masterpiece. Giving a 'wow' emotional impact of a dream rental room transformation.`,
-        negative_prompt:
-          "changed room structure, moved furniture, altered layout, added windows, missing walls, " +
-          "structural modifications, repainted walls, changed flooring, ugly, blurry, deformed, " +
-          "distorted, chaotic layout, messy, mutated, low resolution, flat lighting, " +
-          "fluorescent light, cheap textures.",
-        prompt_strength: strength,
-        image: imagePayload,
-        size,
-        response_format: responseFormat,
-        watermark: false
-      })
-    })
-
-    const rawText = await response.text()
-    let result: SeedreamResponse = {}
-
-    if (rawText) {
-      try {
-        result = JSON.parse(rawText) as SeedreamResponse
-      } catch {
-        result = { error: rawText }
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey,
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                { text: prompt },
+                {
+                  inline_data: {
+                    mime_type: 'image/jpeg',
+                    data: base64Image,
+                  },
+                },
+              ],
+            },
+          ],
+          generationConfig: {
+            responseModalities: ['IMAGE'],
+          },
+        }),
       }
-    }
+    );
+
+    const result = await response.json();
 
     if (!response.ok) {
-      const message =
-        typeof result.error === "string"
-          ? result.error
-          : result.error?.message || result.message
-      const fallback = response.status
-        ? `Generation failed (HTTP ${response.status})`
-        : "Generation failed"
       return NextResponse.json(
-        {
-          error: message || fallback,
-          status: response.status,
-          provider
-        },
+        { error: result?.error?.message || result?.error || 'Generation failed' },
         { status: 500 }
-      )
+      );
     }
 
-    const url = result.data?.[0]?.url
-    const b64 = result.data?.[0]?.b64_json
-    const imageUrl = url || (b64 ? `data:image/jpeg;base64,${b64}` : undefined)
+    const parts = result?.candidates?.[0]?.content?.parts ?? [];
+    const imagePart = parts.find((part: any) => part?.inline_data || part?.inlineData);
 
-    if (!imageUrl) {
+    if (!imagePart) {
       return NextResponse.json(
-        { error: "No image returned", provider },
-        { status: 502 }
-      )
+        { error: 'No image returned from Gemini' },
+        { status: 500 }
+      );
     }
 
-    return NextResponse.json({ imageUrl, provider })
+    const inline = imagePart.inline_data || imagePart.inlineData;
+    const mimeType = inline?.mime_type || inline?.mimeType || 'image/png';
+    const data = inline?.data;
+
+    if (!data) {
+      return NextResponse.json(
+        { error: 'No image data returned from Gemini' },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      imageUrl: `data:${mimeType};base64,${data}`,
+    });
   } catch (error) {
-    console.error("Seedream generate error:", error)
-    const cause =
-      error && typeof error === "object" && "cause" in error
-        ? String((error as { cause?: unknown }).cause)
-        : undefined
-    return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Server error",
-        ...(cause ? { cause } : {})
-      },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }
