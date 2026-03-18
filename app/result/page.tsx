@@ -18,16 +18,16 @@ export default function ResultPage() {
   const [evaluation, setEvaluation] = useState('');
   const [suggestions, setSuggestions] = useState('');
   const [comparePercent, setComparePercent] = useState(56);
+  const [isDragging, setIsDragging] = useState(false);
+  const [baseNatural, setBaseNatural] = useState<{ w: number; h: number } | null>(null);
+  const [frame, setFrame] = useState({ left: 0, top: 0, width: 0, height: 0 });
 
   const hasImage = Boolean(generatedUrl || originalUrl);
   const canCompare = Boolean(generatedUrl && originalUrl);
 
   const updateCompareByX = (clientX: number) => {
-    const el = sliderRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    if (rect.width <= 0) return;
-    const raw = ((clientX - rect.left) / rect.width) * 100;
+    if (!frame.width) return;
+    const raw = ((clientX - frame.left) / frame.width) * 100;
     setComparePercent(Math.min(100, Math.max(0, raw)));
   };
 
@@ -101,9 +101,58 @@ export default function ResultPage() {
     };
   }, []);
 
+  useEffect(() => {
+    const container = sliderRef.current;
+    if (!container || !baseNatural) return;
+
+    const recalc = () => {
+      const rect = container.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+
+      const ratioW = rect.width / baseNatural.w;
+      const ratioH = rect.height / baseNatural.h;
+      const scale = Math.min(ratioW, ratioH);
+
+      const width = baseNatural.w * scale;
+      const height = baseNatural.h * scale;
+      const left = (rect.width - width) / 2;
+      const top = (rect.height - height) / 2;
+
+      setFrame({ left, top, width, height });
+    };
+
+    recalc();
+    const observer = new ResizeObserver(recalc);
+    observer.observe(container);
+    window.addEventListener('resize', recalc);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', recalc);
+    };
+  }, [baseNatural]);
+
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const onMove = (event: PointerEvent) => {
+      updateCompareByX(event.clientX);
+    };
+
+    const onUp = () => setIsDragging(false);
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+  }, [isDragging, frame.width, frame.left]);
+
   return (
     <div className="min-h-screen bg-[#FDF9F1] px-4 py-10 text-stone-800">
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto max-w-[1200px]">
         <motion.div
           initial={{ opacity: 0, y: 40, scale: 0.96, filter: 'blur(6px)' }}
           animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
@@ -135,32 +184,53 @@ export default function ResultPage() {
                 className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-stone-100"
                 onClick={(event) => updateCompareByX(event.clientX)}
               >
-                <img
-                  src={originalUrl || generatedUrl}
-                  alt="Before"
-                  className="absolute inset-0 h-full w-full object-contain"
-                />
-
-                <img
-                  src={generatedUrl || originalUrl}
-                  alt="After"
-                  className="absolute inset-0 h-full w-full object-contain"
+                <div
+                  className="absolute"
                   style={{
-                    clipPath: canCompare
-                      ? `inset(0 ${100 - comparePercent}% 0 0)`
-                      : 'inset(0 0 0 0)',
+                    left: `${frame.left}px`,
+                    top: `${frame.top}px`,
+                    width: `${frame.width}px`,
+                    height: `${frame.height}px`,
                   }}
-                />
+                >
+                  <img
+                    src={originalUrl || generatedUrl}
+                    alt="Before"
+                    onLoad={(event) => {
+                      if (baseNatural) return;
+                      setBaseNatural({
+                        w: event.currentTarget.naturalWidth || 1,
+                        h: event.currentTarget.naturalHeight || 1,
+                      });
+                    }}
+                    className="h-full w-full object-contain"
+                  />
+
+                  <img
+                    src={generatedUrl || originalUrl}
+                    alt="After"
+                    className="absolute inset-0 h-full w-full object-contain"
+                    style={{
+                      clipPath: canCompare
+                        ? `inset(0 ${100 - comparePercent}% 0 0)`
+                        : 'inset(0 0 0 0)',
+                    }}
+                  />
+                </div>
 
                 {canCompare ? (
                   <motion.div
-                    drag="x"
-                    dragElastic={0}
-                    dragConstraints={sliderRef}
-                    onDrag={(_, info) => updateCompareByX(info.point.x)}
-                    onPointerDown={(event) => updateCompareByX(event.clientX)}
-                    className="absolute inset-y-0 z-20 w-10 -translate-x-1/2 cursor-ew-resize"
-                    style={{ left: `${comparePercent}%` }}
+                    onPointerDown={(event) => {
+                      event.preventDefault();
+                      setIsDragging(true);
+                      updateCompareByX(event.clientX);
+                    }}
+                    className="absolute z-20 w-10 -translate-x-1/2 cursor-ew-resize"
+                    style={{
+                      left: `${frame.left + (frame.width * comparePercent) / 100}px`,
+                      top: `${frame.top}px`,
+                      height: `${frame.height}px`,
+                    }}
                   >
                     <div className="mx-auto h-full w-[2px] bg-white/90" />
                     <div className="absolute left-1/2 top-1/2 h-9 w-9 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/70 bg-white/95 shadow-lg" />
