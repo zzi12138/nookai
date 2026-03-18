@@ -43,6 +43,14 @@ function bufferToBase64(buffer: ArrayBuffer) {
   return Buffer.from(buffer).toString('base64');
 }
 
+function stringifyError(error: unknown) {
+  if (error instanceof Error) {
+    const causeCode = (error as Error & { cause?: { code?: string } }).cause?.code;
+    return causeCode ? `${error.message} (${causeCode})` : error.message;
+  }
+  return String(error);
+}
+
 async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 90000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -76,6 +84,26 @@ async function resolveImageForGemini(image: string) {
   }
 
   throw new Error('Unsupported image input for Gemini');
+}
+
+async function resolveImageForNanobanana(image: string) {
+  if (isDataUrl(image)) {
+    return stripDataUrl(image);
+  }
+
+  if (isHttpUrl(image)) {
+    const response = await fetchWithTimeout(image, { method: 'GET' }, 30000);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch source image: ${response.status}`);
+    }
+    return bufferToBase64(await response.arrayBuffer());
+  }
+
+  if (isProbablyBase64(image)) {
+    return stripDataUrl(image);
+  }
+
+  throw new Error('Unsupported image input for Nanobanana');
 }
 
 function pickNanobananaUrl(result: any) {
@@ -115,7 +143,8 @@ function pickProviders(providerHint?: 'nanobanana' | 'gemini') {
   }
 
   if (forced === 'gemini') {
-    if (!hasGemini) throw new Error('IMAGE_PROVIDER=gemini but GEMINI_API_KEY/GOOGLE_API_KEY is missing');
+    if (!hasGemini)
+      throw new Error('IMAGE_PROVIDER=gemini but GEMINI_API_KEY/GOOGLE_API_KEY is missing');
     return ['gemini'] as const;
   }
 
@@ -138,9 +167,10 @@ async function callNanobanana(params: GenerateImageParams): Promise<GenerateImag
   }
 
   const endpoint = process.env.NANOBANANA_BASE_URL || 'https://api.nanobanana.ai/v1/generate';
-  const imagePayload = isDataUrl(params.image) ? stripDataUrl(params.image) : params.image;
+  const imagePayload = await resolveImageForNanobanana(params.image);
 
   let lastError = '';
+
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
       const response = await fetchWithTimeout(
@@ -174,9 +204,9 @@ async function callNanobanana(params: GenerateImageParams): Promise<GenerateImag
 
       return { imageUrl, provider: 'nanobanana' };
     } catch (error) {
-      lastError = error instanceof Error ? error.message : String(error);
+      lastError = stringifyError(error);
       if (attempt < 2) {
-        await new Promise((resolve) => setTimeout(resolve, 600));
+        await new Promise((resolve) => setTimeout(resolve, 700));
         continue;
       }
     }
@@ -222,7 +252,7 @@ async function callGemini(params: GenerateImageParams): Promise<GenerateImageRes
         },
       }),
     },
-    45000
+    90000
   );
 
   const result = await response.json().catch(() => ({}));
@@ -252,8 +282,7 @@ export async function generateImage(params: GenerateImageParams): Promise<Genera
       if (provider === 'nanobanana') return await callNanobanana(params);
       return await callGemini(params);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      errors.push(`${provider}: ${message}`);
+      errors.push(`${provider}: ${stringifyError(error)}`);
     }
   }
 
