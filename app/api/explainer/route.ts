@@ -7,31 +7,153 @@ type Payload = {
   theme?: string;
 };
 
+type PlanItem = {
+  id: number;
+  markerLabel: string;
+  name: string;
+  imageTarget: {
+    x: number;
+    y: number;
+  };
+  module: string;
+  buy: string;
+  priceRange: string;
+  placement: string;
+  value: string;
+};
+
+function toMarker(index: number) {
+  const markers = ['①', '②', '③', '④', '⑤', '⑥'];
+  return markers[index - 1] || String(index);
+}
+
 function stripDataUrl(value: string) {
+  if (!value) return '';
   return value.includes(',') ? value.split(',')[1] : value;
 }
 
+function getStyleHint(theme: string) {
+  if (theme.includes('原木') || theme.toLowerCase().includes('japandi')) {
+    return 'natural wood, linen, beige, warm white light';
+  }
+  if (theme.includes('奶油')) {
+    return 'soft creamy, boucle texture, warm neutral, cozy';
+  }
+  if (theme.includes('复古')) {
+    return 'vintage artistic, warm brown, nostalgic decor';
+  }
+  if (theme.includes('极简')) {
+    return 'modern minimalist, clean line, monochrome neutral';
+  }
+  return 'warm neutral, clean renter-friendly style';
+}
+
 function buildExplainerPrompt(theme: string) {
+  const styleHint = getStyleHint(theme);
+
   return `
-Transform the provided room redesign photo into a clean explainer diagram.
+Create a clean interior transformation explainer diagram from the provided room image.
 
-Style direction:
-- minimal
-- instruction-like
-- Apple / IKEA style
-- not photorealistic
+Keep exactly the same room geometry, camera angle, perspective, and composition.
+Do not modify architecture or layout.
 
-Strict visual rules:
-1) Keep only key upgraded elements visible: lighting, rug, wall art, plants, decor.
-2) Simplify the rest of the room into light neutral line-art or faded background.
-3) Add clean numbered markers near key points: ① ② ③ ④.
-4) Use calm neutral colors and high readability.
-5) Keep composition stable and easy to understand in one glance.
+Visual goal:
+- a line-art / instruction-style explainer image
+- background simplified and faded in very light neutral tones
+- highlight only added renter-friendly upgrade objects
 
-Theme context: ${theme}
+Highlight only these concrete objects:
+1) floor lamp near sofa
+2) rug in seating zone
+3) wall art above sofa or bed
+4) medium indoor plant in corner
+5) bedding textile set
 
-Output must feel like a visual transformation explanation, not a normal room photo.
+Style context: ${styleHint}
+
+Output style:
+- minimal, clean, product-manual style (Apple / IKEA feel)
+- high readability, lots of negative space
+- not photorealistic, not poster-like
+- no extra text blocks
 `.trim();
+}
+
+function buildItems(theme: string): PlanItem[] {
+  const styleHint = getStyleHint(theme);
+
+  return [
+    {
+      id: 1,
+      markerLabel: toMarker(1),
+      name: '暖光落地灯',
+      imageTarget: { x: 73, y: 58 },
+      module: '补一层侧向暖光，让房间从“亮”变成“有氛围”。',
+      buy: `简约暖光落地灯（${styleHint}，建议 3000K）`,
+      priceRange: '¥159-399',
+      placement: '沙发右侧或沙发后方，灯头朝向休息区。',
+      value: '这是最快、最稳定的氛围提升项。',
+    },
+    {
+      id: 2,
+      markerLabel: toMarker(2),
+      name: '浅色地毯',
+      imageTarget: { x: 52, y: 75 },
+      module: '把休息区域明确划出来，空间层次更清晰。',
+      buy: '浅色短绒地毯（易打理）',
+      priceRange: '¥199-499',
+      placement: '沙发前或床尾区域，压住家具前脚更自然。',
+      value: '能快速解决房间“空、散”的问题。',
+    },
+    {
+      id: 3,
+      markerLabel: toMarker(3),
+      name: '简约挂画',
+      imageTarget: { x: 67, y: 33 },
+      module: '给墙面一个焦点，不改硬装也能提升完成度。',
+      buy: '免打孔挂画（单幅优先）',
+      priceRange: '¥69-199',
+      placement: '沙发或床上方中线位置，避免挂得过高。',
+      value: '视觉重心会更稳，照片观感明显更高级。',
+    },
+    {
+      id: 4,
+      markerLabel: toMarker(4),
+      name: '中型绿植',
+      imageTarget: { x: 84, y: 56 },
+      module: '增加自然元素，软化硬边界。',
+      buy: '中型绿植（龟背竹/虎尾兰）',
+      priceRange: '¥79-259',
+      placement: '窗边或角落过渡区，避免挡住动线。',
+      value: '低预算也能明显提升生活感。',
+    },
+    {
+      id: 5,
+      markerLabel: toMarker(5),
+      name: '米色床品',
+      imageTarget: { x: 24, y: 84 },
+      module: '统一大面积织物主色，整体更干净。',
+      buy: '米色床品套装 + 小抱枕',
+      priceRange: '¥179-459',
+      placement: '床面主色保持浅暖色，深色只留小面积点缀。',
+      value: '床面占比最大，改完后整体风格立刻统一。',
+    },
+  ];
+}
+
+function pickImageUrl(result: any) {
+  return (
+    result?.url ||
+    result?.imageUrl ||
+    result?.data?.url ||
+    result?.data?.imageUrl ||
+    result?.data?.[0]?.url ||
+    result?.result?.url ||
+    result?.result?.imageUrl ||
+    result?.output?.url ||
+    result?.output?.[0]?.url ||
+    ''
+  );
 }
 
 export async function POST(req: Request) {
@@ -44,73 +166,54 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing image' }, { status: 400 });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    const apiKey = process.env.NANOBANANA_API_KEY;
     if (!apiKey) {
-      return NextResponse.json(
-        { error: 'Missing GEMINI_API_KEY (or GOOGLE_API_KEY)' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Missing NANOBANANA_API_KEY' }, { status: 500 });
     }
 
-    const model = process.env.GEMINI_IMAGE_MODEL || 'gemini-3.1-flash-image-preview';
-    const prompt = buildExplainerPrompt(theme);
-    const base64Image = stripDataUrl(image);
+    const endpoint = process.env.NANOBANANA_BASE_URL || 'https://api.nanobanana.ai/v1/generate';
+    const payloadImage = image.startsWith('http') ? image : stripDataUrl(image);
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey,
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              role: 'user',
-              parts: [
-                { text: prompt },
-                {
-                  inline_data: {
-                    mime_type: 'image/jpeg',
-                    data: base64Image,
-                  },
-                },
-              ],
-            },
-          ],
-          generationConfig: {
-            responseModalities: ['IMAGE'],
-          },
-        }),
-      }
-    );
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: process.env.NANOBANANA_EXPLAINER_MODEL || 'nb2-interior-pro',
+        image: payloadImage,
+        prompt: buildExplainerPrompt(theme),
+        negative_prompt:
+          'photorealistic texture, noisy background, random typography, busy composition, excessive color, blurred line art, distorted geometry, changed architecture',
+        strength: 0.38,
+      }),
+    });
 
     const result = await response.json().catch(() => ({}));
     if (!response.ok) {
       return NextResponse.json(
-        { error: result?.error?.message || result?.error || 'Explainer generation failed' },
+        { error: result?.error || result?.message || 'Explainer generation failed' },
         { status: 500 }
       );
     }
 
-    const parts = result?.candidates?.[0]?.content?.parts ?? [];
-    const imagePart = parts.find((part: any) => part?.inline_data || part?.inlineData);
-    const inline = imagePart?.inline_data || imagePart?.inlineData;
-    const mimeType = inline?.mime_type || inline?.mimeType || 'image/png';
-    const data = inline?.data;
-
-    if (!data) {
+    const explainerImageUrl = pickImageUrl(result);
+    if (!explainerImageUrl) {
       return NextResponse.json(
-        { error: 'No explainer image data returned from Gemini' },
+        { error: 'Nanobanana returned no explainer image' },
         { status: 500 }
       );
     }
 
     return NextResponse.json({
-      explainerImageUrl: `data:${mimeType};base64,${data}`,
+      summary:
+        '这次改造重点是补光、统一织物和增加装饰焦点。你可以直接按图上编号逐个补齐，不需要动任何硬装。',
+      explainerImageUrl,
+      items: buildItems(theme),
     });
-  } catch {
-    return NextResponse.json({ error: 'Server error' }, { status: 500 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Server error';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
