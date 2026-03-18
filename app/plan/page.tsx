@@ -24,6 +24,27 @@ const markerFallback = [
   { marker: '④', left: '78%', top: '56%' },
 ] as const;
 
+async function optimizeDataUrl(dataUrl: string, maxSize = 1280, quality = 0.82) {
+  return new Promise<string>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Canvas unavailable'));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => reject(new Error('Image load failed'));
+    img.src = dataUrl;
+  });
+}
+
 function buildGuide(theme: string): GuideItem[] {
   const styleHints =
     theme.includes('原木') || theme.toLowerCase().includes('japandi')
@@ -128,53 +149,47 @@ export default function PlanPage() {
     loadSourceData();
   }, []);
 
+  const generateExplainer = async () => {
+    if (!generatedUrl || isGeneratingExplainer) return;
+    setIsGeneratingExplainer(true);
+    setExplainerError('');
+    try {
+      const optimized = await optimizeDataUrl(generatedUrl, 1280, 0.82);
+      const response = await fetch('/api/explainer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: optimized, theme }),
+      });
+
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.explainerImageUrl) {
+        throw new Error(data?.error || '生成讲解图失败');
+      }
+
+      setExplainerImage(data.explainerImageUrl);
+      const cached = sessionStorage.getItem('nookai_result_image');
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached) as Partial<StoredResult>;
+          sessionStorage.setItem(
+            'nookai_result_image',
+            JSON.stringify({ ...parsed, explainerImage: data.explainerImageUrl })
+          );
+        } catch {
+          // ignore cache update error
+        }
+      }
+    } catch (err) {
+      setExplainerError(err instanceof Error ? err.message : '生成讲解图失败');
+    } finally {
+      setIsGeneratingExplainer(false);
+    }
+  };
+
   useEffect(() => {
     if (!generatedUrl || explainerImage || isGeneratingExplainer) return;
-
-    let cancelled = false;
-    const run = async () => {
-      setIsGeneratingExplainer(true);
-      setExplainerError('');
-      try {
-        const response = await fetch('/api/explainer', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: generatedUrl, theme }),
-        });
-
-        const data = await response.json().catch(() => null);
-        if (!response.ok || !data?.explainerImageUrl) {
-          throw new Error(data?.error || '生成讲解图失败');
-        }
-        if (cancelled) return;
-        setExplainerImage(data.explainerImageUrl);
-
-        const cached = sessionStorage.getItem('nookai_result_image');
-        if (cached) {
-          try {
-            const parsed = JSON.parse(cached) as Partial<StoredResult>;
-            sessionStorage.setItem(
-              'nookai_result_image',
-              JSON.stringify({ ...parsed, explainerImage: data.explainerImageUrl })
-            );
-          } catch {
-            // ignore cache update error
-          }
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setExplainerError(err instanceof Error ? err.message : '生成讲解图失败');
-        }
-      } finally {
-        if (!cancelled) setIsGeneratingExplainer(false);
-      }
-    };
-
-    run();
-    return () => {
-      cancelled = true;
-    };
-  }, [generatedUrl, explainerImage, isGeneratingExplainer, theme]);
+    generateExplainer();
+  }, [generatedUrl, explainerImage, isGeneratingExplainer]);
 
   const handleCopy = async () => {
     const lines = guide.map(
@@ -275,7 +290,29 @@ export default function PlanPage() {
         >
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-2xl font-semibold text-stone-900">改造讲解图</h2>
-            <p className="text-xs text-stone-400">看图就能知道改造重点</p>
+            <div className="flex items-center gap-2">
+              {explainerImage ? (
+                <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs text-emerald-700">
+                  已生成讲解图
+                </span>
+              ) : isGeneratingExplainer ? (
+                <span className="rounded-full bg-amber-50 px-3 py-1 text-xs text-amber-700">
+                  生成中...
+                </span>
+              ) : (
+                <span className="rounded-full bg-stone-100 px-3 py-1 text-xs text-stone-500">
+                  当前为标注版
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={generateExplainer}
+                disabled={isGeneratingExplainer}
+                className="rounded-full border border-stone-200 px-3 py-1 text-xs text-stone-600 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                重新生成讲解图
+              </button>
+            </div>
           </div>
 
           <div className="relative overflow-hidden rounded-2xl bg-stone-100">
@@ -290,12 +327,13 @@ export default function PlanPage() {
                 <img
                   src={generatedUrl || originalUrl}
                   alt="讲解图生成中"
-                  className="h-full w-full object-contain opacity-95"
+                  className="h-full w-full object-contain opacity-90 grayscale-[18%]"
                 />
+                <div className="pointer-events-none absolute inset-0 bg-white/22" />
                 {markerFallback.map((item) => (
                   <span
                     key={item.marker}
-                    className="absolute flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white text-sm font-semibold text-stone-800 shadow-md"
+                    className="absolute z-20 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-amber-200 bg-white text-sm font-semibold text-amber-700 shadow-md"
                     style={{ left: item.left, top: item.top }}
                   >
                     {item.marker}
@@ -311,9 +349,10 @@ export default function PlanPage() {
           </div>
 
           {explainerError ? (
-            <p className="mt-3 text-sm text-amber-700">
-              讲解图暂未生成成功，已先展示可执行标注版。({explainerError})
-            </p>
+            <div className="mt-3 rounded-2xl bg-amber-50 p-3 text-sm text-amber-800">
+              讲解图生成失败，当前先展示标注版。可以点击右上角「重新生成讲解图」再试一次。
+              <span className="ml-2 text-xs text-amber-700">({explainerError})</span>
+            </div>
           ) : null}
         </motion.section>
 
