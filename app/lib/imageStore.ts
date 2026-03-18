@@ -36,6 +36,10 @@ export type StoredResult = {
   original: string;
   generated: string;
   theme?: string;
+  evaluation?: string;
+  suggestions?: string;
+  constraints?: string[];
+  requirements?: string[];
   createdAt: number;
 };
 
