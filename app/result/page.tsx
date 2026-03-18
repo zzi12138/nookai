@@ -300,7 +300,11 @@ export default function ResultPage() {
                   </motion.button>
                   <motion.button
                     type="button"
-                    onClick={() => router.push('/plan')}
+                    onClick={() => {
+                      const params = new URLSearchParams(window.location.search);
+                      const id = params.get('id');
+                      router.push(id ? `/plan?id=${encodeURIComponent(id)}` : '/plan');
+                    }}
                     whileHover={{ y: -2 }}
                     whileTap={{ scale: 0.98 }}
                     transition={spring}

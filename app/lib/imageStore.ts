@@ -35,6 +35,7 @@ function generateId() {
 export type StoredResult = {
   original: string;
   generated: string;
+  explainerImage?: string;
   theme?: string;
   evaluation?: string;
   suggestions?: string;
