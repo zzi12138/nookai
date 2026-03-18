@@ -154,12 +154,20 @@ function normalizeItems(raw: PlanItem[] | undefined, theme: string) {
     .sort((a, b) => a.id - b.id);
 }
 
+function inferProviderFromImage(imageUrl: string | undefined) {
+  if (!imageUrl) return undefined;
+  if (imageUrl.startsWith('data:image/')) return 'gemini' as const;
+  if (/^https?:\/\//i.test(imageUrl)) return 'nanobanana' as const;
+  return undefined;
+}
+
 export default function PlanPage() {
   const router = useRouter();
 
   const [theme, setTheme] = useState('日式原木风');
   const [originalUrl, setOriginalUrl] = useState('');
   const [generatedUrl, setGeneratedUrl] = useState('');
+  const [provider, setProvider] = useState<'nanobanana' | 'gemini' | undefined>(undefined);
   const [explainerImageUrl, setExplainerImageUrl] = useState('');
   const [summary, setSummary] = useState('');
   const [items, setItems] = useState<PlanItem[]>([]);
@@ -186,6 +194,7 @@ export default function PlanPage() {
       setTheme(data.theme || '日式原木风');
       setOriginalUrl(data.original || '');
       setGeneratedUrl(data.generated || '');
+      setProvider(data.provider || inferProviderFromImage(data.generated));
     };
 
     const load = async () => {
@@ -247,7 +256,7 @@ export default function PlanPage() {
         const response = await fetch('/api/explainer', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: source, theme }),
+          body: JSON.stringify({ image: source, theme, provider }),
         });
 
         const data = (await response.json().catch(() => null)) as ExplainerResponse | null;
@@ -285,7 +294,7 @@ export default function PlanPage() {
     };
 
     void request();
-  }, [generatedUrl, originalUrl, theme, hint.summary]);
+  }, [generatedUrl, originalUrl, theme, hint.summary, provider]);
 
   const selectedItem = useMemo(
     () => items.find((item) => item.id === selectedId) || null,

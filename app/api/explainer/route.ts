@@ -6,6 +6,7 @@ export const runtime = 'nodejs';
 type Payload = {
   image?: string;
   theme?: string;
+  provider?: 'nanobanana' | 'gemini';
 };
 
 type PlanItem = {
@@ -141,6 +142,7 @@ export async function POST(req: Request) {
     const body = (await req.json()) as Payload;
     const image = body.image || '';
     const theme = body.theme || '日式原木风';
+    const provider = body.provider;
 
     if (!image) {
       return NextResponse.json({ error: 'Missing image' }, { status: 400 });
@@ -148,6 +150,7 @@ export async function POST(req: Request) {
 
     const { imageUrl } = await generateImage({
       image,
+      provider,
       prompt: buildExplainerPrompt(theme),
       negativePrompt:
         'photorealistic texture, noisy background, random typography, busy composition, excessive color, blurred line art, distorted geometry, changed architecture',

@@ -178,6 +178,7 @@ export default function Page() {
         const storedId = await saveResult({
           original: previewUrl,
           generated: data.imageUrl,
+          provider: data.provider,
           theme: selectedStyle,
           constraints: selectedConstraints,
           requirements,
@@ -192,6 +193,7 @@ export default function Page() {
           JSON.stringify({
             original: previewUrl,
             generated: data.imageUrl,
+            provider: data.provider,
             theme: selectedStyle,
             constraints: selectedConstraints,
             requirements,
@@ -209,12 +211,12 @@ export default function Page() {
 
   return (
     <div className="min-h-screen bg-[#FDF9F1] px-4 py-10">
-      <div className="mx-auto w-full max-w-[420px]">
+      <div className="mx-auto w-full max-w-[460px] md:max-w-[520px]">
         <motion.div
           initial={{ opacity: 0, y: 40, scale: 0.96, filter: 'blur(6px)' }}
           animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
           transition={spring}
-          className="overflow-hidden rounded-3xl bg-white p-8 shadow-xl shadow-stone-200/50"
+          className="overflow-hidden rounded-3xl bg-white p-7 shadow-xl shadow-stone-200/50 md:p-9"
         >
           <div className="mb-7">
             <div className="mb-2 flex items-center justify-between text-xs text-stone-400">
@@ -417,7 +419,7 @@ export default function Page() {
                   whileHover={{ y: -2 }}
                   whileTap={{ scale: 0.99 }}
                   transition={spring}
-                  className="group flex h-[220px] w-full items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-amber-300/70 bg-amber-50/70"
+                  className="group flex h-[220px] w-full items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-amber-300/70 bg-amber-50/70 md:h-[250px]"
                 >
                   {previewUrl ? (
                     <img

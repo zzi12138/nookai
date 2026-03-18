@@ -94,7 +94,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing image' }, { status: 400 });
     }
 
-    const { imageUrl } = await generateImage({
+    const { imageUrl, provider } = await generateImage({
       image,
       prompt: buildPrompt(theme, constraints, requirements),
       negativePrompt: buildNegativePrompt(constraints),
@@ -104,6 +104,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       imageUrl,
+      provider,
       evaluation: buildEvaluation(theme, requirements),
       suggestions: buildSuggestions(theme),
     });

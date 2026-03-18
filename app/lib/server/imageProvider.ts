@@ -5,6 +5,7 @@ export type GenerateImageParams = {
   strength?: number;
   nanobananaModel?: string;
   geminiModel?: string;
+  provider?: 'nanobanana' | 'gemini';
 };
 
 export type GenerateImageResult = {
@@ -42,7 +43,7 @@ function bufferToBase64(buffer: ArrayBuffer) {
   return Buffer.from(buffer).toString('base64');
 }
 
-async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 45000) {
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 120000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -93,10 +94,16 @@ function pickNanobananaUrl(result: any) {
   );
 }
 
-function pickProviders() {
+function pickProviders(providerHint?: 'nanobanana' | 'gemini') {
   const hasNano = Boolean(process.env.NANOBANANA_API_KEY);
   const hasGemini = Boolean(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY);
   const forced = (process.env.IMAGE_PROVIDER || '').toLowerCase().trim();
+
+  if (providerHint) {
+    if (providerHint === 'nanobanana' && hasNano) return ['nanobanana'] as const;
+    if (providerHint === 'gemini' && hasGemini) return ['gemini'] as const;
+    throw new Error(`Provider hint ${providerHint} is unavailable in current environment`);
+  }
 
   if (forced === 'nanobanana') {
     if (!hasNano) throw new Error('IMAGE_PROVIDER=nanobanana but NANOBANANA_API_KEY is missing');
@@ -129,36 +136,56 @@ async function callNanobanana(params: GenerateImageParams): Promise<GenerateImag
   const endpoint = process.env.NANOBANANA_BASE_URL || 'https://api.nanobanana.ai/v1/generate';
   const imagePayload = isDataUrl(params.image) ? stripDataUrl(params.image) : params.image;
 
-  const response = await fetchWithTimeout(
-    endpoint,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: params.nanobananaModel || process.env.NANOBANANA_MODEL || 'nb2-interior-pro',
-        image: imagePayload,
-        prompt: params.prompt,
-        negative_prompt: params.negativePrompt || '',
-        strength: typeof params.strength === 'number' ? params.strength : 0.65,
-      }),
-    },
-    45000
-  );
+  let lastError = '';
 
-  const result = await response.json().catch(() => ({}));
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      const response = await fetchWithTimeout(
+        endpoint,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: params.nanobananaModel || process.env.NANOBANANA_MODEL || 'nb2-interior-pro',
+            image: imagePayload,
+            prompt: params.prompt,
+            negative_prompt: params.negativePrompt || '',
+            strength: typeof params.strength === 'number' ? params.strength : 0.65,
+          }),
+        },
+        120000
+      );
 
-  if (!response.ok) {
-    const reason = result?.error || result?.message || `Nanobanana ${response.status}`;
-    throw new Error(String(reason));
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        const reason = result?.error || result?.message || `Nanobanana ${response.status}`;
+        lastError = String(reason);
+        if (response.status >= 500 && attempt < 3) {
+          await new Promise((resolve) => setTimeout(resolve, 900 * attempt));
+          continue;
+        }
+        throw new Error(lastError);
+      }
+
+      const imageUrl = pickNanobananaUrl(result);
+      if (!imageUrl) throw new Error('Nanobanana returned no imageUrl');
+
+      return { imageUrl, provider: 'nanobanana' };
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+      if (attempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, 900 * attempt));
+        continue;
+      }
+      throw new Error(lastError);
+    }
   }
 
-  const imageUrl = pickNanobananaUrl(result);
-  if (!imageUrl) throw new Error('Nanobanana returned no imageUrl');
-
-  return { imageUrl, provider: 'nanobanana' };
+  throw new Error(lastError || 'Nanobanana failed');
 }
 
 async function callGemini(params: GenerateImageParams): Promise<GenerateImageResult> {
@@ -170,57 +197,77 @@ async function callGemini(params: GenerateImageParams): Promise<GenerateImageRes
   const model = params.geminiModel || process.env.GEMINI_IMAGE_MODEL || 'gemini-3.1-flash-image-preview';
   const image = await resolveImageForGemini(params.image);
 
-  const response = await fetchWithTimeout(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey,
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              { text: params.prompt },
+  let lastError = '';
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      const response = await fetchWithTimeout(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': apiKey,
+          },
+          body: JSON.stringify({
+            contents: [
               {
-                inline_data: {
-                  mime_type: image.mimeType,
-                  data: image.data,
-                },
+                role: 'user',
+                parts: [
+                  { text: params.prompt },
+                  {
+                    inline_data: {
+                      mime_type: image.mimeType,
+                      data: image.data,
+                    },
+                  },
+                ],
               },
             ],
-          },
-        ],
-        generationConfig: {
-          responseModalities: ['IMAGE'],
+            generationConfig: {
+              responseModalities: ['IMAGE'],
+            },
+          }),
         },
-      }),
-    },
-    45000
-  );
+        120000
+      );
 
-  const result = await response.json().catch(() => ({}));
+      const result = await response.json().catch(() => ({}));
 
-  if (!response.ok) {
-    const reason = result?.error?.message || result?.error || `Gemini ${response.status}`;
-    throw new Error(String(reason));
+      if (!response.ok) {
+        const reason = result?.error?.message || result?.error || `Gemini ${response.status}`;
+        lastError = String(reason);
+        if (response.status >= 500 && attempt < 3) {
+          await new Promise((resolve) => setTimeout(resolve, 900 * attempt));
+          continue;
+        }
+        throw new Error(lastError);
+      }
+
+      const parts = result?.candidates?.[0]?.content?.parts ?? [];
+      const imagePart = parts.find((part: any) => part?.inline_data || part?.inlineData);
+      const inline = imagePart?.inline_data || imagePart?.inlineData;
+      const mimeType = inline?.mime_type || inline?.mimeType || 'image/png';
+      const data = inline?.data;
+
+      if (!data) throw new Error('Gemini returned no image data');
+
+      return { imageUrl: `data:${mimeType};base64,${data}`, provider: 'gemini' };
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+      if (attempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, 900 * attempt));
+        continue;
+      }
+      throw new Error(lastError);
+    }
   }
 
-  const parts = result?.candidates?.[0]?.content?.parts ?? [];
-  const imagePart = parts.find((part: any) => part?.inline_data || part?.inlineData);
-  const inline = imagePart?.inline_data || imagePart?.inlineData;
-  const mimeType = inline?.mime_type || inline?.mimeType || 'image/png';
-  const data = inline?.data;
-
-  if (!data) throw new Error('Gemini returned no image data');
-
-  return { imageUrl: `data:${mimeType};base64,${data}`, provider: 'gemini' };
+  throw new Error(lastError || 'Gemini failed');
 }
 
 export async function generateImage(params: GenerateImageParams): Promise<GenerateImageResult> {
-  const providers = pickProviders();
+  const providers = pickProviders(params.provider);
   const errors: string[] = [];
 
   for (const provider of providers) {
