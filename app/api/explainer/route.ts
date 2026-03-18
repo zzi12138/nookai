@@ -7,136 +7,303 @@ type Payload = {
   theme?: string;
 };
 
-type PlanItem = {
-  id: number;
-  markerLabel: string;
-  name: string;
-  imageTarget: {
-    x: number;
-    y: number;
+type Category =
+  | '主照明'
+  | '氛围照明'
+  | '地面软装'
+  | '床品布艺'
+  | '墙面装饰'
+  | '绿植'
+  | '功能型小物';
+
+type Necessity = '必买' | '建议买' | '可选';
+
+type RawItem = {
+  name?: string;
+  category?: string;
+  quantity?: number;
+  priceMin?: number;
+  priceMax?: number;
+  placement?: string;
+  necessity?: string;
+  reason?: string;
+  anchor?: {
+    x?: number;
+    y?: number;
+    confidence?: number;
   };
-  module: string;
-  buy: string;
-  priceRange: string;
-  placement: string;
-  value: string;
 };
 
 function stripDataUrl(value: string) {
   return value.includes(',') ? value.split(',')[1] : value;
 }
 
-function toMarker(index: number) {
-  const markers = ['①', '②', '③', '④', '⑤', '⑥'];
-  return markers[index - 1] || String(index);
+function extractMimeType(dataUrl: string) {
+  const m = dataUrl.match(/^data:([^;]+);base64,/i);
+  return m?.[1] || 'image/jpeg';
 }
 
-function getStyleHint(theme: string) {
-  if (theme.includes('原木') || theme.toLowerCase().includes('japandi')) {
-    return 'natural wood, linen, beige, warm white light';
-  }
-  if (theme.includes('奶油')) {
-    return 'soft creamy, boucle texture, warm neutral, cozy';
-  }
-  if (theme.includes('复古')) {
-    return 'vintage artistic, warm brown, nostalgic decor';
-  }
-  if (theme.includes('极简')) {
-    return 'modern minimalist, clean line, monochrome neutral';
-  }
-  return 'warm neutral, clean renter-friendly style';
+function isHttpUrl(value: string) {
+  return /^https?:\/\//i.test(value);
 }
 
-function buildExplainerPrompt(theme: string) {
-  const styleHint = getStyleHint(theme);
+function isDataUrl(value: string) {
+  return /^data:[^;]+;base64,/i.test(value);
+}
 
+function isProbablyBase64(value: string) {
+  if (!value) return false;
+  return /^[A-Za-z0-9+/=\r\n]+$/.test(value) && value.length > 64;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function safeParseJson<T>(text: string): T | null {
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    try {
+      return JSON.parse(match[0]) as T;
+    } catch {
+      return null;
+    }
+  }
+}
+
+function normalizeCategory(raw?: string): Category {
+  const value = (raw || '').trim();
+  if (value.includes('主照明') || value.includes('主灯')) return '主照明';
+  if (value.includes('氛围照明') || value.includes('落地灯') || value.includes('台灯')) {
+    return '氛围照明';
+  }
+  if (value.includes('地面')) return '地面软装';
+  if (value.includes('床品') || value.includes('布艺')) return '床品布艺';
+  if (value.includes('墙面') || value.includes('挂画') || value.includes('装饰画')) return '墙面装饰';
+  if (value.includes('绿植') || value.includes('植物')) return '绿植';
+  if (value.includes('功能') || value.includes('收纳') || value.includes('投影')) return '功能型小物';
+  return '功能型小物';
+}
+
+function normalizeNecessity(raw?: string): Necessity {
+  const value = (raw || '').trim();
+  if (value.includes('必')) return '必买';
+  if (value.includes('建议')) return '建议买';
+  return '可选';
+}
+
+function normalizePrice(minRaw: number | undefined, maxRaw: number | undefined) {
+  let min = Number.isFinite(minRaw) ? Number(minRaw) : 0;
+  let max = Number.isFinite(maxRaw) ? Number(maxRaw) : 0;
+
+  if (min <= 0 && max <= 0) {
+    min = 99;
+    max = 169;
+  } else if (min <= 0) {
+    min = Math.max(39, max - 80);
+  } else if (max <= 0) {
+    max = min + 80;
+  }
+
+  min = Math.round(clamp(min, 39, 2999));
+  max = Math.round(clamp(max, min + 20, min + 260));
+
+  return { min, max };
+}
+
+function normalizeName(raw?: string) {
+  const fallback = '可移动软装单品';
+  const name = (raw || '').trim();
+  if (!name) return fallback;
+  return name.length > 22 ? `${name.slice(0, 22)}...` : name;
+}
+
+function normalizePlacement(raw?: string) {
+  const v = (raw || '').trim();
+  return v || '放在不影响通行的主视觉区域';
+}
+
+function normalizeReason(raw?: string) {
+  const v = (raw || '').trim();
+  return v || '能明显提升空间完成度';
+}
+
+function resolveInlineImagePart(image: string) {
+  if (isDataUrl(image)) {
+    return {
+      mimeType: extractMimeType(image),
+      data: stripDataUrl(image),
+    };
+  }
+
+  if (isProbablyBase64(image)) {
+    return {
+      mimeType: 'image/jpeg',
+      data: stripDataUrl(image),
+    };
+  }
+
+  return null;
+}
+
+async function fetchRemoteImageAsInlinePart(url: string) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30000);
+  try {
+    const response = await fetch(url, { method: 'GET', signal: controller.signal });
+    if (!response.ok) {
+      throw new Error(`Failed to fetch source image: ${response.status}`);
+    }
+    const mimeType = response.headers.get('content-type') || 'image/jpeg';
+    const buffer = Buffer.from(await response.arrayBuffer());
+    return {
+      mimeType,
+      data: buffer.toString('base64'),
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function getPrompt(theme: string) {
   return `
-Create a clean interior transformation explainer diagram from the provided room image.
+你是室内改造执行顾问。请基于“当前效果图”识别 4-6 个最关键、可购买、可摆放的物件。
 
-Keep exactly the same room geometry, camera angle, perspective, and composition.
-Do not modify architecture or layout.
+硬性要求：
+1) 只输出具体物件，不要抽象概念。
+2) 物件必须来自当前效果图真实可见内容。
+3) 不要硬凑不存在的物件。
+4) 每个物件都要给出点位坐标 x/y（0-100），坐标需尽量落在物体中心。
+5) 如果坐标不确定，confidence 设低于 0.55。
+6) 价格区间要窄且真实，不要夸张跨度。
 
-Visual goal:
-- line-art / instruction-style explainer image
-- background simplified and faded in light neutral tones
-- highlight only renter-friendly upgrade objects
+风格上下文：${theme || '日式原木风'}
 
-Highlight only these concrete objects:
-1) floor lamp near sofa
-2) rug in seating zone
-3) wall art above sofa or bed
-4) medium indoor plant in corner
-5) bedding textile set
-
-Style context: ${styleHint}
-
-Output style:
-- minimal, clean, product-manual style (Apple / IKEA feel)
-- high readability, lots of negative space
-- not poster-like, not cluttered
+只返回 JSON，不要 Markdown，不要解释。格式如下：
+{
+  "summary": "一句简短总结，不超过45字",
+  "items": [
+    {
+      "name": "暖光落地灯",
+      "category": "主照明|氛围照明|地面软装|床品布艺|墙面装饰|绿植|功能型小物",
+      "quantity": 1,
+      "priceMin": 159,
+      "priceMax": 239,
+      "placement": "沙发右侧",
+      "necessity": "必买|建议买|可选",
+      "reason": "不超过18字",
+      "anchor": { "x": 72, "y": 58, "confidence": 0.82 }
+    }
+  ]
+}
 `.trim();
 }
 
-function buildItems(theme: string): PlanItem[] {
-  const styleHint = getStyleHint(theme);
+async function analyzeItems(image: string, theme: string, apiKey: string) {
+  const inline = resolveInlineImagePart(image);
+  const imagePart = inline
+    ? inline
+    : isHttpUrl(image)
+      ? await fetchRemoteImageAsInlinePart(image)
+      : null;
 
-  return [
-    {
-      id: 1,
-      markerLabel: toMarker(1),
-      name: '暖光落地灯',
-      imageTarget: { x: 73, y: 58 },
-      module: '补一层侧向暖光，让房间从“亮”变成“有氛围”。',
-      buy: `简约暖光落地灯（${styleHint}，建议 3000K）`,
-      priceRange: '¥159-399',
-      placement: '沙发右侧或沙发后方，灯头朝向休息区。',
-      value: '这是最快、最稳定的氛围提升项。',
-    },
-    {
-      id: 2,
-      markerLabel: toMarker(2),
-      name: '浅色地毯',
-      imageTarget: { x: 52, y: 75 },
-      module: '把休息区域明确划出来，空间层次更清晰。',
-      buy: '浅色短绒地毯（易打理）',
-      priceRange: '¥199-499',
-      placement: '沙发前或床尾区域，压住家具前脚更自然。',
-      value: '能快速解决房间“空、散”的问题。',
-    },
-    {
-      id: 3,
-      markerLabel: toMarker(3),
-      name: '简约挂画',
-      imageTarget: { x: 67, y: 33 },
-      module: '给墙面一个焦点，不改硬装也能提升完成度。',
-      buy: '免打孔挂画（单幅优先）',
-      priceRange: '¥69-199',
-      placement: '沙发或床上方中线位置，避免挂得过高。',
-      value: '视觉重心会更稳，照片观感明显更高级。',
-    },
-    {
-      id: 4,
-      markerLabel: toMarker(4),
-      name: '中型绿植',
-      imageTarget: { x: 84, y: 56 },
-      module: '增加自然元素，软化硬边界。',
-      buy: '中型绿植（龟背竹/虎尾兰）',
-      priceRange: '¥79-259',
-      placement: '窗边或角落过渡区，避免挡住动线。',
-      value: '低预算也能明显提升生活感。',
-    },
-    {
-      id: 5,
-      markerLabel: toMarker(5),
-      name: '米色床品',
-      imageTarget: { x: 24, y: 84 },
-      module: '统一大面积织物主色，整体更干净。',
-      buy: '米色床品套装 + 小抱枕',
-      priceRange: '¥179-459',
-      placement: '床面主色保持浅暖色，深色只留小面积点缀。',
-      value: '床面占比最大，改完后整体风格立刻统一。',
-    },
-  ];
+  if (!imagePart) {
+    throw new Error('Unsupported image format');
+  }
+
+  const models = [
+    process.env.GEMINI_VISION_MODEL || 'gemini-2.5-flash',
+    process.env.GEMINI_IMAGE_MODEL || 'gemini-3.1-flash-image-preview',
+  ].filter((m, i, arr) => arr.indexOf(m) === i);
+
+  let lastError = 'Guide analysis failed';
+
+  for (const model of models) {
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 90000);
+
+      try {
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-goog-api-key': apiKey,
+            },
+            body: JSON.stringify({
+              contents: [
+                {
+                  role: 'user',
+                  parts: [
+                    { text: getPrompt(theme) },
+                    {
+                      inline_data: {
+                        mime_type: imagePart.mimeType,
+                        data: imagePart.data,
+                      },
+                    },
+                  ],
+                },
+              ],
+              generationConfig: {
+                temperature: 0.2,
+                responseMimeType: 'application/json',
+              },
+            }),
+            signal: controller.signal,
+          }
+        );
+
+        const result = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          lastError = result?.error?.message || result?.error || `Analysis failed (${response.status})`;
+          if ((response.status === 429 || response.status >= 500) && attempt < 2) {
+            await sleep(900 * attempt);
+            continue;
+          }
+          throw new Error(lastError);
+        }
+
+        const parts = result?.candidates?.[0]?.content?.parts ?? [];
+        const text = parts.map((p: any) => p?.text || '').join('\n').trim();
+        const parsed = safeParseJson<{ summary?: string; items?: RawItem[] }>(text);
+
+        if (!parsed?.items || !Array.isArray(parsed.items) || parsed.items.length === 0) {
+          lastError = 'No items detected from image';
+          if (attempt < 2) {
+            await sleep(900 * attempt);
+            continue;
+          }
+          throw new Error(lastError);
+        }
+
+        return {
+          summary: (parsed.summary || '').trim(),
+          items: parsed.items,
+        };
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : String(error);
+        if (attempt < 2) {
+          await sleep(900 * attempt);
+          continue;
+        }
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+  }
+
+  throw new Error(lastError);
 }
 
 export async function POST(req: Request) {
@@ -157,68 +324,72 @@ export async function POST(req: Request) {
       );
     }
 
-    const model = process.env.GEMINI_IMAGE_MODEL || 'gemini-3.1-flash-image-preview';
-    const prompt = buildExplainerPrompt(theme);
-    const base64Image = stripDataUrl(image);
+    const analyzed = await analyzeItems(image, theme, apiKey);
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey,
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              role: 'user',
-              parts: [
-                { text: prompt },
-                {
-                  inline_data: {
-                    mime_type: 'image/jpeg',
-                    data: base64Image,
-                  },
-                },
-              ],
-            },
-          ],
-          generationConfig: {
-            responseModalities: ['IMAGE'],
+    const normalized = analyzed.items
+      .slice(0, 6)
+      .map((item, index) => {
+        const id = index + 1;
+        const category = normalizeCategory(item.category);
+        const necessity = normalizeNecessity(item.necessity);
+        const { min, max } = normalizePrice(item.priceMin, item.priceMax);
+        const quantity = Math.round(clamp(Number(item.quantity || 1), 1, 3));
+
+        const rawX = Number(item.anchor?.x);
+        const rawY = Number(item.anchor?.y);
+        const confidence = Number.isFinite(item.anchor?.confidence as number)
+          ? clamp(Number(item.anchor?.confidence), 0, 1)
+          : 0;
+
+        const hasCoord = Number.isFinite(rawX) && Number.isFinite(rawY);
+        const x = hasCoord ? clamp(rawX, 4, 96) : 50;
+        const y = hasCoord ? clamp(rawY, 6, 94) : 50;
+        const hasPoint = hasCoord && confidence >= 0.55;
+
+        const name = normalizeName(item.name);
+        const placement = normalizePlacement(item.placement);
+        const reason = normalizeReason(item.reason);
+
+        return {
+          id,
+          markerLabel: String(id),
+          name,
+          category,
+          quantity,
+          priceMin: min,
+          priceMax: max,
+          priceRange: `¥${min}-${max}`,
+          placement,
+          necessity,
+          reason,
+          imageTarget: {
+            x,
+            y,
+            confidence,
+            hasPoint,
           },
-        }),
-      }
-    );
+          module: reason,
+          buy: name,
+          value: reason,
+        };
+      })
+      .filter((item) => item.name && item.placement)
+      .slice(0, 6);
 
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok) {
+    if (normalized.length === 0) {
       return NextResponse.json(
-        { error: result?.error?.message || result?.error || 'Explainer generation failed' },
-        { status: 500 }
-      );
-    }
-
-    const parts = result?.candidates?.[0]?.content?.parts ?? [];
-    const imagePart = parts.find((part: any) => part?.inline_data || part?.inlineData);
-    const inline = imagePart?.inline_data || imagePart?.inlineData;
-    const mimeType = inline?.mime_type || inline?.mimeType || 'image/png';
-    const data = inline?.data;
-
-    if (!data) {
-      return NextResponse.json(
-        { error: 'No explainer image data returned from Gemini' },
+        { error: '无法从当前效果图识别可执行物件，请重试' },
         { status: 500 }
       );
     }
 
     return NextResponse.json({
       summary:
-        '这次改造重点是补光、统一织物和增加装饰焦点。你可以直接按图上编号逐个补齐，不需要动任何硬装。',
-      explainerImageUrl: `data:${mimeType};base64,${data}`,
-      items: buildItems(theme),
+        analyzed.summary || '已识别当前效果图中的关键可执行物件，按优先级逐步购买即可。',
+      items: normalized,
     });
-  } catch {
-    return NextResponse.json({ error: 'Server error' }, { status: 500 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Server error';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
