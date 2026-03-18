@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Palette, RefreshCw, Save } from 'lucide-react';
+import { RefreshCw, Save } from 'lucide-react';
 import { loadResult, type StoredResult } from '../lib/imageStore';
 
 const spring = { type: 'spring', stiffness: 120, damping: 20 } as const;
@@ -138,19 +138,19 @@ export default function ResultPage() {
                 <img
                   src={originalUrl || generatedUrl}
                   alt="Before"
-                  className="absolute inset-0 h-full w-full object-cover"
+                  className="absolute inset-0 h-full w-full object-contain"
                 />
 
-                <div
-                  className="absolute inset-y-0 left-0 overflow-hidden"
-                  style={{ width: canCompare ? `${comparePercent}%` : '100%' }}
-                >
-                  <img
-                    src={generatedUrl || originalUrl}
-                    alt="After"
-                    className="absolute inset-0 h-full w-full object-cover"
-                  />
-                </div>
+                <img
+                  src={generatedUrl || originalUrl}
+                  alt="After"
+                  className="absolute inset-0 h-full w-full object-contain"
+                  style={{
+                    clipPath: canCompare
+                      ? `inset(0 ${100 - comparePercent}% 0 0)`
+                      : 'inset(0 0 0 0)',
+                  }}
+                />
 
                 {canCompare ? (
                   <motion.div
@@ -166,6 +166,24 @@ export default function ResultPage() {
                     <div className="absolute left-1/2 top-1/2 h-9 w-9 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/70 bg-white/95 shadow-lg" />
                   </motion.div>
                 ) : null}
+              </div>
+
+              <div className="mt-5 space-y-2">
+                <div className="flex items-center justify-between text-xs text-stone-400">
+                  <span>原图</span>
+                  <span>擦除进度 {Math.round(comparePercent)}%</span>
+                  <span>效果图</span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={comparePercent}
+                  disabled={!canCompare}
+                  onChange={(event) => setComparePercent(Number(event.target.value))}
+                  className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-stone-200 accent-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                />
               </div>
             </motion.section>
 
@@ -216,17 +234,6 @@ export default function ResultPage() {
                   >
                     <RefreshCw size={16} />
                     重新生成
-                  </motion.button>
-                  <motion.button
-                    type="button"
-                    onClick={() => router.push('/')}
-                    whileHover={{ y: -2 }}
-                    whileTap={{ scale: 0.98 }}
-                    transition={spring}
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm text-stone-700 hover:shadow-sm"
-                  >
-                    <Palette size={16} />
-                    换种风格
                   </motion.button>
                 </div>
               </section>
