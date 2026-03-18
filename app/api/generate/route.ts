@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { generateImage } from '../../lib/server/imageProvider';
 
 export const runtime = 'nodejs';
 
@@ -18,10 +19,6 @@ const NEGATIVE_MAP: Record<string, string> = {
   自然光优先: 'avoid unnatural lighting',
 };
 
-function stripDataUrl(value: string) {
-  return value.includes(',') ? value.split(',')[1] : value;
-}
-
 function uniqueList(input: string[] = []) {
   return Array.from(
     new Set(
@@ -33,10 +30,6 @@ function uniqueList(input: string[] = []) {
 }
 
 function buildPrompt(theme: string, constraints: string[], requirements: string[]) {
-  const negativeDynamic = constraints
-    .map((item) => NEGATIVE_MAP[item] || `avoid: ${item}`)
-    .join(', ');
-
   const requirementSection =
     requirements.length > 0
       ? `User requirements:\n- ${requirements.join('\n- ')}`
@@ -63,13 +56,18 @@ Only use renter-friendly, non-permanent solutions:
 - layered warm lighting with realistic physical behavior
 - clean, aesthetic, uncluttered composition
 
-Negative prompt (must avoid):
-ugly, blurry, deformed, distorted, low resolution, watermark, bad proportions, chaotic layout${
-  negativeDynamic ? `, ${negativeDynamic}` : ''
-}
-
 Output should feel like a low-cost but high-end transformation for renters.
 `.trim();
+}
+
+function buildNegativePrompt(constraints: string[]) {
+  const negativeDynamic = constraints
+    .map((item) => NEGATIVE_MAP[item] || `avoid: ${item}`)
+    .join(', ');
+
+  const base =
+    'ugly, blurry, deformed, distorted, low resolution, watermark, bad proportions, chaotic layout';
+  return negativeDynamic ? `${base}, ${negativeDynamic}` : base;
 }
 
 function buildEvaluation(theme: string, requirements: string[]) {
@@ -96,75 +94,21 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing image' }, { status: 400 });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: 'Missing GEMINI_API_KEY (or GOOGLE_API_KEY)' },
-        { status: 500 }
-      );
-    }
-
-    const model = process.env.GEMINI_IMAGE_MODEL || 'gemini-3.1-flash-image-preview';
-    const prompt = buildPrompt(theme, constraints, requirements);
-    const base64Image = stripDataUrl(image);
-
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey,
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              role: 'user',
-              parts: [
-                { text: prompt },
-                {
-                  inline_data: {
-                    mime_type: 'image/jpeg',
-                    data: base64Image,
-                  },
-                },
-              ],
-            },
-          ],
-          generationConfig: {
-            responseModalities: ['IMAGE'],
-          },
-        }),
-      }
-    );
-
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      return NextResponse.json(
-        { error: result?.error?.message || result?.error || 'Generation failed' },
-        { status: 500 }
-      );
-    }
-
-    const parts = result?.candidates?.[0]?.content?.parts ?? [];
-    const imagePart = parts.find((part: any) => part?.inline_data || part?.inlineData);
-    const inline = imagePart?.inline_data || imagePart?.inlineData;
-    const mimeType = inline?.mime_type || inline?.mimeType || 'image/png';
-    const data = inline?.data;
-
-    if (!data) {
-      return NextResponse.json(
-        { error: 'No image data returned from Gemini' },
-        { status: 500 }
-      );
-    }
+    const { imageUrl } = await generateImage({
+      image,
+      prompt: buildPrompt(theme, constraints, requirements),
+      negativePrompt: buildNegativePrompt(constraints),
+      strength: 0.65,
+      nanobananaModel: process.env.NANOBANANA_MODEL || 'nb2-interior-pro',
+    });
 
     return NextResponse.json({
-      imageUrl: `data:${mimeType};base64,${data}`,
+      imageUrl,
       evaluation: buildEvaluation(theme, requirements),
       suggestions: buildSuggestions(theme),
     });
-  } catch {
-    return NextResponse.json({ error: 'Server error' }, { status: 500 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Server error';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

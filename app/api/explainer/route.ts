@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { generateImage } from '../../lib/server/imageProvider';
 
 export const runtime = 'nodejs';
 
@@ -27,11 +28,6 @@ function toMarker(index: number) {
   return markers[index - 1] || String(index);
 }
 
-function stripDataUrl(value: string) {
-  if (!value) return '';
-  return value.includes(',') ? value.split(',')[1] : value;
-}
-
 function getStyleHint(theme: string) {
   if (theme.includes('原木') || theme.toLowerCase().includes('japandi')) {
     return 'natural wood, linen, beige, warm white light';
@@ -58,9 +54,9 @@ Keep exactly the same room geometry, camera angle, perspective, and composition.
 Do not modify architecture or layout.
 
 Visual goal:
-- a line-art / instruction-style explainer image
-- background simplified and faded in very light neutral tones
-- highlight only added renter-friendly upgrade objects
+- line-art / instruction-style explainer image
+- background simplified and faded in light neutral tones
+- highlight only renter-friendly upgrade objects
 
 Highlight only these concrete objects:
 1) floor lamp near sofa
@@ -74,8 +70,7 @@ Style context: ${styleHint}
 Output style:
 - minimal, clean, product-manual style (Apple / IKEA feel)
 - high readability, lots of negative space
-- not photorealistic, not poster-like
-- no extra text blocks
+- not poster-like, not cluttered
 `.trim();
 }
 
@@ -141,21 +136,6 @@ function buildItems(theme: string): PlanItem[] {
   ];
 }
 
-function pickImageUrl(result: any) {
-  return (
-    result?.url ||
-    result?.imageUrl ||
-    result?.data?.url ||
-    result?.data?.imageUrl ||
-    result?.data?.[0]?.url ||
-    result?.result?.url ||
-    result?.result?.imageUrl ||
-    result?.output?.url ||
-    result?.output?.[0]?.url ||
-    ''
-  );
-}
-
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as Payload;
@@ -166,50 +146,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing image' }, { status: 400 });
     }
 
-    const apiKey = process.env.NANOBANANA_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json({ error: 'Missing NANOBANANA_API_KEY' }, { status: 500 });
-    }
-
-    const endpoint = process.env.NANOBANANA_BASE_URL || 'https://api.nanobanana.ai/v1/generate';
-    const payloadImage = image.startsWith('http') ? image : stripDataUrl(image);
-
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: process.env.NANOBANANA_EXPLAINER_MODEL || 'nb2-interior-pro',
-        image: payloadImage,
-        prompt: buildExplainerPrompt(theme),
-        negative_prompt:
-          'photorealistic texture, noisy background, random typography, busy composition, excessive color, blurred line art, distorted geometry, changed architecture',
-        strength: 0.38,
-      }),
+    const { imageUrl } = await generateImage({
+      image,
+      prompt: buildExplainerPrompt(theme),
+      negativePrompt:
+        'photorealistic texture, noisy background, random typography, busy composition, excessive color, blurred line art, distorted geometry, changed architecture',
+      strength: 0.38,
+      nanobananaModel: process.env.NANOBANANA_EXPLAINER_MODEL || 'nb2-interior-pro',
     });
-
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      return NextResponse.json(
-        { error: result?.error || result?.message || 'Explainer generation failed' },
-        { status: 500 }
-      );
-    }
-
-    const explainerImageUrl = pickImageUrl(result);
-    if (!explainerImageUrl) {
-      return NextResponse.json(
-        { error: 'Nanobanana returned no explainer image' },
-        { status: 500 }
-      );
-    }
 
     return NextResponse.json({
       summary:
         '这次改造重点是补光、统一织物和增加装饰焦点。你可以直接按图上编号逐个补齐，不需要动任何硬装。',
-      explainerImageUrl,
+      explainerImageUrl: imageUrl,
       items: buildItems(theme),
     });
   } catch (error) {
