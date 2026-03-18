@@ -154,7 +154,7 @@ function normalizeItems(raw: PlanItem[] | undefined, theme: string) {
     .sort((a, b) => a.id - b.id);
 }
 
-function inferProviderFromImage(imageUrl: string | undefined) {
+function inferProvider(imageUrl: string) {
   if (!imageUrl) return undefined;
   if (imageUrl.startsWith('data:image/')) return 'gemini' as const;
   if (/^https?:\/\//i.test(imageUrl)) return 'nanobanana' as const;
@@ -194,7 +194,7 @@ export default function PlanPage() {
       setTheme(data.theme || '日式原木风');
       setOriginalUrl(data.original || '');
       setGeneratedUrl(data.generated || '');
-      setProvider(data.provider || inferProviderFromImage(data.generated));
+      setProvider(data.provider || inferProvider(data.generated || ''));
     };
 
     const load = async () => {
