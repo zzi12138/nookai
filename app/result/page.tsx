@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { RefreshCw, Save } from 'lucide-react';
+import { ArrowRight, RefreshCw, Save } from 'lucide-react';
 import { loadResult, type StoredResult } from '../lib/imageStore';
 
 const spring = { type: 'spring', stiffness: 120, damping: 20 } as const;
@@ -297,6 +297,17 @@ export default function ResultPage() {
                   >
                     <Save size={16} />
                     保存
+                  </motion.button>
+                  <motion.button
+                    type="button"
+                    onClick={() => router.push('/plan')}
+                    whileHover={{ y: -2 }}
+                    whileTap={{ scale: 0.98 }}
+                    transition={spring}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm text-stone-700 hover:shadow-sm"
+                  >
+                    <ArrowRight size={16} />
+                    查看改造方案
                   </motion.button>
                   <motion.button
                     type="button"
