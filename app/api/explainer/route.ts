@@ -1,12 +1,10 @@
 import { NextResponse } from 'next/server';
-import { generateImage } from '../../lib/server/imageProvider';
 
 export const runtime = 'nodejs';
 
 type Payload = {
   image?: string;
   theme?: string;
-  provider?: 'nanobanana' | 'gemini';
 };
 
 type PlanItem = {
@@ -23,6 +21,10 @@ type PlanItem = {
   placement: string;
   value: string;
 };
+
+function stripDataUrl(value: string) {
+  return value.includes(',') ? value.split(',')[1] : value;
+}
 
 function toMarker(index: number) {
   const markers = ['①', '②', '③', '④', '⑤', '⑥'];
@@ -142,30 +144,81 @@ export async function POST(req: Request) {
     const body = (await req.json()) as Payload;
     const image = body.image || '';
     const theme = body.theme || '日式原木风';
-    const provider = body.provider;
 
     if (!image) {
       return NextResponse.json({ error: 'Missing image' }, { status: 400 });
     }
 
-    const { imageUrl } = await generateImage({
-      image,
-      provider,
-      prompt: buildExplainerPrompt(theme),
-      negativePrompt:
-        'photorealistic texture, noisy background, random typography, busy composition, excessive color, blurred line art, distorted geometry, changed architecture',
-      strength: 0.38,
-      nanobananaModel: process.env.NANOBANANA_EXPLAINER_MODEL || 'nb2-interior-pro',
-    });
+    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: 'Missing GEMINI_API_KEY (or GOOGLE_API_KEY)' },
+        { status: 500 }
+      );
+    }
+
+    const model = process.env.GEMINI_IMAGE_MODEL || 'gemini-3.1-flash-image-preview';
+    const prompt = buildExplainerPrompt(theme);
+    const base64Image = stripDataUrl(image);
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey,
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                { text: prompt },
+                {
+                  inline_data: {
+                    mime_type: 'image/jpeg',
+                    data: base64Image,
+                  },
+                },
+              ],
+            },
+          ],
+          generationConfig: {
+            responseModalities: ['IMAGE'],
+          },
+        }),
+      }
+    );
+
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return NextResponse.json(
+        { error: result?.error?.message || result?.error || 'Explainer generation failed' },
+        { status: 500 }
+      );
+    }
+
+    const parts = result?.candidates?.[0]?.content?.parts ?? [];
+    const imagePart = parts.find((part: any) => part?.inline_data || part?.inlineData);
+    const inline = imagePart?.inline_data || imagePart?.inlineData;
+    const mimeType = inline?.mime_type || inline?.mimeType || 'image/png';
+    const data = inline?.data;
+
+    if (!data) {
+      return NextResponse.json(
+        { error: 'No explainer image data returned from Gemini' },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       summary:
         '这次改造重点是补光、统一织物和增加装饰焦点。你可以直接按图上编号逐个补齐，不需要动任何硬装。',
-      explainerImageUrl: imageUrl,
+      explainerImageUrl: `data:${mimeType};base64,${data}`,
       items: buildItems(theme),
     });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Server error';
-    return NextResponse.json({ error: message }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }
