@@ -8,19 +8,17 @@ type Payload = {
 };
 
 type Category =
-  | '主照明'
-  | '氛围照明'
-  | '地面软装'
-  | '床品布艺'
-  | '墙面装饰'
-  | '绿植'
-  | '功能型小物';
+  | 'Ambient lighting'
+  | 'Bedding & soft textiles'
+  | 'Floor soft furnishings'
+  | 'Wall decor'
+  | 'Plants'
+  | 'Functional accessories';
 
-type Necessity = '必买' | '建议买' | '可选';
+type Necessity = 'Must-have' | 'Recommended' | 'Optional';
 
 type RawItem = {
   name?: string;
-  category?: string;
   quantity?: number;
   priceMin?: number;
   priceMax?: number;
@@ -31,6 +29,26 @@ type RawItem = {
     x?: number;
     y?: number;
     confidence?: number;
+  };
+};
+
+type NormalizedItem = {
+  id: number;
+  name: string;
+  category: Category;
+  quantity: number;
+  priceMin: number;
+  priceMax: number;
+  priceRange: string;
+  placement: string;
+  necessity: Necessity;
+  reason: string;
+  imageTarget: {
+    x: number;
+    y: number;
+    confidence: number;
+    hasAnchor: boolean;
+    hasPoint: boolean;
   };
 };
 
@@ -78,61 +96,110 @@ function safeParseJson<T>(text: string): T | null {
   }
 }
 
-function normalizeCategory(raw?: string): Category {
-  const value = (raw || '').trim();
-  if (value.includes('主照明') || value.includes('主灯')) return '主照明';
-  if (value.includes('氛围照明') || value.includes('落地灯') || value.includes('台灯')) {
-    return '氛围照明';
-  }
-  if (value.includes('地面')) return '地面软装';
-  if (value.includes('床品') || value.includes('布艺')) return '床品布艺';
-  if (value.includes('墙面') || value.includes('挂画') || value.includes('装饰画')) return '墙面装饰';
-  if (value.includes('绿植') || value.includes('植物')) return '绿植';
-  if (value.includes('功能') || value.includes('收纳') || value.includes('投影')) return '功能型小物';
-  return '功能型小物';
-}
-
 function normalizeNecessity(raw?: string): Necessity {
-  const value = (raw || '').trim();
-  if (value.includes('必')) return '必买';
-  if (value.includes('建议')) return '建议买';
-  return '可选';
+  const v = (raw || '').toLowerCase();
+  if (v.includes('must') || v.includes('必')) return 'Must-have';
+  if (v.includes('optional') || v.includes('可选')) return 'Optional';
+  return 'Recommended';
 }
 
-function normalizePrice(minRaw: number | undefined, maxRaw: number | undefined) {
-  let min = Number.isFinite(minRaw) ? Number(minRaw) : 0;
-  let max = Number.isFinite(maxRaw) ? Number(maxRaw) : 0;
-
-  if (min <= 0 && max <= 0) {
-    min = 99;
-    max = 169;
-  } else if (min <= 0) {
-    min = Math.max(39, max - 80);
-  } else if (max <= 0) {
-    max = min + 80;
+function inferCategory(name: string): Category {
+  const n = name.toLowerCase();
+  if (
+    n.includes('floor lamp') ||
+    n.includes('table lamp') ||
+    n.includes('desk lamp') ||
+    n.includes('灯') ||
+    n.includes('light strip') ||
+    n.includes('string light')
+  ) {
+    return 'Ambient lighting';
   }
-
-  min = Math.round(clamp(min, 39, 2999));
-  max = Math.round(clamp(max, min + 20, min + 260));
-
-  return { min, max };
+  if (
+    n.includes('bedding') ||
+    n.includes('duvet') ||
+    n.includes('pillow') ||
+    n.includes('blanket') ||
+    n.includes('床品') ||
+    n.includes('抱枕') ||
+    n.includes('毯')
+  ) {
+    return 'Bedding & soft textiles';
+  }
+  if (n.includes('rug') || n.includes('carpet') || n.includes('地毯')) {
+    return 'Floor soft furnishings';
+  }
+  if (n.includes('wall art') || n.includes('poster') || n.includes('挂画') || n.includes('装饰画')) {
+    return 'Wall decor';
+  }
+  if (n.includes('plant') || n.includes('greenery') || n.includes('绿植')) {
+    return 'Plants';
+  }
+  return 'Functional accessories';
 }
 
-function normalizeName(raw?: string) {
-  const fallback = '可移动软装单品';
+function compactName(raw?: string) {
   const name = (raw || '').trim();
-  if (!name) return fallback;
-  return name.length > 22 ? `${name.slice(0, 22)}...` : name;
+  if (!name) return '';
+  if (name.length <= 28) return name;
+  return `${name.slice(0, 28)}...`;
 }
 
 function normalizePlacement(raw?: string) {
-  const v = (raw || '').trim();
-  return v || '放在不影响通行的主视觉区域';
+  const value = (raw || '').trim();
+  return value || 'Place in a visible but unobstructed area';
 }
 
 function normalizeReason(raw?: string) {
-  const v = (raw || '').trim();
-  return v || '能明显提升空间完成度';
+  const value = (raw || '').trim();
+  return value || 'Improves visual quality quickly';
+}
+
+function narrowRangeByName(name: string) {
+  const n = name.toLowerCase();
+
+  if (n.includes('floor lamp') || n.includes('落地灯')) return { min: 159, max: 239 };
+  if (n.includes('desk lamp') || n.includes('table lamp') || n.includes('台灯')) return { min: 69, max: 119 };
+  if (n.includes('light strip') || n.includes('string light') || n.includes('灯带')) return { min: 49, max: 99 };
+
+  if (n.includes('rug') || n.includes('carpet') || n.includes('地毯')) return { min: 199, max: 299 };
+
+  if (n.includes('bedding') || n.includes('duvet') || n.includes('床品')) return { min: 179, max: 259 };
+  if (n.includes('pillow') || n.includes('抱枕')) return { min: 49, max: 99 };
+  if (n.includes('blanket') || n.includes('throw') || n.includes('毯')) return { min: 79, max: 149 };
+
+  if (n.includes('wall art') || n.includes('poster') || n.includes('挂画')) return { min: 79, max: 129 };
+
+  if (n.includes('plant') || n.includes('绿植')) return { min: 89, max: 169 };
+
+  if (n.includes('projector') || n.includes('投影')) return { min: 499, max: 899 };
+  if (n.includes('stand') || n.includes('支架')) return { min: 79, max: 169 };
+  if (n.includes('side table') || n.includes('边几')) return { min: 129, max: 229 };
+  if (n.includes('tray') || n.includes('收纳')) return { min: 39, max: 89 };
+
+  return { min: 99, max: 179 };
+}
+
+function normalizePrice(name: string, minRaw?: number, maxRaw?: number) {
+  const preset = narrowRangeByName(name);
+
+  if (!Number.isFinite(minRaw) || !Number.isFinite(maxRaw) || (maxRaw as number) <= (minRaw as number)) {
+    return preset;
+  }
+
+  let min = Math.round(clamp(Number(minRaw), 39, 4999));
+  let max = Math.round(clamp(Number(maxRaw), min + 20, min + 180));
+
+  const span = max - min;
+  if (span > 120) {
+    max = min + 120;
+  }
+
+  if (min < preset.min - 40 || max > preset.max + 120) {
+    return preset;
+  }
+
+  return { min, max };
 }
 
 function resolveInlineImagePart(image: string) {
@@ -174,36 +241,60 @@ async function fetchRemoteImageAsInlinePart(url: string) {
 
 function getPrompt(theme: string) {
   return `
-你是室内改造执行顾问。请基于“当前效果图”识别 4-6 个最关键、可购买、可摆放的物件。
+You are a visual purchase planner for renters.
 
-硬性要求：
-1) 只输出具体物件，不要抽象概念。
-2) 物件必须来自当前效果图真实可见内容。
-3) 不要硬凑不存在的物件。
-4) 每个物件都要给出点位坐标 x/y（0-100），坐标需尽量落在物体中心。
-5) 如果坐标不确定，confidence 设低于 0.55。
-6) 价格区间要窄且真实，不要夸张跨度。
+Analyze the CURRENT generated room image and output only 4-6 concrete purchasable items that are clearly visible and actionable.
 
-风格上下文：${theme || '日式原木风'}
+Strict rules:
+1) Output concrete objects only. No abstract concepts.
+2) Items must come from what is visible in this exact image.
+3) Do not hallucinate missing objects.
+4) For each item, provide anchor x/y (0-100) and confidence (0-1).
+5) If uncertain, lower confidence below 0.55.
+6) Keep price ranges narrow and realistic.
 
-只返回 JSON，不要 Markdown，不要解释。格式如下：
+Preferred categories:
+- Ambient lighting
+- Bedding & soft textiles
+- Floor soft furnishings
+- Wall decor
+- Plants
+- Functional accessories
+
+Style context: ${theme || 'Japandi'}
+
+Return JSON only with this shape:
 {
-  "summary": "一句简短总结，不超过45字",
+  "summary": "one short sentence",
   "items": [
     {
-      "name": "暖光落地灯",
-      "category": "主照明|氛围照明|地面软装|床品布艺|墙面装饰|绿植|功能型小物",
+      "name": "warm floor lamp",
       "quantity": 1,
       "priceMin": 159,
       "priceMax": 239,
-      "placement": "沙发右侧",
-      "necessity": "必买|建议买|可选",
-      "reason": "不超过18字",
+      "placement": "right side of sofa",
+      "necessity": "Must-have|Recommended|Optional",
+      "reason": "short sentence",
       "anchor": { "x": 72, "y": 58, "confidence": 0.82 }
     }
   ]
 }
 `.trim();
+}
+
+function dedupeByName(items: RawItem[]) {
+  const seen = new Set<string>();
+  const out: RawItem[] = [];
+
+  for (const item of items) {
+    const key = compactName(item.name).toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]/g, '').slice(0, 16);
+    if (!key) continue;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(item);
+  }
+
+  return out;
 }
 
 async function analyzeItems(image: string, theme: string, apiKey: string) {
@@ -218,10 +309,8 @@ async function analyzeItems(image: string, theme: string, apiKey: string) {
     throw new Error('Unsupported image format');
   }
 
-  const models = [
-    process.env.GEMINI_VISION_MODEL || 'gemini-2.5-flash',
-    process.env.GEMINI_IMAGE_MODEL || 'gemini-3.1-flash-image-preview',
-  ].filter((m, i, arr) => arr.indexOf(m) === i);
+  const models = [process.env.GEMINI_VISION_MODEL || 'gemini-2.5-flash', 'gemini-2.5-flash-lite']
+    .filter((m, i, arr) => arr.indexOf(m) === i);
 
   let lastError = 'Guide analysis failed';
 
@@ -255,7 +344,7 @@ async function analyzeItems(image: string, theme: string, apiKey: string) {
                 },
               ],
               generationConfig: {
-                temperature: 0.2,
+                temperature: 0.15,
                 responseMimeType: 'application/json',
               },
             }),
@@ -289,7 +378,7 @@ async function analyzeItems(image: string, theme: string, apiKey: string) {
 
         return {
           summary: (parsed.summary || '').trim(),
-          items: parsed.items,
+          items: dedupeByName(parsed.items),
         };
       } catch (error) {
         lastError = error instanceof Error ? error.message : String(error);
@@ -310,7 +399,7 @@ export async function POST(req: Request) {
   try {
     const body = (await req.json()) as Payload;
     const image = body.image || '';
-    const theme = body.theme || '日式原木风';
+    const theme = body.theme || 'Japandi';
 
     if (!image) {
       return NextResponse.json({ error: 'Missing image' }, { status: 400 });
@@ -326,39 +415,40 @@ export async function POST(req: Request) {
 
     const analyzed = await analyzeItems(image, theme, apiKey);
 
-    const normalized = analyzed.items
-      .slice(0, 6)
+    const normalized: NormalizedItem[] = analyzed.items
+      .slice(0, 8)
       .map((item, index) => {
         const id = index + 1;
-        const category = normalizeCategory(item.category);
+        const name = compactName(item.name);
+        if (!name) return null;
+
+        const category = inferCategory(name);
         const necessity = normalizeNecessity(item.necessity);
-        const { min, max } = normalizePrice(item.priceMin, item.priceMax);
         const quantity = Math.round(clamp(Number(item.quantity || 1), 1, 3));
+        const price = normalizePrice(name, item.priceMin, item.priceMax);
 
         const rawX = Number(item.anchor?.x);
         const rawY = Number(item.anchor?.y);
+        const hasAnchor = Number.isFinite(rawX) && Number.isFinite(rawY);
         const confidence = Number.isFinite(item.anchor?.confidence as number)
           ? clamp(Number(item.anchor?.confidence), 0, 1)
           : 0;
 
-        const hasCoord = Number.isFinite(rawX) && Number.isFinite(rawY);
-        const x = hasCoord ? clamp(rawX, 4, 96) : 50;
-        const y = hasCoord ? clamp(rawY, 6, 94) : 50;
-        const hasPoint = hasCoord && confidence >= 0.55;
+        const x = hasAnchor ? clamp(rawX, 4, 96) : 50;
+        const y = hasAnchor ? clamp(rawY, 6, 94) : 50;
+        const hasPoint = hasAnchor && confidence >= 0.63;
 
-        const name = normalizeName(item.name);
         const placement = normalizePlacement(item.placement);
         const reason = normalizeReason(item.reason);
 
         return {
           id,
-          markerLabel: String(id),
           name,
           category,
           quantity,
-          priceMin: min,
-          priceMax: max,
-          priceRange: `¥${min}-${max}`,
+          priceMin: price.min,
+          priceMax: price.max,
+          priceRange: `¥${price.min}-${price.max}`,
           placement,
           necessity,
           reason,
@@ -366,27 +456,32 @@ export async function POST(req: Request) {
             x,
             y,
             confidence,
+            hasAnchor,
             hasPoint,
           },
-          module: reason,
-          buy: name,
-          value: reason,
         };
       })
-      .filter((item) => item.name && item.placement)
+      .filter((item): item is NormalizedItem => Boolean(item));
+
+    const reduced = normalized
+      .sort((a, b) => {
+        const score = (n: Necessity) => (n === 'Must-have' ? 0 : n === 'Recommended' ? 1 : 2);
+        return score(a.necessity) - score(b.necessity);
+      })
       .slice(0, 6);
 
-    if (normalized.length === 0) {
+    if (reduced.length < 4) {
       return NextResponse.json(
-        { error: '无法从当前效果图识别可执行物件，请重试' },
+        { error: 'Could not confidently detect enough purchasable items from this image' },
         { status: 500 }
       );
     }
 
     return NextResponse.json({
       summary:
-        analyzed.summary || '已识别当前效果图中的关键可执行物件，按优先级逐步购买即可。',
-      items: normalized,
+        analyzed.summary ||
+        'Recognized from the current generated image. Focus on these key purchasable items first.',
+      items: reduced,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Server error';
