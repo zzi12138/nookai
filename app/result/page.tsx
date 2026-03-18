@@ -26,8 +26,11 @@ export default function ResultPage() {
   const canCompare = Boolean(generatedUrl && originalUrl);
 
   const updateCompareByX = (clientX: number) => {
-    if (!frame.width) return;
-    const raw = ((clientX - frame.left) / frame.width) * 100;
+    const container = sliderRef.current;
+    if (!container || !frame.width) return;
+    const rect = container.getBoundingClientRect();
+    const imageLeftInViewport = rect.left + frame.left;
+    const raw = ((clientX - imageLeftInViewport) / frame.width) * 100;
     setComparePercent(Math.min(100, Math.max(0, raw)));
   };
 
@@ -222,10 +225,11 @@ export default function ResultPage() {
                   <motion.div
                     onPointerDown={(event) => {
                       event.preventDefault();
+                      event.currentTarget.setPointerCapture(event.pointerId);
                       setIsDragging(true);
                       updateCompareByX(event.clientX);
                     }}
-                    className="absolute z-20 w-10 -translate-x-1/2 cursor-ew-resize"
+                    className="absolute z-20 w-10 -translate-x-1/2 cursor-ew-resize select-none touch-none"
                     style={{
                       left: `${frame.left + (frame.width * comparePercent) / 100}px`,
                       top: `${frame.top}px`,
