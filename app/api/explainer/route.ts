@@ -59,6 +59,15 @@ type NormalizedItem = {
   placement: string;
   necessity: Necessity;
   reason: string;
+  boardCell?: {
+    index: number;
+    row: number;
+    col: number;
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  };
   imageTarget: {
     x: number;
     y: number;
@@ -70,6 +79,16 @@ type NormalizedItem = {
     hasAnchor: boolean;
     hasPoint: boolean;
   };
+};
+
+type BoardCell = {
+  index: number;
+  row: number;
+  col: number;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
 };
 
 function stripDataUrl(value: string) {
@@ -282,11 +301,6 @@ function inferProviderFromImage(image: string): 'nanobanana' | 'gemini' | undefi
   return undefined;
 }
 
-function toMarker(index: number) {
-  const markers = ['①', '②', '③', '④', '⑤', '⑥'];
-  return markers[index - 1] || String(index);
-}
-
 function fallbackSizeByName(name: string) {
   const n = name.toLowerCase();
   if (n.includes('floor lamp') || n.includes('落地灯')) return { width: 12, height: 26 };
@@ -394,7 +408,7 @@ async function toInlineImagePart(image?: string): Promise<InlineImagePart | null
 
 function getPrompt(theme: string, hasBefore: boolean) {
   return `
-你是租房改造购物助手。请基于${hasBefore ? '原图 + 效果图对照' : '效果图'}，识别可购买、可摆放的具体物件（目标 8-14 个）。
+你是租房改造购物助手。请基于${hasBefore ? '原图 + 效果图对照' : '效果图'}，识别可购买、可摆放的具体物件（目标 12-18 个）。
 
 硬性规则：
 1) 只能输出具体物品，不要抽象概念。
@@ -403,8 +417,10 @@ function getPrompt(theme: string, hasBefore: boolean) {
 4) 每个物件必须有 anchor 坐标与尺寸：centerX/centerY（中心点）、left/top（左上角）、width/height（0-100）和 confidence（0-1）。
 5) centerX/centerY 必须基于物体几何中心；width/height 贴合物体轮廓，不要固定模板尺寸。
 6) 如果不确定，把 confidence 降低到 0.55 以下；不确定项宁可不输出。
-7) 价格区间要收窄，符合中国电商常见区间。
-8) 所有字段优先用中文，名称要简洁完整，禁止省略号。
+7) 需要尽量覆盖：所有可见灯具、地毯/地面织物、床品/抱枕/毯子、装饰摆件、挂画、绿植。
+8) 同类型可重复输出（例如两个灯），不要只保留一个。
+9) 价格区间要收窄，符合中国电商常见区间。
+10) 所有字段优先用中文，名称要简洁完整，禁止省略号。
 
 风格上下文：${theme || '日式原木风'}
 
@@ -432,38 +448,79 @@ function getPrompt(theme: string, hasBefore: boolean) {
 
 function buildItemsBoardPrompt(theme: string, items: NormalizedItem[]) {
   const lines = items
-    .slice(0, 6)
-    .map((item, index) => `${toMarker(index + 1)} ${item.name}`)
+    .map((item, index) => `${index + 1}. ${item.name}`)
     .join('\n');
+  const count = items.length;
 
   return `
-Use the provided generated room image only as reference.
-Create exactly ONE extracted items board image.
+Use the provided generated room image as visual reference.
+Generate ONE internal extracted-items board image (not user-facing).
 
-Board requirements:
-- clean pure white background
-- show only 4-6 key added objects from the room
-- each object isolated in its own neat slot
-- include clear number labels for each object
-- labels must match this order:
+Strict board requirements:
+- very light neutral or pure white background
+- include at least ${Math.max(10, count)} extracted purchasable objects
+- include all visible lamps, rugs/floor textiles, bedding/pillows/throws, decor objects, wall art, plants when present
+- each object must be isolated inside its own regular rectangular/square grid cell
+- neat grid layout, no overlap, no collage, no irregular arrangement
+- keep object style/material/color consistent with the generated room
+- each cell has enough padding for clean thumbnail crop
+- small index labels are allowed for internal mapping
+
+Object list to include:
 ${lines}
 
-Style:
-- product extraction board
-- minimal, tidy, high readability
-- no room background, no perspective room scene
-- no extra objects beyond listed items
+Output style:
+- clean product extraction board
+- no full-room scene, no architecture, no walls/floor/ceiling structure
+- no random new objects
 
 Theme context: ${theme || '日式原木风'}
 `.trim();
 }
 
-function dedupeByName(items: RawItem[]) {
+function buildBoardCells(count: number): BoardCell[] {
+  const safeCount = Math.max(1, count);
+  const cols = safeCount >= 15 ? 5 : safeCount >= 10 ? 4 : 3;
+  const rows = Math.ceil(safeCount / cols);
+  const padX = 4;
+  const padY = 4;
+  const gapX = 2.2;
+  const gapY = 2.2;
+  const cellW = (100 - padX * 2 - gapX * (cols - 1)) / cols;
+  const cellH = (100 - padY * 2 - gapY * (rows - 1)) / rows;
+  const cells: BoardCell[] = [];
+
+  for (let i = 0; i < safeCount; i += 1) {
+    const row = Math.floor(i / cols);
+    const col = i % cols;
+    const left = padX + col * (cellW + gapX);
+    const top = padY + row * (cellH + gapY);
+    cells.push({
+      index: i + 1,
+      row: row + 1,
+      col: col + 1,
+      left,
+      top,
+      width: cellW,
+      height: cellH,
+    });
+  }
+
+  return cells;
+}
+
+function dedupeByObject(items: RawItem[]) {
   const seen = new Set<string>();
   const out: RawItem[] = [];
 
   for (const item of items) {
-    const key = compactName(item.name).toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]/g, '').slice(0, 36);
+    const baseName = compactName(item.name).toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]/g, '').slice(0, 28);
+    if (!baseName) continue;
+    const ax = Number(item.anchor?.x ?? item.anchor?.centerX ?? item.anchor?.left ?? 0);
+    const ay = Number(item.anchor?.y ?? item.anchor?.centerY ?? item.anchor?.top ?? 0);
+    const gx = Number.isFinite(ax) ? Math.round(ax / 5) : -1;
+    const gy = Number.isFinite(ay) ? Math.round(ay / 5) : -1;
+    const key = `${baseName}@${gx},${gy}`;
     if (!key) continue;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -562,7 +619,7 @@ async function analyzeItems(beforeImage: string | undefined, afterImage: string,
 
         return {
           summary: (parsed.summary || '').trim(),
-          items: dedupeByName(parsed.items),
+          items: dedupeByObject(parsed.items),
         };
       } catch (error) {
         lastError = error instanceof Error ? error.message : String(error);
@@ -600,7 +657,7 @@ export async function POST(req: Request) {
 
     const analyzed = await analyzeItems(beforeImage || undefined, afterImage, theme, apiKey);
 
-    const normalized: NormalizedItem[] = analyzed.items
+    const normalizedAll: NormalizedItem[] = analyzed.items
       .slice(0, 18)
       .map((item, index) => {
         const id = index + 1;
@@ -708,10 +765,11 @@ export async function POST(req: Request) {
           },
         };
       })
-      .filter((item): item is NormalizedItem => Boolean(item))
-      .filter((item) => item.imageTarget.confidence >= 0.45);
+      .filter((item): item is NormalizedItem => Boolean(item));
 
-    const reduced = normalized
+    const normalized = normalizedAll.filter((item) => item.imageTarget.confidence >= 0.2);
+
+    let reduced = normalized
       .sort((a, b) => {
         const score = (n: Necessity) => (n === 'Must-have' ? 0 : n === 'Recommended' ? 1 : 2);
         if (score(a.necessity) !== score(b.necessity)) {
@@ -719,16 +777,29 @@ export async function POST(req: Request) {
         }
         return b.imageTarget.confidence - a.imageTarget.confidence;
       })
-      .slice(0, 16);
+      .slice(0, 14);
 
-    if (reduced.length < 1) {
+    if (reduced.length < 10) {
+      const picked = new Set(reduced.map((item) => item.id));
+      const topUp = normalizedAll
+        .filter((item) => !picked.has(item.id))
+        .sort((a, b) => b.imageTarget.confidence - a.imageTarget.confidence)
+        .slice(0, 10 - reduced.length);
+      reduced = [...reduced, ...topUp];
+    }
+
+    if (reduced.length < 10) {
       return NextResponse.json(
-        { error: '当前效果图未识别到可购买物件' },
+        { error: '识别到的可购买物件不足 10 个，请更换更清晰的效果图后重试' },
         { status: 500 }
       );
     }
 
-    const boardItems = reduced.slice(0, 6);
+    const boardCells = buildBoardCells(reduced.length);
+    const boardItems = reduced.map((item, index) => ({
+      ...item,
+      boardCell: boardCells[index],
+    }));
     let itemsBoardImageUrl = '';
 
     try {
@@ -739,7 +810,7 @@ export async function POST(req: Request) {
           image: afterImage,
           prompt: boardPrompt,
           negativePrompt:
-            'room background, full room scene, clutter, watermark, text paragraphs, logo, duplicate objects, collage mess',
+            'room background, full room scene, clutter, watermark, long text paragraphs, logo, irregular collage, overlapping objects, architecture elements',
           strength: 0.72,
           provider: boardProvider,
         });
@@ -747,13 +818,18 @@ export async function POST(req: Request) {
       }
     } catch (error) {
       console.error('items board generation failed:', error);
+      throw new Error('提取物件板生成失败');
+    }
+
+    if (!itemsBoardImageUrl) {
+      throw new Error('提取物件板生成失败');
     }
 
     return NextResponse.json({
       summary:
         analyzed.summary ||
         '已从当前效果图识别关键可购买物件，可按优先级逐步添置。',
-      items: reduced,
+      items: boardItems,
       itemsBoardImageUrl,
       explainerImageUrl: itemsBoardImageUrl,
     });

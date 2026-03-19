@@ -30,6 +30,15 @@ type GuideItem = {
   necessity: Necessity;
   reason: string;
   previewImage?: string;
+  boardCell?: {
+    index: number;
+    row: number;
+    col: number;
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  };
   imageTarget: {
     x: number;
     y: number;
@@ -119,38 +128,71 @@ async function loadImageForCrop(src: string): Promise<HTMLImageElement> {
   });
 }
 
-async function buildPreviewMapFromAfterImage(
-  imageUrl: string,
+function fallbackBoardCell(index: number, total: number) {
+  const safeTotal = Math.max(1, total);
+  const cols = safeTotal >= 15 ? 5 : safeTotal >= 10 ? 4 : 3;
+  const rowCount = Math.ceil(safeTotal / cols);
+  const padX = 4;
+  const padY = 4;
+  const gapX = 2.2;
+  const gapY = 2.2;
+  const cellW = (100 - padX * 2 - gapX * (cols - 1)) / cols;
+  const cellH = (100 - padY * 2 - gapY * (rowCount - 1)) / rowCount;
+  const row = Math.floor(index / cols);
+  const col = index % cols;
+  const left = padX + col * (cellW + gapX);
+  const top = padY + row * (cellH + gapY);
+  return { index: index + 1, row: row + 1, col: col + 1, left, top, width: cellW, height: cellH };
+}
+
+function getItemBoardCell(item: GuideItem, index: number, total: number) {
+  if (
+    item.boardCell &&
+    Number.isFinite(item.boardCell.left) &&
+    Number.isFinite(item.boardCell.top) &&
+    Number.isFinite(item.boardCell.width) &&
+    Number.isFinite(item.boardCell.height)
+  ) {
+    return item.boardCell;
+  }
+  return fallbackBoardCell(index, total);
+}
+
+async function buildPreviewMapFromBoardImage(
+  boardImageUrl: string,
   items: GuideItem[],
   cropSize: number
 ): Promise<Record<number, string>> {
-  const img = await loadImageForCrop(imageUrl);
+  const img = await loadImageForCrop(boardImageUrl);
   const imageW = Math.max(1, img.naturalWidth || img.width || 1);
   const imageH = Math.max(1, img.naturalHeight || img.height || 1);
-  const maxCrop = Math.max(80, Math.min(imageW, imageH));
-  const sourceCrop = clamp(Math.round(cropSize), 120, maxCrop);
-  const outputSize = 220;
 
   const map: Record<number, string> = {};
 
-  for (const item of items) {
-    const cx = (item.imageTarget.x / 100) * imageW;
-    const cy = (item.imageTarget.y / 100) * imageH;
-    const objectScale = clamp((item.imageTarget.width + item.imageTarget.height) / 32, 0.82, 1.26);
-    const dynamicCrop = clamp(Math.round(sourceCrop * objectScale), 110, maxCrop);
+  for (const [index, item] of items.entries()) {
+    const cell = getItemBoardCell(item, index, items.length);
+    const cellLeftPx = (cell.left / 100) * imageW;
+    const cellTopPx = (cell.top / 100) * imageH;
+    const cellW = (cell.width / 100) * imageW;
+    const cellH = (cell.height / 100) * imageH;
 
-    const rawLeft = Math.round(cx - dynamicCrop / 2);
-    const rawTop = Math.round(cy - dynamicCrop / 2);
-    const sx = clamp(rawLeft, 0, imageW - dynamicCrop);
-    const sy = clamp(rawTop, 0, imageH - dynamicCrop);
+    const responsiveTarget = clamp(Math.round(cropSize), 160, 240);
+    const sourceByCell = Math.round(Math.min(cellW, cellH) * 0.9);
+    const sourceCrop = clamp(sourceByCell, 120, Math.max(120, Math.min(imageW, imageH)));
+    const output = responsiveTarget;
+
+    const cx = cellLeftPx + cellW / 2;
+    const cy = cellTopPx + cellH / 2;
+    const sx = clamp(Math.round(cx - sourceCrop / 2), 0, imageW - sourceCrop);
+    const sy = clamp(Math.round(cy - sourceCrop / 2), 0, imageH - sourceCrop);
 
     const canvas = document.createElement('canvas');
-    canvas.width = outputSize;
-    canvas.height = outputSize;
+    canvas.width = output;
+    canvas.height = output;
     const ctx = canvas.getContext('2d');
     if (!ctx) continue;
 
-    ctx.drawImage(img, sx, sy, dynamicCrop, dynamicCrop, 0, 0, outputSize, outputSize);
+    ctx.drawImage(img, sx, sy, sourceCrop, sourceCrop, 0, 0, output, output);
     map[item.id] = canvas.toDataURL('image/jpeg', 0.88);
   }
 
@@ -371,6 +413,7 @@ export default function ResultPage() {
   const [itemsBoardImageUrl, setItemsBoardImageUrl] = useState('');
   const [previewMap, setPreviewMap] = useState<Record<number, string>>({});
   const [cropSize, setCropSize] = useState(200);
+  const [lightbox, setLightbox] = useState<{ id: number; src: string; title: string } | null>(null);
   const [loadingGuide, setLoadingGuide] = useState(false);
   const [guideError, setGuideError] = useState('');
 
@@ -577,7 +620,7 @@ export default function ResultPage() {
     setLoadingGuide(true);
     setGuideError('');
 
-    const cacheKey = `nookai_guide_v7_${hashString(`${theme}__${beforeImage.slice(0, 180)}__${afterImage.slice(0, 180)}`)}`;
+    const cacheKey = `nookai_guide_v8_${hashString(`${theme}__${beforeImage.slice(0, 180)}__${afterImage.slice(0, 180)}`)}`;
     const cached = sessionStorage.getItem(cacheKey);
     if (cached) {
       try {
@@ -657,7 +700,7 @@ export default function ResultPage() {
   }, [afterImage, fetchGuide]);
 
   useEffect(() => {
-    if (!afterImage || items.length === 0) {
+    if (!itemsBoardImageUrl || items.length === 0) {
       setPreviewMap({});
       return;
     }
@@ -666,7 +709,7 @@ export default function ResultPage() {
 
     const run = async () => {
       try {
-        const map = await buildPreviewMapFromAfterImage(afterImage, items, cropSize);
+        const map = await buildPreviewMapFromBoardImage(itemsBoardImageUrl, items, cropSize);
         if (!active) return;
         setPreviewMap(map);
       } catch {
@@ -683,7 +726,7 @@ export default function ResultPage() {
     return () => {
       active = false;
     };
-  }, [afterImage, items, cropSize]);
+  }, [itemsBoardImageUrl, items, cropSize]);
 
   useEffect(() => {
     if (groupedItems.length === 0) {
@@ -1035,22 +1078,6 @@ export default function ResultPage() {
                 })}
               </div>
 
-              {itemsBoardImageUrl ? (
-                <div className="mt-3 rounded-2xl border border-stone-200 bg-stone-50/60 p-2">
-                  <div className="px-2 pb-2 pt-1">
-                    <p className="text-xs font-medium text-stone-700">提取物件板（单张参考图）</p>
-                    <p className="mt-0.5 text-[11px] text-stone-500">白底提取 4-6 个关键新增物件，用于购物决策</p>
-                  </div>
-                  <div className="overflow-hidden rounded-xl bg-white">
-                    <img
-                      src={itemsBoardImageUrl}
-                      alt="提取物件板"
-                      className="block h-auto w-full object-contain"
-                    />
-                  </div>
-                </div>
-              ) : null}
-
               <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
                 {loadingGuide ? (
                   <p className="py-10 text-center text-sm text-stone-500">正在识别当前效果图中的可购买物件...</p>
@@ -1114,7 +1141,17 @@ export default function ResultPage() {
                                     >
                                       <div className="flex items-center justify-between gap-2">
                                         <div className="flex min-w-0 items-center gap-2.5">
-                                          <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-stone-100 ring-1 ring-stone-200">
+                                          <button
+                                            type="button"
+                                            onClick={(event) => {
+                                              event.stopPropagation();
+                                              if (item.previewImage) {
+                                                setLightbox({ id: item.id, src: item.previewImage, title: item.name });
+                                              }
+                                            }}
+                                            className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-stone-100 ring-1 ring-stone-200"
+                                            aria-label={`查看 ${item.name} 预览大图`}
+                                          >
                                             {item.previewImage ? (
                                               <img
                                                 src={item.previewImage}
@@ -1122,14 +1159,11 @@ export default function ResultPage() {
                                                 className="h-full w-full object-cover"
                                               />
                                             ) : (
-                                              <img
-                                                src={afterImage}
-                                                alt={`${item.name} 预览`}
-                                                className="h-full w-full scale-[2.1] object-cover"
-                                                style={{ objectPosition: `${item.imageTarget.x}% ${item.imageTarget.y}%` }}
-                                              />
+                                              <div className="flex h-full w-full items-center justify-center text-[10px] text-stone-400">
+                                                生成中
+                                              </div>
                                             )}
-                                          </div>
+                                          </button>
                                           <div className="min-w-0">
                                             <h3 className="text-sm font-medium text-stone-900">{item.name}</h3>
                                             <p className="mt-0.5 text-xs text-stone-500">{item.priceRange}</p>
@@ -1224,6 +1258,45 @@ export default function ResultPage() {
           </motion.aside>
         </div>
       </div>
+
+      <AnimatePresence>
+        {lightbox ? (
+          <motion.div
+            className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setLightbox(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 12, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.96 }}
+              transition={spring}
+              onClick={(event) => event.stopPropagation()}
+              className="w-full max-w-[520px] overflow-hidden rounded-2xl bg-white shadow-xl"
+            >
+              <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3">
+                <p className="text-sm font-medium text-stone-800">{lightbox.title}</p>
+                <button
+                  type="button"
+                  onClick={() => setLightbox(null)}
+                  className="rounded-full px-3 py-1 text-xs text-stone-500 hover:bg-stone-100"
+                >
+                  关闭
+                </button>
+              </div>
+              <div className="bg-stone-50 p-3">
+                <img
+                  src={lightbox.src}
+                  alt={`${lightbox.title} 大图`}
+                  className="mx-auto block max-h-[72vh] w-full rounded-xl object-contain"
+                />
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }
