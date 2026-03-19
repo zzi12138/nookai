@@ -1,7 +1,7 @@
 'use client';
 
-import { motion } from 'framer-motion';
-import { Check, Copy, Download, Plus, RefreshCw, Save } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Check, ChevronDown, Copy, Download, Plus, RefreshCw, Save } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { loadResult, type StoredResult } from '../lib/imageStore';
@@ -15,6 +15,8 @@ type Category =
   | 'Functional accessories';
 
 type Necessity = 'Must-have' | 'Recommended' | 'Optional';
+
+type FilterKey = 'all' | 'must' | 'recommended' | 'optional';
 
 type GuideItem = {
   id: number;
@@ -53,6 +55,28 @@ const CATEGORY_ORDER: Category[] = [
   'Functional accessories',
 ];
 
+const CATEGORY_LABEL: Record<Category, string> = {
+  'Ambient lighting': '灯光',
+  'Bedding & soft textiles': '床品布艺',
+  'Floor soft furnishings': '地面软装',
+  'Wall decor': '墙面装饰',
+  Plants: '绿植',
+  'Functional accessories': '功能型小物',
+};
+
+const FILTERS: { key: FilterKey; label: string }[] = [
+  { key: 'all', label: '全部' },
+  { key: 'must', label: '必买' },
+  { key: 'recommended', label: '建议' },
+  { key: 'optional', label: '可选' },
+];
+
+const NECESSITY_LABEL: Record<Necessity, string> = {
+  'Must-have': '必买',
+  Recommended: '建议买',
+  Optional: '可选',
+};
+
 const NECESSITY_STYLE: Record<Necessity, string> = {
   'Must-have': 'border-red-200 bg-red-50 text-red-700',
   Recommended: 'border-amber-200 bg-amber-50 text-amber-700',
@@ -71,6 +95,61 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
+function hasChinese(text: string) {
+  return /[\u4e00-\u9fff]/.test(text);
+}
+
+function mapNameToChinese(rawName: string) {
+  const name = rawName.trim();
+  if (!name) return '软装单品';
+  if (hasChinese(name)) return name;
+
+  const lower = name.toLowerCase();
+  if (lower.includes('floor lamp')) return '暖光落地灯';
+  if (lower.includes('desk lamp') || lower.includes('table lamp')) return '桌面台灯';
+  if (lower.includes('string light') || lower.includes('light strip')) return '窗帘灯串';
+  if (lower.includes('rug') || lower.includes('carpet')) return '圆形地毯';
+  if (lower.includes('bedding') || lower.includes('duvet')) return '亚麻床品';
+  if (lower.includes('pillow')) return '装饰抱枕';
+  if (lower.includes('blanket') || lower.includes('throw')) return '针织披毯';
+  if (lower.includes('wall art') || lower.includes('poster') || lower.includes('painting')) return '免打孔挂画';
+  if (lower.includes('plant') || lower.includes('greenery')) return '中型绿植';
+  if (lower.includes('projector')) return '投影仪';
+  if (lower.includes('side table')) return '小边几';
+  if (lower.includes('tray') || lower.includes('storage')) return '桌面收纳盘';
+  return name;
+}
+
+function mapPlacementToChinese(rawPlacement: string) {
+  const value = rawPlacement.trim();
+  if (!value) return '放在不挡动线的位置';
+  if (hasChinese(value)) return value;
+
+  const lower = value.toLowerCase();
+  if (lower.includes('sofa') && lower.includes('right')) return '沙发右侧';
+  if (lower.includes('sofa')) return '沙发附近';
+  if (lower.includes('bedside') || lower.includes('bed side')) return '床侧边';
+  if (lower.includes('desk')) return '书桌一角';
+  if (lower.includes('wall')) return '床头或沙发背墙';
+  if (lower.includes('window')) return '窗边';
+  if (lower.includes('corner')) return '房间角落';
+  if (lower.includes('center')) return '空间中部';
+  return value;
+}
+
+function mapReasonToChinese(rawReason: string) {
+  const value = rawReason.trim();
+  if (!value) return '提升氛围最直接';
+  if (hasChinese(value)) return value;
+
+  const lower = value.toLowerCase();
+  if (lower.includes('warm') || lower.includes('light')) return '补充暖光后房间更有层次';
+  if (lower.includes('cozy')) return '让空间更放松舒适';
+  if (lower.includes('focus')) return '快速形成视觉焦点';
+  if (lower.includes('texture')) return '增加软装质感';
+  return '提升空间完成度';
+}
+
 function normalizeGuideItem(item: GuideItem, index: number): GuideItem {
   const category = CATEGORY_ORDER.includes(item.category) ? item.category : 'Functional accessories';
   const necessity: Necessity = ['Must-have', 'Recommended', 'Optional'].includes(item.necessity)
@@ -79,7 +158,7 @@ function normalizeGuideItem(item: GuideItem, index: number): GuideItem {
 
   const quantity = Math.round(clamp(Number(item.quantity || 1), 1, 3));
   const minPrice = Math.round(clamp(Number(item.priceMin || 99), 39, 4999));
-  const maxPrice = Math.round(clamp(Number(item.priceMax || minPrice + 80), minPrice + 20, minPrice + 140));
+  const maxPrice = Math.round(clamp(Number(item.priceMax || minPrice + 60), minPrice + 20, minPrice + 120));
 
   const hasAnchor = Boolean(item.imageTarget?.hasAnchor);
   const confidence = Number.isFinite(item.imageTarget?.confidence)
@@ -92,14 +171,15 @@ function normalizeGuideItem(item: GuideItem, index: number): GuideItem {
   return {
     ...item,
     id: item.id || index + 1,
+    name: mapNameToChinese(item.name || ''),
     category,
     necessity,
     quantity,
     priceMin: minPrice,
     priceMax: maxPrice,
     priceRange: `¥${minPrice}-${maxPrice}`,
-    placement: item.placement || 'Place where it does not block movement',
-    reason: item.reason || 'Improves the room quickly',
+    placement: mapPlacementToChinese(item.placement || ''),
+    reason: mapReasonToChinese(item.reason || ''),
     imageTarget: {
       x,
       y,
@@ -116,13 +196,13 @@ function buildChecklistText(items: GuideItem[]) {
     list: items.filter((item) => item.category === category),
   })).filter((group) => group.list.length > 0);
 
-  const lines: string[] = ['NookAI Shopping List', ''];
+  const lines: string[] = ['NookAI 购物清单', ''];
 
   for (const group of groups) {
-    lines.push(`[${group.category}]`);
+    lines.push(`[${CATEGORY_LABEL[group.category]}]`);
     for (const item of group.list) {
       lines.push(
-        `- ${item.name} | ${item.priceRange} | qty x${item.quantity} | placement: ${item.placement} | ${item.necessity}`
+        `- ${item.name} | ${item.priceRange} | 数量x${item.quantity} | 摆放: ${item.placement} | ${NECESSITY_LABEL[item.necessity]}`
       );
     }
     lines.push('');
@@ -152,6 +232,24 @@ function drawRoundRect(
   ctx.closePath();
 }
 
+function passFilter(item: GuideItem, filter: FilterKey) {
+  if (filter === 'all') return true;
+  if (filter === 'must') return item.necessity === 'Must-have';
+  if (filter === 'recommended') return item.necessity === 'Recommended';
+  return item.necessity === 'Optional';
+}
+
+function getLabelStyle(target: GuideItem['imageTarget']) {
+  const onRight = target.x >= 68;
+  const nearTop = target.y <= 18;
+
+  return {
+    left: `${target.x}%`,
+    top: `${target.y}%`,
+    transform: `translate(${onRight ? '-112%' : '12%'}, ${nearTop ? '14%' : '-112%'})`,
+  } as const;
+}
+
 export default function ResultPage() {
   const router = useRouter();
 
@@ -160,7 +258,7 @@ export default function ResultPage() {
 
   const [originalUrl, setOriginalUrl] = useState('');
   const [generatedUrl, setGeneratedUrl] = useState('');
-  const [theme, setTheme] = useState('Japandi');
+  const [theme, setTheme] = useState('日式原木风');
 
   const [summary, setSummary] = useState('');
   const [items, setItems] = useState<GuideItem[]>([]);
@@ -170,6 +268,9 @@ export default function ResultPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [hoverId, setHoverId] = useState<number | null>(null);
   const [cartIds, setCartIds] = useState<number[]>([]);
+
+  const [filter, setFilter] = useState<FilterKey>('all');
+  const [expandedCategory, setExpandedCategory] = useState<Category | null>(null);
 
   const [notice, setNotice] = useState('');
 
@@ -182,15 +283,20 @@ export default function ResultPage() {
   const detectImage = generatedUrl || originalUrl;
   const canCompare = Boolean(generatedUrl && originalUrl);
 
+  const filteredItems = useMemo(() => items.filter((item) => passFilter(item, filter)), [items, filter]);
+
   const activeId = selectedId ?? hoverId;
-  const activeItem = useMemo(() => items.find((item) => item.id === activeId) || null, [items, activeId]);
+  const activeItem = useMemo(
+    () => filteredItems.find((item) => item.id === activeId) || null,
+    [filteredItems, activeId]
+  );
 
   const groupedItems = useMemo(() => {
     return CATEGORY_ORDER.map((category) => ({
       category,
-      list: items.filter((item) => item.category === category),
+      list: filteredItems.filter((item) => item.category === category),
     })).filter((group) => group.list.length > 0);
-  }, [items]);
+  }, [filteredItems]);
 
   const selectedItems = useMemo(() => items.filter((item) => cartIds.includes(item.id)), [items, cartIds]);
 
@@ -220,7 +326,7 @@ export default function ResultPage() {
 
   useEffect(() => {
     if (!notice) return;
-    const timer = window.setTimeout(() => setNotice(''), 2300);
+    const timer = window.setTimeout(() => setNotice(''), 2200);
     return () => window.clearTimeout(timer);
   }, [notice]);
 
@@ -235,7 +341,7 @@ export default function ResultPage() {
       if (!active) return;
       setOriginalUrl(data.original || '');
       setGeneratedUrl(data.generated || '');
-      setTheme(data.theme || 'Japandi');
+      setTheme(data.theme || '日式原木风');
     };
 
     const load = async () => {
@@ -326,7 +432,7 @@ export default function ResultPage() {
     setLoadingGuide(true);
     setGuideError('');
 
-    const cacheKey = `nookai_guide_v2_${hashString(`${theme}__${detectImage.slice(0, 256)}`)}`;
+    const cacheKey = `nookai_guide_v3_${hashString(`${theme}__${detectImage.slice(0, 256)}`)}`;
     const cached = sessionStorage.getItem(cacheKey);
     if (cached) {
       try {
@@ -334,7 +440,7 @@ export default function ResultPage() {
         if (parsed.items?.length) {
           const normalized = parsed.items.map(normalizeGuideItem).slice(0, 6);
           setItems(normalized);
-          setSummary(parsed.summary || 'Recognized from the current generated image.');
+          setSummary(parsed.summary || '已从当前效果图识别可购买项。');
           setLoadingGuide(false);
           return;
         }
@@ -343,7 +449,7 @@ export default function ResultPage() {
       }
     }
 
-    let lastError = 'Could not analyze current generated image';
+    let lastError = '当前效果图识别失败';
 
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       try {
@@ -356,9 +462,9 @@ export default function ResultPage() {
         const data = (await response.json().catch(() => null)) as GuideResponse | null;
 
         if (!response.ok || !data?.items?.length) {
-          lastError = data?.error || `Recognition failed (${attempt})`;
+          lastError = data?.error || `识别失败（第 ${attempt} 次）`;
           if (attempt < 3) {
-            await new Promise((resolve) => setTimeout(resolve, 900 * attempt));
+            await new Promise((resolve) => setTimeout(resolve, 800 * attempt));
             continue;
           }
           throw new Error(lastError);
@@ -366,7 +472,7 @@ export default function ResultPage() {
 
         const normalized = data.items.map(normalizeGuideItem).slice(0, 6);
         setItems(normalized);
-        setSummary(data.summary || 'Recognized from the current generated image.');
+        setSummary(data.summary || '已从当前效果图识别可购买项。');
 
         sessionStorage.setItem(
           cacheKey,
@@ -379,9 +485,9 @@ export default function ResultPage() {
         setLoadingGuide(false);
         return;
       } catch (error) {
-        lastError = error instanceof Error ? error.message : 'Recognition failed';
+        lastError = error instanceof Error ? error.message : '识别失败';
         if (attempt < 3) {
-          await new Promise((resolve) => setTimeout(resolve, 900 * attempt));
+          await new Promise((resolve) => setTimeout(resolve, 800 * attempt));
           continue;
         }
       }
@@ -396,37 +502,57 @@ export default function ResultPage() {
     setSelectedId(null);
     setHoverId(null);
     setCartIds([]);
+    setFilter('all');
     void fetchGuide();
   }, [detectImage, fetchGuide]);
 
-  const handleSelectItem = (id: number) => {
+  useEffect(() => {
+    if (groupedItems.length === 0) {
+      setExpandedCategory(null);
+      return;
+    }
+
+    if (!expandedCategory || !groupedItems.some((group) => group.category === expandedCategory)) {
+      setExpandedCategory(groupedItems[0].category);
+    }
+  }, [groupedItems, expandedCategory]);
+
+  useEffect(() => {
+    const visibleIds = new Set(filteredItems.map((item) => item.id));
+
+    if (selectedId !== null && !visibleIds.has(selectedId)) {
+      setSelectedId(null);
+    }
+    if (hoverId !== null && !visibleIds.has(hoverId)) {
+      setHoverId(null);
+    }
+  }, [filteredItems, selectedId, hoverId]);
+
+  const handleSelectItem = (id: number, category: Category) => {
+    setExpandedCategory(category);
     setSelectedId((prev) => (prev === id ? null : id));
     setHoverId(null);
   };
 
   const handleHoverStart = (id: number) => {
-    if (selectedId === null) setHoverId(id);
+    if (selectedId === null) {
+      setHoverId(id);
+    }
   };
 
   const handleHoverEnd = () => {
-    if (selectedId === null) setHoverId(null);
-  };
-
-  const handleHotspotClick = (id: number) => {
-    setSelectedId(id);
-    const node = cardRefs.current[id];
-    if (node) {
-      node.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    if (selectedId === null) {
+      setHoverId(null);
     }
   };
 
   const toggleCart = (id: number) => {
     setCartIds((prev) => {
       if (prev.includes(id)) {
-        setNotice('Removed from list');
+        setNotice('已从清单移除');
         return prev.filter((x) => x !== id);
       }
-      setNotice('Added to list');
+      setNotice('已加入购物清单');
       return [...prev, id];
     });
   };
@@ -445,28 +571,28 @@ export default function ResultPage() {
 
   const copyChecklist = async () => {
     if (selectedItems.length === 0) {
-      setNotice('Please add at least 1 item first');
+      setNotice('请先加入至少 1 件物品');
       return;
     }
 
     try {
       await navigator.clipboard.writeText(buildChecklistText(selectedItems));
-      setNotice('Shopping list copied');
+      setNotice('购物清单已复制');
     } catch {
-      setNotice('Copy failed');
+      setNotice('复制失败');
     }
   };
 
   const exportChecklistImage = () => {
     if (selectedItems.length === 0) {
-      setNotice('Please add at least 1 item first');
+      setNotice('请先加入至少 1 件物品');
       return;
     }
 
-    const width = 1220;
-    const rowHeight = 134;
-    const headerHeight = 190;
-    const footerHeight = 84;
+    const width = 1120;
+    const rowHeight = 122;
+    const headerHeight = 176;
+    const footerHeight = 72;
     const height = headerHeight + selectedItems.length * rowHeight + footerHeight;
 
     const canvas = document.createElement('canvas');
@@ -475,7 +601,7 @@ export default function ResultPage() {
     const ctx = canvas.getContext('2d');
 
     if (!ctx) {
-      setNotice('Export failed');
+      setNotice('导出失败');
       return;
     }
 
@@ -483,28 +609,28 @@ export default function ResultPage() {
     ctx.fillRect(0, 0, width, height);
 
     ctx.fillStyle = '#1c1917';
-    ctx.font = 'bold 46px sans-serif';
-    ctx.fillText('NookAI Shopping List', 64, 84);
+    ctx.font = 'bold 44px sans-serif';
+    ctx.fillText('NookAI 购物清单', 58, 78);
 
     ctx.fillStyle = '#57534e';
-    ctx.font = '24px sans-serif';
-    ctx.fillText(`Selected: ${selectedItems.length}`, 64, 128);
-    ctx.fillText(`Budget min ¥${budget.min} / max ¥${budget.max}`, 64, 162);
+    ctx.font = '23px sans-serif';
+    ctx.fillText(`已选 ${selectedItems.length} 件`, 58, 118);
+    ctx.fillText(`最低预算 ¥${budget.min} / 最高预算 ¥${budget.max}`, 58, 150);
 
     selectedItems.forEach((item, idx) => {
       const y = headerHeight + idx * rowHeight;
-      drawRoundRect(ctx, 46, y, width - 92, rowHeight - 18, 20);
+      drawRoundRect(ctx, 38, y, width - 76, rowHeight - 16, 18);
       ctx.fillStyle = '#ffffff';
       ctx.fill();
 
       ctx.fillStyle = '#1c1917';
-      ctx.font = 'bold 30px sans-serif';
-      ctx.fillText(`${idx + 1}. ${item.name}`, 72, y + 44);
+      ctx.font = 'bold 28px sans-serif';
+      ctx.fillText(`${idx + 1}. ${item.name}`, 62, y + 40);
 
       ctx.fillStyle = '#57534e';
-      ctx.font = '22px sans-serif';
-      ctx.fillText(`${item.category} · ${item.priceRange} · qty x${item.quantity} · ${item.necessity}`, 72, y + 80);
-      ctx.fillText(`Placement: ${item.placement}`, 72, y + 112);
+      ctx.font = '20px sans-serif';
+      ctx.fillText(`${CATEGORY_LABEL[item.category]} · ${item.priceRange} · 数量x${item.quantity}`, 62, y + 74);
+      ctx.fillText(`摆放：${item.placement} · ${NECESSITY_LABEL[item.necessity]}`, 62, y + 102);
     });
 
     const url = canvas.toDataURL('image/png');
@@ -514,20 +640,20 @@ export default function ResultPage() {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    setNotice('List image exported');
+    setNotice('清单图片已导出');
   };
 
   if (!hasImage) {
     return (
       <div className="min-h-screen bg-[#FDF9F1] px-5 py-10">
         <div className="mx-auto w-full max-w-[1680px] rounded-[28px] bg-white p-10 text-center shadow-sm ring-1 ring-stone-100">
-          <p className="text-sm text-stone-500">No result image found. Please generate first.</p>
+          <p className="text-sm text-stone-500">未找到效果图，请先完成生成。</p>
           <button
             type="button"
             onClick={() => router.push('/')}
             className="mt-5 rounded-full bg-stone-900 px-6 py-3 text-sm text-white"
           >
-            Back to Home
+            返回首页
           </button>
         </div>
       </div>
@@ -547,9 +673,9 @@ export default function ResultPage() {
         >
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <p className="text-xs uppercase tracking-[0.24em] text-stone-400">RESULT + PURCHASE DECISION</p>
-              <h1 className="mt-1 text-3xl font-semibold text-stone-900">Your Makeover Result</h1>
-              <p className="mt-2 text-sm text-stone-500">{summary || 'Recognized from the current generated image.'}</p>
+              <p className="text-xs uppercase tracking-[0.24em] text-stone-400">RESULT + PURCHASE GUIDE</p>
+              <h1 className="mt-1 text-3xl font-semibold text-stone-900">效果图与购物指南</h1>
+              <p className="mt-2 text-sm text-stone-500">{summary || '已从当前效果图识别关键可购买物件。'}</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <button
@@ -558,7 +684,7 @@ export default function ResultPage() {
                 className="inline-flex items-center gap-2 rounded-full border border-stone-200 px-4 py-2 text-sm text-stone-700"
               >
                 <Save size={15} />
-                Save Image
+                保存效果图
               </button>
               <button
                 type="button"
@@ -566,7 +692,7 @@ export default function ResultPage() {
                 className="inline-flex items-center gap-2 rounded-full bg-stone-900 px-4 py-2 text-sm text-white"
               >
                 <RefreshCw size={15} />
-                Regenerate
+                重新生成
               </button>
             </div>
           </div>
@@ -580,8 +706,8 @@ export default function ResultPage() {
             className="rounded-[28px] bg-white p-5 shadow-sm ring-1 ring-stone-100 lg:p-6"
           >
             <div className="mb-4 flex items-center justify-between">
-              <p className="text-sm font-medium text-stone-700">Before / After Proof</p>
-              <p className="text-xs text-stone-400">After is the primary view</p>
+              <p className="text-sm font-medium text-stone-700">改造前后对比</p>
+              <p className="text-xs text-stone-400">默认展示干净效果图，选择右侧物件后高亮对应区域</p>
             </div>
 
             <div
@@ -598,15 +724,11 @@ export default function ResultPage() {
                   height: `${frame.height}px`,
                 }}
               >
-                <img
-                  src={originalUrl || generatedUrl}
-                  alt="Before"
-                  className="h-full w-full object-contain"
-                />
+                <img src={originalUrl || generatedUrl} alt="原图" className="h-full w-full object-contain" />
 
                 <img
                   src={generatedUrl || originalUrl}
-                  alt="After"
+                  alt="效果图"
                   onLoad={(event) => {
                     if (baseNatural) return;
                     setBaseNatural({
@@ -620,11 +742,20 @@ export default function ResultPage() {
 
                 {activeItem?.imageTarget.hasAnchor ? (
                   <div className="absolute inset-0" style={{ clipPath: canCompare ? afterClip : 'inset(0 0 0 0)' }}>
-                    <div className="absolute inset-0 bg-black/24" />
+                    <div className="absolute inset-0 bg-black/28" />
                     <div
-                      className="absolute h-56 w-56 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/45 blur-2xl"
-                      style={{ left: `${activeItem.imageTarget.x}%`, top: `${activeItem.imageTarget.y}%` }}
+                      className="absolute h-52 w-52 -translate-x-1/2 -translate-y-1/2 rounded-[32px] border border-amber-100/90 bg-amber-200/30 shadow-[0_0_50px_rgba(251,191,36,0.42)]"
+                      style={{
+                        left: `${activeItem.imageTarget.x}%`,
+                        top: `${activeItem.imageTarget.y}%`,
+                      }}
                     />
+                    <div
+                      className="pointer-events-none absolute z-30 rounded-full border border-stone-200 bg-white/95 px-3 py-1 text-xs text-stone-700 shadow-sm"
+                      style={getLabelStyle(activeItem.imageTarget)}
+                    >
+                      {activeItem.name}
+                    </div>
                   </div>
                 ) : null}
               </div>
@@ -649,38 +780,12 @@ export default function ResultPage() {
                 </motion.div>
               ) : null}
 
-              {activeItem?.imageTarget.hasPoint ? (
-                <button
-                  type="button"
-                  onClick={() => handleHotspotClick(activeItem.id)}
-                  className="absolute z-30 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-amber-400 bg-amber-100 text-xs font-semibold text-amber-700 shadow-md"
-                  style={{
-                    left: `${frame.left + (frame.width * activeItem.imageTarget.x) / 100}px`,
-                    top: `${frame.top + (frame.height * activeItem.imageTarget.y) / 100}px`,
-                  }}
-                >
-                  {activeItem.id}
-                </button>
-              ) : null}
-
-              {activeItem?.imageTarget.hasAnchor ? (
-                <div
-                  className="pointer-events-none absolute z-30 rounded-full bg-stone-900/92 px-3 py-1 text-xs text-white"
-                  style={{
-                    left: `${frame.left + (frame.width * activeItem.imageTarget.x) / 100}px`,
-                    top: `${Math.max(18, frame.top + (frame.height * activeItem.imageTarget.y) / 100 - 34)}px`,
-                    transform: 'translateX(-50%)',
-                  }}
-                >
-                  {activeItem.name}
-                </div>
-              ) : null}
             </div>
 
             <div className="mt-3 flex items-center justify-between text-xs text-stone-500">
-              <span>Before</span>
-              <span>Drag to compare</span>
-              <span>After</span>
+              <span>原图</span>
+              <span>拖动中线查看对比</span>
+              <span>效果图</span>
             </div>
           </motion.section>
 
@@ -691,16 +796,16 @@ export default function ResultPage() {
             className="space-y-4"
           >
             <section className="rounded-[28px] bg-white p-5 shadow-sm ring-1 ring-stone-100">
-              <h2 className="text-base font-semibold text-stone-900">Decision Summary</h2>
+              <h2 className="text-base font-semibold text-stone-900">购物清单汇总</h2>
 
               <div className="mt-3 grid grid-cols-2 gap-3">
                 <div className="rounded-2xl bg-stone-50 p-3">
-                  <p className="text-xs text-stone-400">Selected Items</p>
+                  <p className="text-xs text-stone-400">已加入</p>
                   <p className="mt-1 text-2xl font-semibold text-stone-900">{selectedItems.length}</p>
                 </div>
                 <div className="rounded-2xl bg-stone-50 p-3">
-                  <p className="text-xs text-stone-400">Budget</p>
-                  <p className="mt-1 text-sm font-semibold text-stone-900">Min ¥{budget.min} / Max ¥{budget.max}</p>
+                  <p className="text-xs text-stone-400">预算范围</p>
+                  <p className="mt-1 text-sm font-semibold text-stone-900">最低 ¥{budget.min} · 最高 ¥{budget.max}</p>
                 </div>
               </div>
 
@@ -711,7 +816,7 @@ export default function ResultPage() {
                   className="inline-flex items-center justify-center gap-2 rounded-2xl border border-stone-200 px-3 py-2.5 text-sm text-stone-700"
                 >
                   <Copy size={14} />
-                  Copy
+                  复制清单
                 </button>
                 <button
                   type="button"
@@ -719,7 +824,7 @@ export default function ResultPage() {
                   className="inline-flex items-center justify-center gap-2 rounded-2xl bg-stone-900 px-3 py-2.5 text-sm text-white"
                 >
                   <Download size={14} />
-                  Export
+                  导出清单
                 </button>
               </div>
 
@@ -728,91 +833,149 @@ export default function ResultPage() {
 
             <section className="rounded-[28px] bg-white p-5 shadow-sm ring-1 ring-stone-100">
               <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-base font-semibold text-stone-900">AI Purchase Guide</h2>
+                <h2 className="text-base font-semibold text-stone-900">购物指南</h2>
                 <button
                   type="button"
                   onClick={() => void fetchGuide()}
                   className="rounded-full border border-stone-200 px-3 py-1 text-xs text-stone-600"
                 >
-                  Refresh
+                  刷新识别
                 </button>
               </div>
 
+              <div className="mb-3 flex flex-wrap gap-2">
+                {FILTERS.map((item) => {
+                  const active = filter === item.key;
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => setFilter(item.key)}
+                      className={`rounded-full px-3 py-1.5 text-xs transition ${
+                        active ? 'bg-stone-900 text-white' : 'border border-stone-200 bg-white text-stone-600'
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+
               {loadingGuide ? (
-                <p className="py-10 text-center text-sm text-stone-500">Recognizing items from current generated image...</p>
+                <p className="py-10 text-center text-sm text-stone-500">正在识别当前效果图中的可购买物件...</p>
               ) : guideError ? (
                 <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-700">
                   {guideError}
                 </div>
+              ) : groupedItems.length === 0 ? (
+                <p className="rounded-2xl bg-stone-50 px-3 py-5 text-center text-sm text-stone-500">当前筛选下暂无可展示物件</p>
               ) : (
-                <div className="max-h-[66vh] space-y-5 overflow-y-auto pr-1">
-                  {groupedItems.map((group) => (
-                    <div key={group.category} className="space-y-2">
-                      <p className="text-sm font-medium text-stone-700">{group.category}</p>
-                      <div className="space-y-2">
-                        {group.list.map((item) => {
-                          const selected = selectedId === item.id;
-                          const preview = hoverId === item.id && selectedId === null;
-                          const added = cartIds.includes(item.id);
+                <div className="max-h-[66vh] space-y-2 overflow-y-auto pr-1">
+                  {groupedItems.map((group) => {
+                    const open = expandedCategory === group.category;
+                    return (
+                      <div key={group.category} className="overflow-hidden rounded-2xl border border-stone-200 bg-white">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedCategory((prev) => (prev === group.category ? null : group.category))}
+                          className="flex w-full items-center justify-between px-3.5 py-3 text-left"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-stone-800">{CATEGORY_LABEL[group.category]}</span>
+                            <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-500">{group.list.length}</span>
+                          </div>
+                          <ChevronDown
+                            size={15}
+                            className={`text-stone-400 transition-transform ${open ? 'rotate-180' : 'rotate-0'}`}
+                          />
+                        </button>
 
-                          return (
-                            <article
-                              key={item.id}
-                              ref={(node) => {
-                                cardRefs.current[item.id] = node;
-                              }}
-                              onClick={() => handleSelectItem(item.id)}
-                              onMouseEnter={() => handleHoverStart(item.id)}
-                              onMouseLeave={handleHoverEnd}
-                              className={`cursor-pointer rounded-2xl border px-3.5 py-3 transition ${
-                                selected
-                                  ? 'border-amber-300 bg-amber-50/70 shadow-sm'
-                                  : preview
-                                    ? 'border-stone-300 bg-stone-50'
-                                    : 'border-stone-200 bg-white'
-                              }`}
+                        <AnimatePresence initial={false}>
+                          {open ? (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.22 }}
+                              className="space-y-2 overflow-hidden px-3.5 pb-3"
                             >
-                              <div className="flex items-start justify-between gap-2">
-                                <div>
-                                  <h3 className="text-sm font-medium text-stone-900">{item.name}</h3>
-                                  <p className="mt-0.5 text-xs text-stone-500">
-                                    {item.priceRange} · qty x{item.quantity}
-                                  </p>
-                                </div>
+                              {group.list.map((item) => {
+                                const selected = selectedId === item.id;
+                                const preview = hoverId === item.id && selectedId === null;
+                                const added = cartIds.includes(item.id);
 
-                                <button
-                                  type="button"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    toggleCart(item.id);
-                                  }}
-                                  className={`inline-flex h-8 min-w-[70px] items-center justify-center gap-1 rounded-full border px-2 text-xs transition ${
-                                    added
-                                      ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                                      : 'border-stone-200 bg-white text-stone-600'
-                                  }`}
-                                >
-                                  {added ? <Check size={13} /> : <Plus size={13} />}
-                                  <span>{added ? 'Added' : 'Add'}</span>
-                                </button>
-                              </div>
+                                return (
+                                  <article
+                                    key={item.id}
+                                    ref={(node) => {
+                                      cardRefs.current[item.id] = node;
+                                    }}
+                                    onClick={() => handleSelectItem(item.id, group.category)}
+                                    onMouseEnter={() => handleHoverStart(item.id)}
+                                    onMouseLeave={handleHoverEnd}
+                                    className={`cursor-pointer rounded-xl border px-3 py-2.5 transition ${
+                                      selected
+                                        ? 'border-amber-300 bg-amber-50/70 shadow-sm'
+                                        : preview
+                                          ? 'border-stone-300 bg-stone-50'
+                                          : 'border-stone-200 bg-white'
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between gap-2">
+                                      <div className="min-w-0">
+                                        <h3 className="text-sm font-medium text-stone-900">{item.name}</h3>
+                                        <p className="mt-0.5 text-xs text-stone-500">{item.priceRange}</p>
+                                      </div>
 
-                              <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                                <span className={`rounded-full border px-2.5 py-1 ${NECESSITY_STYLE[item.necessity]}`}>
-                                  {item.necessity}
-                                </span>
-                                <span className="rounded-full bg-stone-100 px-2.5 py-1 text-stone-600">
-                                  {item.placement}
-                                </span>
-                              </div>
+                                      <button
+                                        type="button"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          toggleCart(item.id);
+                                        }}
+                                        className={`inline-flex h-7 min-w-[62px] items-center justify-center gap-1 rounded-full border px-2 text-xs transition ${
+                                          added
+                                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                            : 'border-stone-200 bg-white text-stone-600'
+                                        }`}
+                                      >
+                                        {added ? <Check size={12} /> : <Plus size={12} />}
+                                        <span>{added ? '已加入' : '加入'}</span>
+                                      </button>
+                                    </div>
 
-                              <p className="mt-2 text-xs text-stone-500">{item.reason}</p>
-                            </article>
-                          );
-                        })}
+                                    <AnimatePresence initial={false}>
+                                      {selected ? (
+                                        <motion.div
+                                          initial={{ height: 0, opacity: 0 }}
+                                          animate={{ height: 'auto', opacity: 1 }}
+                                          exit={{ height: 0, opacity: 0 }}
+                                          transition={{ duration: 0.18 }}
+                                          className="mt-2 overflow-hidden"
+                                        >
+                                          <div className="flex flex-wrap items-center gap-2 text-xs">
+                                            <span className={`rounded-full border px-2 py-0.5 ${NECESSITY_STYLE[item.necessity]}`}>
+                                              {NECESSITY_LABEL[item.necessity]}
+                                            </span>
+                                            <span className="rounded-full bg-stone-100 px-2 py-0.5 text-stone-600">
+                                              数量 x{item.quantity}
+                                            </span>
+                                          </div>
+
+                                          <p className="mt-2 text-xs text-stone-600">摆放：{item.placement}</p>
+                                          <p className="mt-1 text-xs text-stone-500">{item.reason}</p>
+                                        </motion.div>
+                                      ) : null}
+                                    </AnimatePresence>
+                                  </article>
+                                );
+                              })}
+                            </motion.div>
+                          ) : null}
+                        </AnimatePresence>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </section>

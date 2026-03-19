@@ -141,18 +141,71 @@ function inferCategory(name: string): Category {
 function compactName(raw?: string) {
   const name = (raw || '').trim();
   if (!name) return '';
-  if (name.length <= 28) return name;
-  return `${name.slice(0, 28)}...`;
+  return name;
 }
 
 function normalizePlacement(raw?: string) {
   const value = (raw || '').trim();
-  return value || 'Place in a visible but unobstructed area';
+  return value || '放在不影响动线的位置';
 }
 
 function normalizeReason(raw?: string) {
   const value = (raw || '').trim();
-  return value || 'Improves visual quality quickly';
+  return value || '提升空间氛围最直接';
+}
+
+function hasChinese(text: string) {
+  return /[\u4e00-\u9fff]/.test(text);
+}
+
+function toChineseName(raw: string) {
+  const name = compactName(raw);
+  if (!name) return '';
+  if (hasChinese(name)) return name;
+
+  const n = name.toLowerCase();
+  if (n.includes('floor lamp')) return '暖光落地灯';
+  if (n.includes('desk lamp') || n.includes('table lamp')) return '桌面台灯';
+  if (n.includes('light strip') || n.includes('string light')) return '窗帘灯串';
+  if (n.includes('rug') || n.includes('carpet')) return '圆形地毯';
+  if (n.includes('bedding') || n.includes('duvet')) return '亚麻床品';
+  if (n.includes('pillow')) return '装饰抱枕';
+  if (n.includes('blanket') || n.includes('throw')) return '针织披毯';
+  if (n.includes('wall art') || n.includes('poster') || n.includes('painting')) return '免打孔挂画';
+  if (n.includes('plant') || n.includes('greenery')) return '中型绿植';
+  if (n.includes('projector')) return '投影仪';
+  if (n.includes('stand')) return '投影支架';
+  if (n.includes('side table')) return '小边几';
+  if (n.includes('tray') || n.includes('storage')) return '桌面收纳盘';
+  return name;
+}
+
+function toChinesePlacement(raw: string) {
+  const value = normalizePlacement(raw);
+  if (hasChinese(value)) return value;
+
+  const n = value.toLowerCase();
+  if (n.includes('sofa') && n.includes('right')) return '沙发右侧';
+  if (n.includes('sofa')) return '沙发附近';
+  if (n.includes('bedside') || n.includes('bed side')) return '床边';
+  if (n.includes('desk')) return '书桌一角';
+  if (n.includes('wall')) return '床头或沙发背墙';
+  if (n.includes('window')) return '窗边';
+  if (n.includes('corner')) return '房间角落';
+  if (n.includes('center')) return '空间中部';
+  return value;
+}
+
+function toChineseReason(raw: string) {
+  const value = normalizeReason(raw);
+  if (hasChinese(value)) return value;
+
+  const n = value.toLowerCase();
+  if (n.includes('warm') || n.includes('light')) return '补充暖光后，空间更有层次';
+  if (n.includes('cozy')) return '让房间更放松舒适';
+  if (n.includes('focus')) return '快速形成视觉焦点';
+  if (n.includes('texture')) return '提升软装质感';
+  return '提升空间完成度';
 }
 
 function narrowRangeByName(name: string) {
@@ -241,40 +294,33 @@ async function fetchRemoteImageAsInlinePart(url: string) {
 
 function getPrompt(theme: string) {
   return `
-You are a visual purchase planner for renters.
+你是租房改造购物助手。请分析“当前效果图”，输出 4-6 个最关键、可购买、可摆放的具体物件。
 
-Analyze the CURRENT generated room image and output only 4-6 concrete purchasable items that are clearly visible and actionable.
+硬性规则：
+1) 只能输出具体物品，不要抽象概念。
+2) 只基于图中可见物件，不得臆造。
+3) 每个物件必须有 anchor 坐标（x/y 0-100）与 confidence（0-1）。
+4) 坐标必须尽量落在对应物体上；如果不确定，把 confidence 降低到 0.55 以下。
+5) 价格区间要收窄，符合中国电商常见区间。
+6) 所有字段优先用中文，名称要简洁完整，禁止省略号。
 
-Strict rules:
-1) Output concrete objects only. No abstract concepts.
-2) Items must come from what is visible in this exact image.
-3) Do not hallucinate missing objects.
-4) For each item, provide anchor x/y (0-100) and confidence (0-1).
-5) If uncertain, lower confidence below 0.55.
-6) Keep price ranges narrow and realistic.
+风格上下文：${theme || '日式原木风'}
 
-Preferred categories:
-- Ambient lighting
-- Bedding & soft textiles
-- Floor soft furnishings
-- Wall decor
-- Plants
-- Functional accessories
+推荐识别对象：
+落地灯、台灯、灯串、地毯、床品、抱枕、披毯、挂画、绿植、投影仪、小边几、收纳托盘。
 
-Style context: ${theme || 'Japandi'}
-
-Return JSON only with this shape:
+返回 JSON，格式严格如下：
 {
-  "summary": "one short sentence",
+  "summary": "一句简短中文总结",
   "items": [
     {
-      "name": "warm floor lamp",
+      "name": "暖光落地灯",
       "quantity": 1,
       "priceMin": 159,
       "priceMax": 239,
-      "placement": "right side of sofa",
+      "placement": "沙发右侧",
       "necessity": "Must-have|Recommended|Optional",
-      "reason": "short sentence",
+      "reason": "一句中文短句",
       "anchor": { "x": 72, "y": 58, "confidence": 0.82 }
     }
   ]
@@ -419,7 +465,7 @@ export async function POST(req: Request) {
       .slice(0, 8)
       .map((item, index) => {
         const id = index + 1;
-        const name = compactName(item.name);
+        const name = toChineseName(item.name || '');
         if (!name) return null;
 
         const category = inferCategory(name);
@@ -438,8 +484,8 @@ export async function POST(req: Request) {
         const y = hasAnchor ? clamp(rawY, 6, 94) : 50;
         const hasPoint = hasAnchor && confidence >= 0.63;
 
-        const placement = normalizePlacement(item.placement);
-        const reason = normalizeReason(item.reason);
+        const placement = toChinesePlacement(item.placement || '');
+        const reason = toChineseReason(item.reason || '');
 
         return {
           id,
@@ -480,7 +526,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       summary:
         analyzed.summary ||
-        'Recognized from the current generated image. Focus on these key purchasable items first.',
+        '已从当前效果图识别关键可购买物件，可按优先级逐步添置。',
       items: reduced,
     });
   } catch (error) {
