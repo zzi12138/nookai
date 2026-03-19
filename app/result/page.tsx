@@ -45,6 +45,8 @@ type GuideItem = {
 type GuideResponse = {
   summary?: string;
   items?: GuideItem[];
+  itemsBoardImageUrl?: string;
+  explainerImageUrl?: string;
   error?: string;
 };
 
@@ -97,6 +99,13 @@ function hashString(input: string) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function inferProvider(imageUrl: string): 'nanobanana' | 'gemini' | undefined {
+  if (!imageUrl) return undefined;
+  if (imageUrl.startsWith('data:image/')) return 'gemini';
+  if (/^https?:\/\//i.test(imageUrl)) return 'nanobanana';
+  return undefined;
 }
 
 function hasChinese(text: string) {
@@ -305,9 +314,11 @@ export default function ResultPage() {
   const [originalUrl, setOriginalUrl] = useState('');
   const [generatedUrl, setGeneratedUrl] = useState('');
   const [theme, setTheme] = useState('日式原木风');
+  const [provider, setProvider] = useState<'nanobanana' | 'gemini' | undefined>(undefined);
 
   const [summary, setSummary] = useState('');
   const [items, setItems] = useState<GuideItem[]>([]);
+  const [itemsBoardImageUrl, setItemsBoardImageUrl] = useState('');
   const [loadingGuide, setLoadingGuide] = useState(false);
   const [guideError, setGuideError] = useState('');
 
@@ -389,6 +400,8 @@ export default function ResultPage() {
       setOriginalUrl(data.original || '');
       setGeneratedUrl(data.generated || '');
       setTheme(data.theme || '日式原木风');
+      setProvider(data.provider || inferProvider(data.generated || ''));
+      setItemsBoardImageUrl(data.explainerImage || '');
     };
 
     const load = async () => {
@@ -479,7 +492,7 @@ export default function ResultPage() {
     setLoadingGuide(true);
     setGuideError('');
 
-    const cacheKey = `nookai_guide_v6_${hashString(`${theme}__${beforeImage.slice(0, 180)}__${afterImage.slice(0, 180)}`)}`;
+    const cacheKey = `nookai_guide_v7_${hashString(`${theme}__${beforeImage.slice(0, 180)}__${afterImage.slice(0, 180)}`)}`;
     const cached = sessionStorage.getItem(cacheKey);
     if (cached) {
       try {
@@ -488,6 +501,7 @@ export default function ResultPage() {
           const normalized = parsed.items.map(normalizeGuideItem).slice(0, 16);
           setItems(normalized);
           setSummary(parsed.summary || '已从当前效果图识别可购买项。');
+          setItemsBoardImageUrl(parsed.itemsBoardImageUrl || parsed.explainerImageUrl || '');
           setLoadingGuide(false);
           return;
         }
@@ -503,7 +517,7 @@ export default function ResultPage() {
         const response = await fetch('/api/explainer', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ beforeImage, afterImage, theme }),
+          body: JSON.stringify({ beforeImage, afterImage, theme, provider }),
         });
 
         const data = (await response.json().catch(() => null)) as GuideResponse | null;
@@ -520,12 +534,14 @@ export default function ResultPage() {
         const normalized = data.items.map(normalizeGuideItem).slice(0, 16);
         setItems(normalized);
         setSummary(data.summary || '已从当前效果图识别可购买项。');
+        setItemsBoardImageUrl(data.itemsBoardImageUrl || data.explainerImageUrl || '');
 
         sessionStorage.setItem(
           cacheKey,
           JSON.stringify({
             summary: data.summary,
             items: normalized,
+            itemsBoardImageUrl: data.itemsBoardImageUrl || data.explainerImageUrl || '',
           })
         );
 
@@ -542,7 +558,7 @@ export default function ResultPage() {
 
     setGuideError(lastError);
     setLoadingGuide(false);
-  }, [afterImage, beforeImage, theme]);
+  }, [afterImage, beforeImage, theme, provider]);
 
   useEffect(() => {
     if (!afterImage) return;
@@ -550,6 +566,7 @@ export default function ResultPage() {
     setHoverId(null);
     setCartIds([]);
     setFilter('all');
+    setItemsBoardImageUrl('');
     void fetchGuide();
   }, [afterImage, fetchGuide]);
 
@@ -899,6 +916,22 @@ export default function ResultPage() {
                   );
                 })}
               </div>
+
+              {itemsBoardImageUrl ? (
+                <div className="mt-3 rounded-2xl border border-stone-200 bg-stone-50/60 p-2">
+                  <div className="px-2 pb-2 pt-1">
+                    <p className="text-xs font-medium text-stone-700">提取物件板（单张参考图）</p>
+                    <p className="mt-0.5 text-[11px] text-stone-500">白底提取 4-6 个关键新增物件，用于购物决策</p>
+                  </div>
+                  <div className="overflow-hidden rounded-xl bg-white">
+                    <img
+                      src={itemsBoardImageUrl}
+                      alt="提取物件板"
+                      className="block h-auto w-full object-contain"
+                    />
+                  </div>
+                </div>
+              ) : null}
 
               <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
                 {loadingGuide ? (

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { generateImage } from '../../lib/server/imageProvider';
 
 export const runtime = 'nodejs';
 
@@ -7,6 +8,7 @@ type Payload = {
   beforeImage?: string;
   afterImage?: string;
   theme?: string;
+  provider?: 'nanobanana' | 'gemini';
 };
 
 type Category =
@@ -273,6 +275,18 @@ function normalizePrice(name: string, minRaw?: number, maxRaw?: number) {
   return { min, max };
 }
 
+function inferProviderFromImage(image: string): 'nanobanana' | 'gemini' | undefined {
+  if (!image) return undefined;
+  if (image.startsWith('data:image/')) return 'gemini';
+  if (/^https?:\/\//i.test(image)) return 'nanobanana';
+  return undefined;
+}
+
+function toMarker(index: number) {
+  const markers = ['①', '②', '③', '④', '⑤', '⑥'];
+  return markers[index - 1] || String(index);
+}
+
 function fallbackSizeByName(name: string) {
   const n = name.toLowerCase();
   if (n.includes('floor lamp') || n.includes('落地灯')) return { width: 12, height: 26 };
@@ -413,6 +427,34 @@ function getPrompt(theme: string, hasBefore: boolean) {
     }
   ]
 }
+`.trim();
+}
+
+function buildItemsBoardPrompt(theme: string, items: NormalizedItem[]) {
+  const lines = items
+    .slice(0, 6)
+    .map((item, index) => `${toMarker(index + 1)} ${item.name}`)
+    .join('\n');
+
+  return `
+Use the provided generated room image only as reference.
+Create exactly ONE extracted items board image.
+
+Board requirements:
+- clean pure white background
+- show only 4-6 key added objects from the room
+- each object isolated in its own neat slot
+- include clear number labels for each object
+- labels must match this order:
+${lines}
+
+Style:
+- product extraction board
+- minimal, tidy, high readability
+- no room background, no perspective room scene
+- no extra objects beyond listed items
+
+Theme context: ${theme || '日式原木风'}
 `.trim();
 }
 
@@ -686,11 +728,34 @@ export async function POST(req: Request) {
       );
     }
 
+    const boardItems = reduced.slice(0, 6);
+    let itemsBoardImageUrl = '';
+
+    try {
+      if (boardItems.length > 0) {
+        const boardPrompt = buildItemsBoardPrompt(theme, boardItems);
+        const boardProvider = body.provider || inferProviderFromImage(afterImage);
+        const boardResult = await generateImage({
+          image: afterImage,
+          prompt: boardPrompt,
+          negativePrompt:
+            'room background, full room scene, clutter, watermark, text paragraphs, logo, duplicate objects, collage mess',
+          strength: 0.72,
+          provider: boardProvider,
+        });
+        itemsBoardImageUrl = boardResult.imageUrl;
+      }
+    } catch (error) {
+      console.error('items board generation failed:', error);
+    }
+
     return NextResponse.json({
       summary:
         analyzed.summary ||
         '已从当前效果图识别关键可购买物件，可按优先级逐步添置。',
       items: reduced,
+      itemsBoardImageUrl,
+      explainerImageUrl: itemsBoardImageUrl,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Server error';
