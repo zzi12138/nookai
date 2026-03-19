@@ -30,6 +30,7 @@ type GuideItem = {
   necessity: Necessity;
   reason: string;
   previewImage?: string;
+  previewImageLarge?: string;
   boardCell?: {
     index: number;
     row: number;
@@ -50,6 +51,12 @@ type GuideItem = {
     hasAnchor: boolean;
     hasPoint: boolean;
   };
+};
+
+type PreviewAsset = {
+  thumb: string;
+  full: string;
+  usedFallback: boolean;
 };
 
 type GuideResponse = {
@@ -158,16 +165,52 @@ function getItemBoardCell(item: GuideItem, index: number, total: number) {
   return fallbackBoardCell(index, total);
 }
 
+function drawCellToSquare(
+  img: HTMLImageElement,
+  sx: number,
+  sy: number,
+  sw: number,
+  sh: number,
+  outputSize: number,
+  paddingRatio: number
+) {
+  const canvas = document.createElement('canvas');
+  canvas.width = outputSize;
+  canvas.height = outputSize;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return '';
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, outputSize, outputSize);
+
+  const drawW = outputSize * (1 - paddingRatio * 2);
+  const drawH = outputSize * (1 - paddingRatio * 2);
+  const scale = Math.min(drawW / sw, drawH / sh);
+  const rw = sw * scale;
+  const rh = sh * scale;
+  const dx = (outputSize - rw) / 2;
+  const dy = (outputSize - rh) / 2;
+
+  ctx.drawImage(img, sx, sy, sw, sh, dx, dy, rw, rh);
+  return canvas.toDataURL('image/jpeg', 0.9);
+}
+
+function isLikelyTexturePatch(sw: number, sh: number, boardW: number, boardH: number) {
+  const wRatio = sw / boardW;
+  const hRatio = sh / boardH;
+  return wRatio < 0.08 || hRatio < 0.08;
+}
+
 async function buildPreviewMapFromBoardImage(
   boardImageUrl: string,
   items: GuideItem[],
   cropSize: number
-): Promise<Record<number, string>> {
+): Promise<Record<number, PreviewAsset>> {
   const img = await loadImageForCrop(boardImageUrl);
   const imageW = Math.max(1, img.naturalWidth || img.width || 1);
   const imageH = Math.max(1, img.naturalHeight || img.height || 1);
 
-  const map: Record<number, string> = {};
+  const map: Record<number, PreviewAsset> = {};
 
   for (const [index, item] of items.entries()) {
     const cell = getItemBoardCell(item, index, items.length);
@@ -176,24 +219,31 @@ async function buildPreviewMapFromBoardImage(
     const cellW = (cell.width / 100) * imageW;
     const cellH = (cell.height / 100) * imageH;
 
-    const responsiveTarget = clamp(Math.round(cropSize), 160, 240);
-    const sourceByCell = Math.round(Math.min(cellW, cellH) * 0.9);
-    const sourceCrop = clamp(sourceByCell, 120, Math.max(120, Math.min(imageW, imageH)));
-    const output = responsiveTarget;
+    const sx = clamp(Math.round(cellLeftPx), 0, imageW - 1);
+    const sy = clamp(Math.round(cellTopPx), 0, imageH - 1);
+    const sw = Math.max(1, Math.round(clamp(cellW, 1, imageW - sx)));
+    const sh = Math.max(1, Math.round(clamp(cellH, 1, imageH - sy)));
 
-    const cx = cellLeftPx + cellW / 2;
-    const cy = cellTopPx + cellH / 2;
-    const sx = clamp(Math.round(cx - sourceCrop / 2), 0, imageW - sourceCrop);
-    const sy = clamp(Math.round(cy - sourceCrop / 2), 0, imageH - sourceCrop);
+    const fallbackCell = fallbackBoardCell(index, items.length);
+    const fsx = clamp(Math.round((fallbackCell.left / 100) * imageW), 0, imageW - 1);
+    const fsy = clamp(Math.round((fallbackCell.top / 100) * imageH), 0, imageH - 1);
+    const fsw = Math.max(1, Math.round(clamp((fallbackCell.width / 100) * imageW, 1, imageW - fsx)));
+    const fsh = Math.max(1, Math.round(clamp((fallbackCell.height / 100) * imageH, 1, imageH - fsy)));
 
-    const canvas = document.createElement('canvas');
-    canvas.width = output;
-    canvas.height = output;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) continue;
+    const shouldFallback = isLikelyTexturePatch(sw, sh, imageW, imageH);
+    const source = shouldFallback
+      ? { sx: fsx, sy: fsy, sw: fsw, sh: fsh }
+      : { sx, sy, sw, sh };
 
-    ctx.drawImage(img, sx, sy, sourceCrop, sourceCrop, 0, 0, output, output);
-    map[item.id] = canvas.toDataURL('image/jpeg', 0.88);
+    const thumbSize = clamp(Math.round(cropSize), 160, 240);
+    const thumb = drawCellToSquare(img, source.sx, source.sy, source.sw, source.sh, thumbSize, 0.08);
+    const full = drawCellToSquare(img, source.sx, source.sy, source.sw, source.sh, 720, 0.04);
+
+    map[item.id] = {
+      thumb,
+      full,
+      usedFallback: shouldFallback,
+    };
   }
 
   return map;
@@ -411,7 +461,7 @@ export default function ResultPage() {
   const [summary, setSummary] = useState('');
   const [items, setItems] = useState<GuideItem[]>([]);
   const [itemsBoardImageUrl, setItemsBoardImageUrl] = useState('');
-  const [previewMap, setPreviewMap] = useState<Record<number, string>>({});
+  const [previewMap, setPreviewMap] = useState<Record<number, PreviewAsset>>({});
   const [cropSize, setCropSize] = useState(200);
   const [lightbox, setLightbox] = useState<{ id: number; src: string; title: string } | null>(null);
   const [loadingGuide, setLoadingGuide] = useState(false);
@@ -437,7 +487,12 @@ export default function ResultPage() {
   const canCompare = Boolean(generatedUrl && originalUrl);
 
   const itemsWithPreview = useMemo(
-    () => items.map((item) => ({ ...item, previewImage: previewMap[item.id] || item.previewImage || '' })),
+    () =>
+      items.map((item) => ({
+        ...item,
+        previewImage: previewMap[item.id]?.thumb || item.previewImage || '',
+        previewImageLarge: previewMap[item.id]?.full || item.previewImageLarge || item.previewImage || '',
+      })),
     [items, previewMap]
   );
 
@@ -714,9 +769,9 @@ export default function ResultPage() {
         setPreviewMap(map);
       } catch {
         if (!active) return;
-        const fallback: Record<number, string> = {};
+        const fallback: Record<number, PreviewAsset> = {};
         for (const item of items) {
-          fallback[item.id] = '';
+          fallback[item.id] = { thumb: '', full: '', usedFallback: true };
         }
         setPreviewMap(fallback);
       }
@@ -1145,8 +1200,12 @@ export default function ResultPage() {
                                             type="button"
                                             onClick={(event) => {
                                               event.stopPropagation();
-                                              if (item.previewImage) {
-                                                setLightbox({ id: item.id, src: item.previewImage, title: item.name });
+                                              if (item.previewImageLarge || item.previewImage) {
+                                                setLightbox({
+                                                  id: item.id,
+                                                  src: item.previewImageLarge || item.previewImage || '',
+                                                  title: item.name,
+                                                });
                                               }
                                             }}
                                             className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-stone-100 ring-1 ring-stone-200"
