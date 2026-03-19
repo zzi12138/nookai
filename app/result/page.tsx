@@ -32,6 +32,8 @@ type GuideItem = {
   imageTarget: {
     x: number;
     y: number;
+    left: number;
+    top: number;
     width: number;
     height: number;
     confidence: number;
@@ -185,8 +187,13 @@ function normalizeGuideItem(item: GuideItem, index: number): GuideItem {
   const height = Number.isFinite(item.imageTarget?.height)
     ? clamp(Number(item.imageTarget.height), 6, 56)
     : fallbackBox.height;
-  const safeX = clamp(x, width / 2 + 1, 100 - width / 2 - 1);
-  const safeY = clamp(y, height / 2 + 1, 100 - height / 2 - 1);
+  const hasLeftTop = Number.isFinite(item.imageTarget?.left) && Number.isFinite(item.imageTarget?.top);
+  const leftFromCenter = x - width / 2;
+  const topFromCenter = y - height / 2;
+  const safeLeft = hasLeftTop ? clamp(Number(item.imageTarget.left), 0, 100 - width) : clamp(leftFromCenter, 0, 100 - width);
+  const safeTop = hasLeftTop ? clamp(Number(item.imageTarget.top), 0, 100 - height) : clamp(topFromCenter, 0, 100 - height);
+  const safeX = clamp(safeLeft + width / 2, width / 2 + 1, 100 - width / 2 - 1);
+  const safeY = clamp(safeTop + height / 2, height / 2 + 1, 100 - height / 2 - 1);
 
   return {
     ...item,
@@ -203,6 +210,8 @@ function normalizeGuideItem(item: GuideItem, index: number): GuideItem {
     imageTarget: {
       x: safeX,
       y: safeY,
+      left: safeLeft,
+      top: safeTop,
       width,
       height,
       confidence,
@@ -262,9 +271,9 @@ function passFilter(item: GuideItem, filter: FilterKey) {
 }
 
 function getLabelStyle(target: GuideItem['imageTarget']) {
-  const rightEdge = target.x + target.width / 2;
-  const leftEdge = target.x - target.width / 2;
-  const topEdge = target.y - target.height / 2;
+  const rightEdge = target.left + target.width;
+  const leftEdge = target.left;
+  const topEdge = target.top;
   const placeRight = rightEdge <= 78;
   const x = placeRight ? clamp(rightEdge + 1.8, 4, 95) : clamp(leftEdge - 1.8, 5, 96);
   const y = clamp(topEdge - 1.5, 7, 94);
@@ -277,8 +286,8 @@ function getLabelStyle(target: GuideItem['imageTarget']) {
 }
 
 function getHighlightStyle(target: GuideItem['imageTarget']) {
-  const left = clamp(target.x - target.width / 2, 0, 100 - target.width);
-  const top = clamp(target.y - target.height / 2, 0, 100 - target.height);
+  const left = clamp(target.left, 0, 100 - target.width);
+  const top = clamp(target.top, 0, 100 - target.height);
   return {
     left: `${left}%`,
     top: `${top}%`,
@@ -317,7 +326,8 @@ export default function ResultPage() {
   const [frame, setFrame] = useState({ left: 0, top: 0, width: 0, height: 0 });
 
   const hasImage = Boolean(generatedUrl || originalUrl);
-  const detectImage = generatedUrl || originalUrl;
+  const beforeImage = originalUrl || '';
+  const afterImage = generatedUrl || originalUrl || '';
   const canCompare = Boolean(generatedUrl && originalUrl);
 
   const filteredItems = useMemo(() => items.filter((item) => passFilter(item, filter)), [items, filter]);
@@ -464,12 +474,12 @@ export default function ResultPage() {
   }, [isDragging, updateCompareByX]);
 
   const fetchGuide = useCallback(async () => {
-    if (!detectImage) return;
+    if (!afterImage) return;
 
     setLoadingGuide(true);
     setGuideError('');
 
-    const cacheKey = `nookai_guide_v5_${hashString(`${theme}__${detectImage.slice(0, 256)}`)}`;
+    const cacheKey = `nookai_guide_v6_${hashString(`${theme}__${beforeImage.slice(0, 180)}__${afterImage.slice(0, 180)}`)}`;
     const cached = sessionStorage.getItem(cacheKey);
     if (cached) {
       try {
@@ -493,7 +503,7 @@ export default function ResultPage() {
         const response = await fetch('/api/explainer', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: detectImage, theme }),
+          body: JSON.stringify({ beforeImage, afterImage, theme }),
         });
 
         const data = (await response.json().catch(() => null)) as GuideResponse | null;
@@ -532,16 +542,16 @@ export default function ResultPage() {
 
     setGuideError(lastError);
     setLoadingGuide(false);
-  }, [detectImage, theme]);
+  }, [afterImage, beforeImage, theme]);
 
   useEffect(() => {
-    if (!detectImage) return;
+    if (!afterImage) return;
     setSelectedId(null);
     setHoverId(null);
     setCartIds([]);
     setFilter('all');
     void fetchGuide();
-  }, [detectImage, fetchGuide]);
+  }, [afterImage, fetchGuide]);
 
   useEffect(() => {
     if (groupedItems.length === 0) {

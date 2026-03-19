@@ -4,6 +4,8 @@ export const runtime = 'nodejs';
 
 type Payload = {
   image?: string;
+  beforeImage?: string;
+  afterImage?: string;
   theme?: string;
 };
 
@@ -34,6 +36,8 @@ type RawItem = {
     cy?: number;
     left?: number;
     top?: number;
+    right?: number;
+    bottom?: number;
     width?: number;
     height?: number;
     w?: number;
@@ -56,6 +60,8 @@ type NormalizedItem = {
   imageTarget: {
     x: number;
     y: number;
+    left: number;
+    top: number;
     width: number;
     height: number;
     confidence: number;
@@ -283,6 +289,48 @@ function fallbackSizeByName(name: string) {
   return { width: 16, height: 16 };
 }
 
+function shouldExcludeItem(name: string) {
+  const n = name.toLowerCase();
+  const blocked = [
+    '床架',
+    '床垫',
+    '沙发',
+    '书桌',
+    '桌子',
+    '椅子',
+    '餐椅',
+    '餐桌',
+    '电视',
+    '柜',
+    '衣柜',
+    '空调',
+    '硬装墙',
+    '地板',
+    '天花板',
+    '吊顶',
+    '门框',
+    '窗框',
+    '电视柜',
+    '原有床',
+    '原有沙发',
+    '原有书桌',
+    'built-in',
+    'wall',
+    'floor',
+    'ceiling',
+    'door',
+    'window',
+    'cabinet',
+    'sofa',
+    'bed',
+    'desk',
+    'chair',
+    'air conditioner',
+  ];
+
+  return blocked.some((kw) => n.includes(kw));
+}
+
 function resolveInlineImagePart(image: string) {
   if (isDataUrl(image)) {
     return {
@@ -320,18 +368,29 @@ async function fetchRemoteImageAsInlinePart(url: string) {
   }
 }
 
-function getPrompt(theme: string) {
+type InlineImagePart = { mimeType: string; data: string };
+
+async function toInlineImagePart(image?: string): Promise<InlineImagePart | null> {
+  if (!image) return null;
+  const inline = resolveInlineImagePart(image);
+  if (inline) return inline;
+  if (isHttpUrl(image)) return fetchRemoteImageAsInlinePart(image);
+  return null;
+}
+
+function getPrompt(theme: string, hasBefore: boolean) {
   return `
-你是租房改造购物助手。请分析“当前效果图”，尽可能全面地识别可购买、可摆放的具体物件（目标 10-16 个）。
+你是租房改造购物助手。请基于${hasBefore ? '原图 + 效果图对照' : '效果图'}，识别可购买、可摆放的具体物件（目标 8-14 个）。
 
 硬性规则：
 1) 只能输出具体物品，不要抽象概念。
 2) 只基于图中可见物件，不得臆造。
-3) 每个物件必须有 anchor 坐标与尺寸：centerX/centerY（中心点）、left/top（左上角）、width/height（0-100）和 confidence（0-1）。
-4) centerX/centerY 必须基于物体几何中心；width/height 贴合物体轮廓，不要固定模板尺寸。
-5) 如果不确定，把 confidence 降低到 0.55 以下。
-5) 价格区间要收窄，符合中国电商常见区间。
-6) 所有字段优先用中文，名称要简洁完整，禁止省略号。
+3) 如果提供了原图：只保留“效果图中新增或明显增强”的物件；原图里本来就有且无明显变化的物件必须排除。
+4) 每个物件必须有 anchor 坐标与尺寸：centerX/centerY（中心点）、left/top（左上角）、width/height（0-100）和 confidence（0-1）。
+5) centerX/centerY 必须基于物体几何中心；width/height 贴合物体轮廓，不要固定模板尺寸。
+6) 如果不确定，把 confidence 降低到 0.55 以下；不确定项宁可不输出。
+7) 价格区间要收窄，符合中国电商常见区间。
+8) 所有字段优先用中文，名称要简洁完整，禁止省略号。
 
 风格上下文：${theme || '日式原木风'}
 
@@ -372,15 +431,11 @@ function dedupeByName(items: RawItem[]) {
   return out;
 }
 
-async function analyzeItems(image: string, theme: string, apiKey: string) {
-  const inline = resolveInlineImagePart(image);
-  const imagePart = inline
-    ? inline
-    : isHttpUrl(image)
-      ? await fetchRemoteImageAsInlinePart(image)
-      : null;
+async function analyzeItems(beforeImage: string | undefined, afterImage: string, theme: string, apiKey: string) {
+  const beforePart = await toInlineImagePart(beforeImage).catch(() => null);
+  const afterPart = await toInlineImagePart(afterImage);
 
-  if (!imagePart) {
+  if (!afterPart) {
     throw new Error('Unsupported image format');
   }
 
@@ -408,11 +463,23 @@ async function analyzeItems(image: string, theme: string, apiKey: string) {
                 {
                   role: 'user',
                   parts: [
-                    { text: getPrompt(theme) },
+                    { text: getPrompt(theme, Boolean(beforePart)) },
+                    ...(beforePart
+                      ? [
+                          { text: '[原图 BEFORE]' },
+                          {
+                            inline_data: {
+                              mime_type: beforePart.mimeType,
+                              data: beforePart.data,
+                            },
+                          },
+                        ]
+                      : []),
+                    { text: '[效果图 AFTER]' },
                     {
                       inline_data: {
-                        mime_type: imagePart.mimeType,
-                        data: imagePart.data,
+                        mime_type: afterPart.mimeType,
+                        data: afterPart.data,
                       },
                     },
                   ],
@@ -473,10 +540,11 @@ async function analyzeItems(image: string, theme: string, apiKey: string) {
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as Payload;
-    const image = body.image || '';
+    const beforeImage = body.beforeImage || '';
+    const afterImage = body.afterImage || body.image || '';
     const theme = body.theme || 'Japandi';
 
-    if (!image) {
+    if (!afterImage) {
       return NextResponse.json({ error: 'Missing image' }, { status: 400 });
     }
 
@@ -488,14 +556,14 @@ export async function POST(req: Request) {
       );
     }
 
-    const analyzed = await analyzeItems(image, theme, apiKey);
+    const analyzed = await analyzeItems(beforeImage || undefined, afterImage, theme, apiKey);
 
     const normalized: NormalizedItem[] = analyzed.items
       .slice(0, 18)
       .map((item, index) => {
         const id = index + 1;
         const name = toChineseName(item.name || '');
-        if (!name) return null;
+        if (!name || shouldExcludeItem(name)) return null;
 
         const category = inferCategory(name);
         const necessity = normalizeNecessity(item.necessity);
@@ -508,37 +576,67 @@ export async function POST(req: Request) {
         const rawY = Number(item.anchor?.y);
         const rawLeft = Number(item.anchor?.left);
         const rawTop = Number(item.anchor?.top);
+        const rawRight = Number(item.anchor?.right);
+        const rawBottom = Number(item.anchor?.bottom);
         const rawW = Number(item.anchor?.width ?? item.anchor?.w);
         const rawH = Number(item.anchor?.height ?? item.anchor?.h);
+        const hasRightBottom = Number.isFinite(rawRight) && Number.isFinite(rawBottom);
+        const hasBoxFromSide = hasRightBottom && Number.isFinite(rawLeft) && Number.isFinite(rawTop);
         const hasBox = Number.isFinite(rawW) && Number.isFinite(rawH);
         const hasCenter = Number.isFinite(rawCenterX) && Number.isFinite(rawCenterY);
         const hasXY = Number.isFinite(rawX) && Number.isFinite(rawY);
         const hasLeftTop = Number.isFinite(rawLeft) && Number.isFinite(rawTop);
-        const hasAnchor = hasCenter || hasXY || hasLeftTop;
+        const hasAnchor = hasCenter || hasXY || hasLeftTop || hasRightBottom;
         const confidence = Number.isFinite(item.anchor?.confidence as number)
           ? clamp(Number(item.anchor?.confidence), 0, 1)
           : 0;
 
         const fallbackSize = fallbackSizeByName(name);
-        const width = hasBox ? clamp(rawW, 6, 56) : fallbackSize.width;
-        const height = hasBox ? clamp(rawH, 6, 56) : fallbackSize.height;
+        const width = hasBox
+          ? clamp(rawW, 6, 56)
+          : hasBoxFromSide
+            ? clamp(rawRight - rawLeft, 6, 56)
+            : fallbackSize.width;
+        const height = hasBox
+          ? clamp(rawH, 6, 56)
+          : hasBoxFromSide
+            ? clamp(rawBottom - rawTop, 6, 56)
+            : fallbackSize.height;
 
-        let centerX = 50;
-        let centerY = 50;
+        let left = Number.NaN;
+        let top = Number.NaN;
 
-        if (hasCenter) {
-          centerX = rawCenterX;
-          centerY = rawCenterY;
-        } else if (hasLeftTop) {
-          centerX = rawLeft + width / 2;
-          centerY = rawTop + height / 2;
+        if (hasLeftTop) {
+          left = rawLeft;
+          top = rawTop;
+        } else if (hasCenter) {
+          left = rawCenterX - width / 2;
+          top = rawCenterY - height / 2;
         } else if (hasXY) {
-          centerX = rawX;
-          centerY = rawY;
+          const centerCandidateLeft = rawX - width / 2;
+          const centerCandidateTop = rawY - height / 2;
+          const centerCandidateValid =
+            centerCandidateLeft >= -5 &&
+            centerCandidateTop >= -5 &&
+            centerCandidateLeft + width <= 105 &&
+            centerCandidateTop + height <= 105;
+
+          if (centerCandidateValid) {
+            left = centerCandidateLeft;
+            top = centerCandidateTop;
+          } else {
+            left = rawX;
+            top = rawY;
+          }
+        } else if (hasRightBottom) {
+          left = rawRight - width;
+          top = rawBottom - height;
         }
 
-        const x = hasAnchor ? clamp(centerX, width / 2 + 1, 100 - width / 2 - 1) : 50;
-        const y = hasAnchor ? clamp(centerY, height / 2 + 1, 100 - height / 2 - 1) : 50;
+        const safeLeft = Number.isFinite(left) ? clamp(left, 0, 100 - width) : 50 - width / 2;
+        const safeTop = Number.isFinite(top) ? clamp(top, 0, 100 - height) : 50 - height / 2;
+        const x = clamp(safeLeft + width / 2, width / 2 + 1, 100 - width / 2 - 1);
+        const y = clamp(safeTop + height / 2, height / 2 + 1, 100 - height / 2 - 1);
         const hasPoint = hasAnchor && confidence >= 0.63;
 
         const placement = toChinesePlacement(item.placement || '');
@@ -558,6 +656,8 @@ export async function POST(req: Request) {
           imageTarget: {
             x,
             y,
+            left: safeLeft,
+            top: safeTop,
             width,
             height,
             confidence,
@@ -566,7 +666,8 @@ export async function POST(req: Request) {
           },
         };
       })
-      .filter((item): item is NormalizedItem => Boolean(item));
+      .filter((item): item is NormalizedItem => Boolean(item))
+      .filter((item) => item.imageTarget.confidence >= 0.45);
 
     const reduced = normalized
       .sort((a, b) => {
