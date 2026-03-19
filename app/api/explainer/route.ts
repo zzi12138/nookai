@@ -28,6 +28,10 @@ type RawItem = {
   anchor?: {
     x?: number;
     y?: number;
+    width?: number;
+    height?: number;
+    w?: number;
+    h?: number;
     confidence?: number;
   };
 };
@@ -46,6 +50,8 @@ type NormalizedItem = {
   imageTarget: {
     x: number;
     y: number;
+    width: number;
+    height: number;
     confidence: number;
     hasAnchor: boolean;
     hasPoint: boolean;
@@ -255,6 +261,22 @@ function normalizePrice(name: string, minRaw?: number, maxRaw?: number) {
   return { min, max };
 }
 
+function fallbackSizeByName(name: string) {
+  const n = name.toLowerCase();
+  if (n.includes('floor lamp') || n.includes('落地灯')) return { width: 12, height: 26 };
+  if (n.includes('desk lamp') || n.includes('table lamp') || n.includes('台灯')) return { width: 9, height: 13 };
+  if (n.includes('light strip') || n.includes('string light') || n.includes('灯带')) return { width: 24, height: 10 };
+  if (n.includes('rug') || n.includes('carpet') || n.includes('地毯')) return { width: 34, height: 22 };
+  if (n.includes('bedding') || n.includes('床品')) return { width: 30, height: 24 };
+  if (n.includes('pillow') || n.includes('抱枕')) return { width: 12, height: 10 };
+  if (n.includes('blanket') || n.includes('throw') || n.includes('毯')) return { width: 18, height: 14 };
+  if (n.includes('wall art') || n.includes('poster') || n.includes('挂画')) return { width: 20, height: 16 };
+  if (n.includes('plant') || n.includes('绿植')) return { width: 14, height: 24 };
+  if (n.includes('projector') || n.includes('投影')) return { width: 12, height: 10 };
+  if (n.includes('side table') || n.includes('边几')) return { width: 13, height: 14 };
+  return { width: 16, height: 16 };
+}
+
 function resolveInlineImagePart(image: string) {
   if (isDataUrl(image)) {
     return {
@@ -294,13 +316,13 @@ async function fetchRemoteImageAsInlinePart(url: string) {
 
 function getPrompt(theme: string) {
   return `
-你是租房改造购物助手。请分析“当前效果图”，输出 4-6 个最关键、可购买、可摆放的具体物件。
+你是租房改造购物助手。请分析“当前效果图”，尽可能全面地识别可购买、可摆放的具体物件（目标 8-12 个）。
 
 硬性规则：
 1) 只能输出具体物品，不要抽象概念。
 2) 只基于图中可见物件，不得臆造。
-3) 每个物件必须有 anchor 坐标（x/y 0-100）与 confidence（0-1）。
-4) 坐标必须尽量落在对应物体上；如果不确定，把 confidence 降低到 0.55 以下。
+3) 每个物件必须有 anchor 坐标（x/y 0-100）与物体框尺寸（width/height 0-100）及 confidence（0-1）。
+4) width/height 需要尽量贴合物体轮廓，不要使用固定尺寸；如果不确定，把 confidence 降低到 0.55 以下。
 5) 价格区间要收窄，符合中国电商常见区间。
 6) 所有字段优先用中文，名称要简洁完整，禁止省略号。
 
@@ -321,7 +343,7 @@ function getPrompt(theme: string) {
       "placement": "沙发右侧",
       "necessity": "Must-have|Recommended|Optional",
       "reason": "一句中文短句",
-      "anchor": { "x": 72, "y": 58, "confidence": 0.82 }
+      "anchor": { "x": 72, "y": 58, "width": 12, "height": 26, "confidence": 0.82 }
     }
   ]
 }
@@ -462,7 +484,7 @@ export async function POST(req: Request) {
     const analyzed = await analyzeItems(image, theme, apiKey);
 
     const normalized: NormalizedItem[] = analyzed.items
-      .slice(0, 8)
+      .slice(0, 14)
       .map((item, index) => {
         const id = index + 1;
         const name = toChineseName(item.name || '');
@@ -475,6 +497,8 @@ export async function POST(req: Request) {
 
         const rawX = Number(item.anchor?.x);
         const rawY = Number(item.anchor?.y);
+        const rawW = Number(item.anchor?.width ?? item.anchor?.w);
+        const rawH = Number(item.anchor?.height ?? item.anchor?.h);
         const hasAnchor = Number.isFinite(rawX) && Number.isFinite(rawY);
         const confidence = Number.isFinite(item.anchor?.confidence as number)
           ? clamp(Number(item.anchor?.confidence), 0, 1)
@@ -482,6 +506,9 @@ export async function POST(req: Request) {
 
         const x = hasAnchor ? clamp(rawX, 4, 96) : 50;
         const y = hasAnchor ? clamp(rawY, 6, 94) : 50;
+        const fallbackSize = fallbackSizeByName(name);
+        const width = Number.isFinite(rawW) ? clamp(rawW, 6, 56) : fallbackSize.width;
+        const height = Number.isFinite(rawH) ? clamp(rawH, 6, 56) : fallbackSize.height;
         const hasPoint = hasAnchor && confidence >= 0.63;
 
         const placement = toChinesePlacement(item.placement || '');
@@ -501,6 +528,8 @@ export async function POST(req: Request) {
           imageTarget: {
             x,
             y,
+            width,
+            height,
             confidence,
             hasAnchor,
             hasPoint,
@@ -512,13 +541,16 @@ export async function POST(req: Request) {
     const reduced = normalized
       .sort((a, b) => {
         const score = (n: Necessity) => (n === 'Must-have' ? 0 : n === 'Recommended' ? 1 : 2);
-        return score(a.necessity) - score(b.necessity);
+        if (score(a.necessity) !== score(b.necessity)) {
+          return score(a.necessity) - score(b.necessity);
+        }
+        return b.imageTarget.confidence - a.imageTarget.confidence;
       })
-      .slice(0, 6);
+      .slice(0, 12);
 
-    if (reduced.length < 4) {
+    if (reduced.length < 1) {
       return NextResponse.json(
-        { error: 'Could not confidently detect enough purchasable items from this image' },
+        { error: '当前效果图未识别到可购买物件' },
         { status: 500 }
       );
     }

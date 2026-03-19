@@ -32,6 +32,8 @@ type GuideItem = {
   imageTarget: {
     x: number;
     y: number;
+    width: number;
+    height: number;
     confidence: number;
     hasAnchor: boolean;
     hasPoint: boolean;
@@ -150,6 +152,15 @@ function mapReasonToChinese(rawReason: string) {
   return '提升空间完成度';
 }
 
+function fallbackBoxByCategory(category: Category) {
+  if (category === 'Ambient lighting') return { width: 12, height: 20 };
+  if (category === 'Bedding & soft textiles') return { width: 24, height: 18 };
+  if (category === 'Floor soft furnishings') return { width: 30, height: 20 };
+  if (category === 'Wall decor') return { width: 20, height: 16 };
+  if (category === 'Plants') return { width: 14, height: 22 };
+  return { width: 16, height: 14 };
+}
+
 function normalizeGuideItem(item: GuideItem, index: number): GuideItem {
   const category = CATEGORY_ORDER.includes(item.category) ? item.category : 'Functional accessories';
   const necessity: Necessity = ['Must-have', 'Recommended', 'Optional'].includes(item.necessity)
@@ -167,6 +178,15 @@ function normalizeGuideItem(item: GuideItem, index: number): GuideItem {
 
   const x = Number.isFinite(item.imageTarget?.x) ? clamp(item.imageTarget.x, 4, 96) : 50;
   const y = Number.isFinite(item.imageTarget?.y) ? clamp(item.imageTarget.y, 6, 94) : 50;
+  const fallbackBox = fallbackBoxByCategory(category);
+  const width = Number.isFinite(item.imageTarget?.width)
+    ? clamp(Number(item.imageTarget.width), 6, 56)
+    : fallbackBox.width;
+  const height = Number.isFinite(item.imageTarget?.height)
+    ? clamp(Number(item.imageTarget.height), 6, 56)
+    : fallbackBox.height;
+  const safeX = clamp(x, width / 2 + 1, 100 - width / 2 - 1);
+  const safeY = clamp(y, height / 2 + 1, 100 - height / 2 - 1);
 
   return {
     ...item,
@@ -181,8 +201,10 @@ function normalizeGuideItem(item: GuideItem, index: number): GuideItem {
     placement: mapPlacementToChinese(item.placement || ''),
     reason: mapReasonToChinese(item.reason || ''),
     imageTarget: {
-      x,
-      y,
+      x: safeX,
+      y: safeY,
+      width,
+      height,
       confidence,
       hasAnchor,
       hasPoint: Boolean(item.imageTarget?.hasPoint && hasAnchor && confidence >= 0.63),
@@ -240,13 +262,17 @@ function passFilter(item: GuideItem, filter: FilterKey) {
 }
 
 function getLabelStyle(target: GuideItem['imageTarget']) {
-  const onRight = target.x >= 68;
-  const nearTop = target.y <= 18;
+  const rightEdge = target.x + target.width / 2;
+  const leftEdge = target.x - target.width / 2;
+  const topEdge = target.y - target.height / 2;
+  const placeRight = rightEdge <= 78;
+  const x = placeRight ? clamp(rightEdge + 1.8, 4, 95) : clamp(leftEdge - 1.8, 5, 96);
+  const y = clamp(topEdge - 1.5, 7, 94);
 
   return {
-    left: `${target.x}%`,
-    top: `${target.y}%`,
-    transform: `translate(${onRight ? '-112%' : '12%'}, ${nearTop ? '14%' : '-112%'})`,
+    left: `${x}%`,
+    top: `${y}%`,
+    transform: placeRight ? 'translate(0, -100%)' : 'translate(-100%, -100%)',
   } as const;
 }
 
@@ -432,13 +458,13 @@ export default function ResultPage() {
     setLoadingGuide(true);
     setGuideError('');
 
-    const cacheKey = `nookai_guide_v3_${hashString(`${theme}__${detectImage.slice(0, 256)}`)}`;
+    const cacheKey = `nookai_guide_v4_${hashString(`${theme}__${detectImage.slice(0, 256)}`)}`;
     const cached = sessionStorage.getItem(cacheKey);
     if (cached) {
       try {
         const parsed = JSON.parse(cached) as GuideResponse;
         if (parsed.items?.length) {
-          const normalized = parsed.items.map(normalizeGuideItem).slice(0, 6);
+          const normalized = parsed.items.map(normalizeGuideItem).slice(0, 12);
           setItems(normalized);
           setSummary(parsed.summary || '已从当前效果图识别可购买项。');
           setLoadingGuide(false);
@@ -470,7 +496,7 @@ export default function ResultPage() {
           throw new Error(lastError);
         }
 
-        const normalized = data.items.map(normalizeGuideItem).slice(0, 6);
+        const normalized = data.items.map(normalizeGuideItem).slice(0, 12);
         setItems(normalized);
         setSummary(data.summary || '已从当前效果图识别可购买项。');
 
@@ -554,6 +580,26 @@ export default function ResultPage() {
       }
       setNotice('已加入购物清单');
       return [...prev, id];
+    });
+  };
+
+  const addAllVisibleToCart = () => {
+    if (filteredItems.length === 0) {
+      setNotice('当前列表没有可加入物件');
+      return;
+    }
+
+    setCartIds((prev) => {
+      const next = new Set(prev);
+      let addedCount = 0;
+      for (const item of filteredItems) {
+        if (!next.has(item.id)) {
+          next.add(item.id);
+          addedCount += 1;
+        }
+      }
+      setNotice(addedCount > 0 ? `已一键加入 ${addedCount} 件` : '当前列表已全部加入');
+      return Array.from(next);
     });
   };
 
@@ -744,10 +790,12 @@ export default function ResultPage() {
                   <div className="absolute inset-0" style={{ clipPath: canCompare ? afterClip : 'inset(0 0 0 0)' }}>
                     <div className="absolute inset-0 bg-black/28" />
                     <div
-                      className="absolute h-52 w-52 -translate-x-1/2 -translate-y-1/2 rounded-[32px] border border-amber-100/90 bg-amber-200/30 shadow-[0_0_50px_rgba(251,191,36,0.42)]"
+                      className="absolute -translate-x-1/2 -translate-y-1/2 rounded-[20px] border border-amber-100/90 bg-amber-200/22 shadow-[0_0_42px_rgba(251,191,36,0.46)]"
                       style={{
                         left: `${activeItem.imageTarget.x}%`,
                         top: `${activeItem.imageTarget.y}%`,
+                        width: `${activeItem.imageTarget.width}%`,
+                        height: `${activeItem.imageTarget.height}%`,
                       }}
                     />
                     <div
@@ -827,6 +875,15 @@ export default function ResultPage() {
                   导出清单
                 </button>
               </div>
+
+              <button
+                type="button"
+                onClick={addAllVisibleToCart}
+                className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800"
+              >
+                <Plus size={14} />
+                一键加入购物车
+              </button>
 
               {notice ? <p className="mt-2 text-xs text-stone-500">{notice}</p> : null}
             </section>
