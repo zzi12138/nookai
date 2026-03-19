@@ -276,6 +276,17 @@ function getLabelStyle(target: GuideItem['imageTarget']) {
   } as const;
 }
 
+function getHighlightStyle(target: GuideItem['imageTarget']) {
+  const left = clamp(target.x - target.width / 2, 0, 100 - target.width);
+  const top = clamp(target.y - target.height / 2, 0, 100 - target.height);
+  return {
+    left: `${left}%`,
+    top: `${top}%`,
+    width: `${target.width}%`,
+    height: `${target.height}%`,
+  } as const;
+}
+
 export default function ResultPage() {
   const router = useRouter();
 
@@ -458,13 +469,13 @@ export default function ResultPage() {
     setLoadingGuide(true);
     setGuideError('');
 
-    const cacheKey = `nookai_guide_v4_${hashString(`${theme}__${detectImage.slice(0, 256)}`)}`;
+    const cacheKey = `nookai_guide_v5_${hashString(`${theme}__${detectImage.slice(0, 256)}`)}`;
     const cached = sessionStorage.getItem(cacheKey);
     if (cached) {
       try {
         const parsed = JSON.parse(cached) as GuideResponse;
         if (parsed.items?.length) {
-          const normalized = parsed.items.map(normalizeGuideItem).slice(0, 12);
+          const normalized = parsed.items.map(normalizeGuideItem).slice(0, 16);
           setItems(normalized);
           setSummary(parsed.summary || '已从当前效果图识别可购买项。');
           setLoadingGuide(false);
@@ -496,7 +507,7 @@ export default function ResultPage() {
           throw new Error(lastError);
         }
 
-        const normalized = data.items.map(normalizeGuideItem).slice(0, 12);
+        const normalized = data.items.map(normalizeGuideItem).slice(0, 16);
         setItems(normalized);
         setSummary(data.summary || '已从当前效果图识别可购买项。');
 
@@ -744,7 +755,7 @@ export default function ResultPage() {
           </div>
         </motion.header>
 
-        <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+        <div className="grid items-stretch gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
           <motion.section
             initial={{ opacity: 0, y: 20, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -790,13 +801,8 @@ export default function ResultPage() {
                   <div className="absolute inset-0" style={{ clipPath: canCompare ? afterClip : 'inset(0 0 0 0)' }}>
                     <div className="absolute inset-0 bg-black/28" />
                     <div
-                      className="absolute -translate-x-1/2 -translate-y-1/2 rounded-[20px] border border-amber-100/90 bg-amber-200/22 shadow-[0_0_42px_rgba(251,191,36,0.46)]"
-                      style={{
-                        left: `${activeItem.imageTarget.x}%`,
-                        top: `${activeItem.imageTarget.y}%`,
-                        width: `${activeItem.imageTarget.width}%`,
-                        height: `${activeItem.imageTarget.height}%`,
-                      }}
+                      className="absolute rounded-[20px] border border-amber-100/90 bg-amber-200/22 shadow-[0_0_42px_rgba(251,191,36,0.46)]"
+                      style={getHighlightStyle(activeItem.imageTarget)}
                     />
                     <div
                       className="pointer-events-none absolute z-30 rounded-full border border-stone-200 bg-white/95 px-3 py-1 text-xs text-stone-700 shadow-sm"
@@ -841,10 +847,19 @@ export default function ResultPage() {
             initial={{ opacity: 0, y: 20, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ ...spring, delay: 0.06 }}
-            className="space-y-4"
+            className="h-full"
           >
-            <section className="rounded-[28px] bg-white p-5 shadow-sm ring-1 ring-stone-100">
-              <h2 className="text-base font-semibold text-stone-900">购物清单汇总</h2>
+            <section className="flex h-full min-h-[500px] flex-col rounded-[28px] bg-white p-5 shadow-sm ring-1 ring-stone-100 lg:min-h-[720px]">
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-semibold text-stone-900">购物指南</h2>
+                <button
+                  type="button"
+                  onClick={() => void fetchGuide()}
+                  className="rounded-full border border-stone-200 px-3 py-1 text-xs text-stone-600"
+                >
+                  刷新识别
+                </button>
+              </div>
 
               <div className="mt-3 grid grid-cols-2 gap-3">
                 <div className="rounded-2xl bg-stone-50 p-3">
@@ -857,50 +872,7 @@ export default function ResultPage() {
                 </div>
               </div>
 
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={copyChecklist}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-stone-200 px-3 py-2.5 text-sm text-stone-700"
-                >
-                  <Copy size={14} />
-                  复制清单
-                </button>
-                <button
-                  type="button"
-                  onClick={exportChecklistImage}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-stone-900 px-3 py-2.5 text-sm text-white"
-                >
-                  <Download size={14} />
-                  导出清单
-                </button>
-              </div>
-
-              <button
-                type="button"
-                onClick={addAllVisibleToCart}
-                className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800"
-              >
-                <Plus size={14} />
-                一键加入购物车
-              </button>
-
-              {notice ? <p className="mt-2 text-xs text-stone-500">{notice}</p> : null}
-            </section>
-
-            <section className="rounded-[28px] bg-white p-5 shadow-sm ring-1 ring-stone-100">
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-base font-semibold text-stone-900">购物指南</h2>
-                <button
-                  type="button"
-                  onClick={() => void fetchGuide()}
-                  className="rounded-full border border-stone-200 px-3 py-1 text-xs text-stone-600"
-                >
-                  刷新识别
-                </button>
-              </div>
-
-              <div className="mb-3 flex flex-wrap gap-2">
+              <div className="mt-3 flex flex-wrap gap-2">
                 {FILTERS.map((item) => {
                   const active = filter === item.key;
                   return (
@@ -918,123 +890,157 @@ export default function ResultPage() {
                 })}
               </div>
 
-              {loadingGuide ? (
-                <p className="py-10 text-center text-sm text-stone-500">正在识别当前效果图中的可购买物件...</p>
-              ) : guideError ? (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-700">
-                  {guideError}
-                </div>
-              ) : groupedItems.length === 0 ? (
-                <p className="rounded-2xl bg-stone-50 px-3 py-5 text-center text-sm text-stone-500">当前筛选下暂无可展示物件</p>
-              ) : (
-                <div className="max-h-[66vh] space-y-2 overflow-y-auto pr-1">
-                  {groupedItems.map((group) => {
-                    const open = expandedCategory === group.category;
-                    return (
-                      <div key={group.category} className="overflow-hidden rounded-2xl border border-stone-200 bg-white">
-                        <button
-                          type="button"
-                          onClick={() => setExpandedCategory((prev) => (prev === group.category ? null : group.category))}
-                          className="flex w-full items-center justify-between px-3.5 py-3 text-left"
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-stone-800">{CATEGORY_LABEL[group.category]}</span>
-                            <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-500">{group.list.length}</span>
-                          </div>
-                          <ChevronDown
-                            size={15}
-                            className={`text-stone-400 transition-transform ${open ? 'rotate-180' : 'rotate-0'}`}
-                          />
-                        </button>
+              <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
+                {loadingGuide ? (
+                  <p className="py-10 text-center text-sm text-stone-500">正在识别当前效果图中的可购买物件...</p>
+                ) : guideError ? (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-700">
+                    {guideError}
+                  </div>
+                ) : groupedItems.length === 0 ? (
+                  <p className="rounded-2xl bg-stone-50 px-3 py-5 text-center text-sm text-stone-500">当前筛选下暂无可展示物件</p>
+                ) : (
+                  <div className="space-y-2">
+                    {groupedItems.map((group) => {
+                      const open = expandedCategory === group.category;
+                      return (
+                        <div key={group.category} className="overflow-hidden rounded-2xl border border-stone-200 bg-white">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedCategory((prev) => (prev === group.category ? null : group.category))}
+                            className="flex w-full items-center justify-between px-3.5 py-3 text-left"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-stone-800">{CATEGORY_LABEL[group.category]}</span>
+                              <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-500">{group.list.length}</span>
+                            </div>
+                            <ChevronDown
+                              size={15}
+                              className={`text-stone-400 transition-transform ${open ? 'rotate-180' : 'rotate-0'}`}
+                            />
+                          </button>
 
-                        <AnimatePresence initial={false}>
-                          {open ? (
-                            <motion.div
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: 'auto', opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              transition={{ duration: 0.22 }}
-                              className="space-y-2 overflow-hidden px-3.5 pb-3"
-                            >
-                              {group.list.map((item) => {
-                                const selected = selectedId === item.id;
-                                const preview = hoverId === item.id && selectedId === null;
-                                const added = cartIds.includes(item.id);
+                          <AnimatePresence initial={false}>
+                            {open ? (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.22 }}
+                                className="space-y-2 overflow-hidden px-3.5 pb-3"
+                              >
+                                {group.list.map((item) => {
+                                  const selected = selectedId === item.id;
+                                  const preview = hoverId === item.id && selectedId === null;
+                                  const added = cartIds.includes(item.id);
 
-                                return (
-                                  <article
-                                    key={item.id}
-                                    ref={(node) => {
-                                      cardRefs.current[item.id] = node;
-                                    }}
-                                    onClick={() => handleSelectItem(item.id, group.category)}
-                                    onMouseEnter={() => handleHoverStart(item.id)}
-                                    onMouseLeave={handleHoverEnd}
-                                    className={`cursor-pointer rounded-xl border px-3 py-2.5 transition ${
-                                      selected
-                                        ? 'border-amber-300 bg-amber-50/70 shadow-sm'
-                                        : preview
-                                          ? 'border-stone-300 bg-stone-50'
-                                          : 'border-stone-200 bg-white'
-                                    }`}
-                                  >
-                                    <div className="flex items-center justify-between gap-2">
-                                      <div className="min-w-0">
-                                        <h3 className="text-sm font-medium text-stone-900">{item.name}</h3>
-                                        <p className="mt-0.5 text-xs text-stone-500">{item.priceRange}</p>
+                                  return (
+                                    <article
+                                      key={item.id}
+                                      ref={(node) => {
+                                        cardRefs.current[item.id] = node;
+                                      }}
+                                      onClick={() => handleSelectItem(item.id, group.category)}
+                                      onMouseEnter={() => handleHoverStart(item.id)}
+                                      onMouseLeave={handleHoverEnd}
+                                      className={`cursor-pointer rounded-xl border px-3 py-2.5 transition ${
+                                        selected
+                                          ? 'border-amber-300 bg-amber-50/70 shadow-sm'
+                                          : preview
+                                            ? 'border-stone-300 bg-stone-50'
+                                            : 'border-stone-200 bg-white'
+                                      }`}
+                                    >
+                                      <div className="flex items-center justify-between gap-2">
+                                        <div className="min-w-0">
+                                          <h3 className="text-sm font-medium text-stone-900">{item.name}</h3>
+                                          <p className="mt-0.5 text-xs text-stone-500">{item.priceRange}</p>
+                                        </div>
+
+                                        <button
+                                          type="button"
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                            toggleCart(item.id);
+                                          }}
+                                          className={`inline-flex h-7 min-w-[62px] items-center justify-center gap-1 rounded-full border px-2 text-xs transition ${
+                                            added
+                                              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                              : 'border-stone-200 bg-white text-stone-600'
+                                          }`}
+                                        >
+                                          {added ? <Check size={12} /> : <Plus size={12} />}
+                                          <span>{added ? '已加入' : '加入'}</span>
+                                        </button>
                                       </div>
 
-                                      <button
-                                        type="button"
-                                        onClick={(event) => {
-                                          event.stopPropagation();
-                                          toggleCart(item.id);
-                                        }}
-                                        className={`inline-flex h-7 min-w-[62px] items-center justify-center gap-1 rounded-full border px-2 text-xs transition ${
-                                          added
-                                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                                            : 'border-stone-200 bg-white text-stone-600'
-                                        }`}
-                                      >
-                                        {added ? <Check size={12} /> : <Plus size={12} />}
-                                        <span>{added ? '已加入' : '加入'}</span>
-                                      </button>
-                                    </div>
+                                      <AnimatePresence initial={false}>
+                                        {selected ? (
+                                          <motion.div
+                                            initial={{ height: 0, opacity: 0 }}
+                                            animate={{ height: 'auto', opacity: 1 }}
+                                            exit={{ height: 0, opacity: 0 }}
+                                            transition={{ duration: 0.18 }}
+                                            className="mt-2 overflow-hidden"
+                                          >
+                                            <div className="flex flex-wrap items-center gap-2 text-xs">
+                                              <span className={`rounded-full border px-2 py-0.5 ${NECESSITY_STYLE[item.necessity]}`}>
+                                                {NECESSITY_LABEL[item.necessity]}
+                                              </span>
+                                              <span className="rounded-full bg-stone-100 px-2 py-0.5 text-stone-600">
+                                                数量 x{item.quantity}
+                                              </span>
+                                            </div>
 
-                                    <AnimatePresence initial={false}>
-                                      {selected ? (
-                                        <motion.div
-                                          initial={{ height: 0, opacity: 0 }}
-                                          animate={{ height: 'auto', opacity: 1 }}
-                                          exit={{ height: 0, opacity: 0 }}
-                                          transition={{ duration: 0.18 }}
-                                          className="mt-2 overflow-hidden"
-                                        >
-                                          <div className="flex flex-wrap items-center gap-2 text-xs">
-                                            <span className={`rounded-full border px-2 py-0.5 ${NECESSITY_STYLE[item.necessity]}`}>
-                                              {NECESSITY_LABEL[item.necessity]}
-                                            </span>
-                                            <span className="rounded-full bg-stone-100 px-2 py-0.5 text-stone-600">
-                                              数量 x{item.quantity}
-                                            </span>
-                                          </div>
+                                            <p className="mt-2 text-xs text-stone-600">摆放：{item.placement}</p>
+                                            <p className="mt-1 text-xs text-stone-500">{item.reason}</p>
+                                          </motion.div>
+                                        ) : null}
+                                      </AnimatePresence>
+                                    </article>
+                                  );
+                                })}
+                              </motion.div>
+                            ) : null}
+                          </AnimatePresence>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
 
-                                          <p className="mt-2 text-xs text-stone-600">摆放：{item.placement}</p>
-                                          <p className="mt-1 text-xs text-stone-500">{item.reason}</p>
-                                        </motion.div>
-                                      ) : null}
-                                    </AnimatePresence>
-                                  </article>
-                                );
-                              })}
-                            </motion.div>
-                          ) : null}
-                        </AnimatePresence>
-                      </div>
-                    );
-                  })}
+              <div className="mt-3 border-t border-stone-100 pt-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={copyChecklist}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-stone-200 px-3 py-2.5 text-sm text-stone-700"
+                  >
+                    <Copy size={14} />
+                    复制清单
+                  </button>
+                  <button
+                    type="button"
+                    onClick={exportChecklistImage}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-stone-900 px-3 py-2.5 text-sm text-white"
+                  >
+                    <Download size={14} />
+                    导出清单
+                  </button>
                 </div>
-              )}
+
+                <button
+                  type="button"
+                  onClick={addAllVisibleToCart}
+                  className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800"
+                >
+                  <Plus size={14} />
+                  一键加入购物车
+                </button>
+
+                {notice ? <p className="mt-2 text-xs text-stone-500">{notice}</p> : null}
+              </div>
             </section>
           </motion.aside>
         </div>

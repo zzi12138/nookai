@@ -28,6 +28,12 @@ type RawItem = {
   anchor?: {
     x?: number;
     y?: number;
+    centerX?: number;
+    centerY?: number;
+    cx?: number;
+    cy?: number;
+    left?: number;
+    top?: number;
     width?: number;
     height?: number;
     w?: number;
@@ -316,13 +322,14 @@ async function fetchRemoteImageAsInlinePart(url: string) {
 
 function getPrompt(theme: string) {
   return `
-你是租房改造购物助手。请分析“当前效果图”，尽可能全面地识别可购买、可摆放的具体物件（目标 8-12 个）。
+你是租房改造购物助手。请分析“当前效果图”，尽可能全面地识别可购买、可摆放的具体物件（目标 10-16 个）。
 
 硬性规则：
 1) 只能输出具体物品，不要抽象概念。
 2) 只基于图中可见物件，不得臆造。
-3) 每个物件必须有 anchor 坐标（x/y 0-100）与物体框尺寸（width/height 0-100）及 confidence（0-1）。
-4) width/height 需要尽量贴合物体轮廓，不要使用固定尺寸；如果不确定，把 confidence 降低到 0.55 以下。
+3) 每个物件必须有 anchor 坐标与尺寸：centerX/centerY（中心点）、left/top（左上角）、width/height（0-100）和 confidence（0-1）。
+4) centerX/centerY 必须基于物体几何中心；width/height 贴合物体轮廓，不要固定模板尺寸。
+5) 如果不确定，把 confidence 降低到 0.55 以下。
 5) 价格区间要收窄，符合中国电商常见区间。
 6) 所有字段优先用中文，名称要简洁完整，禁止省略号。
 
@@ -343,7 +350,7 @@ function getPrompt(theme: string) {
       "placement": "沙发右侧",
       "necessity": "Must-have|Recommended|Optional",
       "reason": "一句中文短句",
-      "anchor": { "x": 72, "y": 58, "width": 12, "height": 26, "confidence": 0.82 }
+      "anchor": { "centerX": 72, "centerY": 58, "left": 66, "top": 45, "width": 12, "height": 26, "confidence": 0.82 }
     }
   ]
 }
@@ -355,7 +362,7 @@ function dedupeByName(items: RawItem[]) {
   const out: RawItem[] = [];
 
   for (const item of items) {
-    const key = compactName(item.name).toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]/g, '').slice(0, 16);
+    const key = compactName(item.name).toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]/g, '').slice(0, 36);
     if (!key) continue;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -484,7 +491,7 @@ export async function POST(req: Request) {
     const analyzed = await analyzeItems(image, theme, apiKey);
 
     const normalized: NormalizedItem[] = analyzed.items
-      .slice(0, 14)
+      .slice(0, 18)
       .map((item, index) => {
         const id = index + 1;
         const name = toChineseName(item.name || '');
@@ -495,20 +502,43 @@ export async function POST(req: Request) {
         const quantity = Math.round(clamp(Number(item.quantity || 1), 1, 3));
         const price = normalizePrice(name, item.priceMin, item.priceMax);
 
+        const rawCenterX = Number(item.anchor?.centerX ?? item.anchor?.cx);
+        const rawCenterY = Number(item.anchor?.centerY ?? item.anchor?.cy);
         const rawX = Number(item.anchor?.x);
         const rawY = Number(item.anchor?.y);
+        const rawLeft = Number(item.anchor?.left);
+        const rawTop = Number(item.anchor?.top);
         const rawW = Number(item.anchor?.width ?? item.anchor?.w);
         const rawH = Number(item.anchor?.height ?? item.anchor?.h);
-        const hasAnchor = Number.isFinite(rawX) && Number.isFinite(rawY);
+        const hasBox = Number.isFinite(rawW) && Number.isFinite(rawH);
+        const hasCenter = Number.isFinite(rawCenterX) && Number.isFinite(rawCenterY);
+        const hasXY = Number.isFinite(rawX) && Number.isFinite(rawY);
+        const hasLeftTop = Number.isFinite(rawLeft) && Number.isFinite(rawTop);
+        const hasAnchor = hasCenter || hasXY || hasLeftTop;
         const confidence = Number.isFinite(item.anchor?.confidence as number)
           ? clamp(Number(item.anchor?.confidence), 0, 1)
           : 0;
 
-        const x = hasAnchor ? clamp(rawX, 4, 96) : 50;
-        const y = hasAnchor ? clamp(rawY, 6, 94) : 50;
         const fallbackSize = fallbackSizeByName(name);
-        const width = Number.isFinite(rawW) ? clamp(rawW, 6, 56) : fallbackSize.width;
-        const height = Number.isFinite(rawH) ? clamp(rawH, 6, 56) : fallbackSize.height;
+        const width = hasBox ? clamp(rawW, 6, 56) : fallbackSize.width;
+        const height = hasBox ? clamp(rawH, 6, 56) : fallbackSize.height;
+
+        let centerX = 50;
+        let centerY = 50;
+
+        if (hasCenter) {
+          centerX = rawCenterX;
+          centerY = rawCenterY;
+        } else if (hasLeftTop) {
+          centerX = rawLeft + width / 2;
+          centerY = rawTop + height / 2;
+        } else if (hasXY) {
+          centerX = rawX;
+          centerY = rawY;
+        }
+
+        const x = hasAnchor ? clamp(centerX, width / 2 + 1, 100 - width / 2 - 1) : 50;
+        const y = hasAnchor ? clamp(centerY, height / 2 + 1, 100 - height / 2 - 1) : 50;
         const hasPoint = hasAnchor && confidence >= 0.63;
 
         const placement = toChinesePlacement(item.placement || '');
@@ -546,7 +576,7 @@ export async function POST(req: Request) {
         }
         return b.imageTarget.confidence - a.imageTarget.confidence;
       })
-      .slice(0, 12);
+      .slice(0, 16);
 
     if (reduced.length < 1) {
       return NextResponse.json(

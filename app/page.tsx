@@ -135,7 +135,7 @@ export default function Page() {
     setError('');
     try {
       const dataUrl = await fileToDataUrl(file);
-      const resized = await resizeDataUrl(dataUrl, 1280, 0.85);
+      const resized = await resizeDataUrl(dataUrl, 1024, 0.8);
       setPreviewUrl(resized);
       setImageBase64(dataUrlToBase64(resized));
     } catch (err) {
@@ -156,20 +156,42 @@ export default function Page() {
     if (extra) requirements.push(extra);
 
     try {
-      const response = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          image: imageBase64,
-          theme: selectedStyle,
-          constraints: selectedConstraints,
-          requirements,
-        }),
-      });
+      let response: Response | null = null;
+      let data: any = null;
+      let lastMessage = '生成失败，请稍后再试';
 
-      const data = await response.json().catch(() => null);
-      if (!response.ok || !data?.imageUrl) {
-        throw new Error(data?.error || '生成失败，请稍后再试');
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        try {
+          response = await fetch('/api/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              image: imageBase64,
+              theme: selectedStyle,
+              constraints: selectedConstraints,
+              requirements,
+            }),
+          });
+
+          data = await response.json().catch(() => null);
+          if (response.ok && data?.imageUrl) {
+            break;
+          }
+
+          lastMessage = data?.error || `生成失败（第 ${attempt} 次）`;
+          if (attempt < 3) {
+            await new Promise((resolve) => setTimeout(resolve, 800 * attempt));
+          }
+        } catch (error) {
+          lastMessage = error instanceof Error ? error.message : '网络异常，请重试';
+          if (attempt < 3) {
+            await new Promise((resolve) => setTimeout(resolve, 800 * attempt));
+          }
+        }
+      }
+
+      if (!response?.ok || !data?.imageUrl) {
+        throw new Error(lastMessage || '生成失败，请稍后再试');
       }
 
       setLoadingProgress(100);
@@ -211,12 +233,13 @@ export default function Page() {
 
   return (
     <div className="min-h-screen bg-[#FDF9F1] px-4 py-10">
-      <div className="mx-auto w-full max-w-[460px] md:max-w-[520px]">
+      <div className="mx-auto w-full max-w-[560px] md:max-w-[700px]">
         <motion.div
+          layout
           initial={{ opacity: 0, y: 40, scale: 0.96, filter: 'blur(6px)' }}
           animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
-          transition={spring}
-          className="overflow-hidden rounded-3xl bg-white p-7 shadow-xl shadow-stone-200/50 md:p-9"
+          transition={{ ...spring, layout: { type: 'spring', stiffness: 135, damping: 22 } }}
+          className="overflow-hidden rounded-3xl bg-white p-7 shadow-xl shadow-stone-200/50 md:p-10"
         >
           <div className="mb-7">
             <div className="mb-2 flex items-center justify-between text-xs text-stone-400">
@@ -232,9 +255,15 @@ export default function Page() {
             </div>
           </div>
 
-          <AnimatePresence mode="wait">
+          <motion.div
+            layout
+            transition={{ type: 'spring', stiffness: 135, damping: 22 }}
+            className="min-h-[360px] md:min-h-[390px]"
+          >
+          <AnimatePresence mode="wait" initial={false}>
             {step === 1 ? (
               <motion.section
+                layout
                 key="step-1"
                 initial={{ opacity: 0, y: 40, scale: 0.96, filter: 'blur(6px)' }}
                 animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
@@ -252,22 +281,12 @@ export default function Page() {
                 <p className="text-sm leading-7 text-stone-500">
                   我们会保留原有结构，用低预算可落地的软装方案，帮你把房间变成更舒服的小窝。
                 </p>
-                <motion.button
-                  type="button"
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.98 }}
-                  transition={spring}
-                  onClick={nextStep}
-                  className="inline-flex items-center gap-2 rounded-full bg-stone-900 px-6 py-3 text-sm font-medium text-white shadow-sm"
-                >
-                  开始设计
-                  <ChevronRight size={16} />
-                </motion.button>
               </motion.section>
             ) : null}
 
             {step === 2 ? (
               <motion.section
+                layout
                 key="step-2"
                 initial={{ opacity: 0, y: 40, scale: 0.96, filter: 'blur(6px)' }}
                 animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
@@ -306,6 +325,7 @@ export default function Page() {
 
             {step === 3 ? (
               <motion.section
+                layout
                 key="step-3"
                 initial={{ opacity: 0, y: 40, scale: 0.96, filter: 'blur(6px)' }}
                 animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
@@ -345,6 +365,7 @@ export default function Page() {
 
             {step === 4 ? (
               <motion.section
+                layout
                 key="step-4"
                 initial={{ opacity: 0, y: 40, scale: 0.96, filter: 'blur(6px)' }}
                 animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
@@ -384,6 +405,7 @@ export default function Page() {
 
             {step === 5 ? (
               <motion.section
+                layout
                 key="step-5"
                 initial={{ opacity: 0, y: 40, scale: 0.96, filter: 'blur(6px)' }}
                 animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
@@ -404,6 +426,7 @@ export default function Page() {
 
             {step === 6 ? (
               <motion.section
+                layout
                 key="step-6"
                 initial={{ opacity: 0, y: 40, scale: 0.96, filter: 'blur(6px)' }}
                 animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
@@ -442,6 +465,7 @@ export default function Page() {
               </motion.section>
             ) : null}
           </AnimatePresence>
+          </motion.div>
 
           <div className="mt-8 flex items-center justify-between">
             <motion.button
