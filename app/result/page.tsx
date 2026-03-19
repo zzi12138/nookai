@@ -29,6 +29,7 @@ type GuideItem = {
   placement: string;
   necessity: Necessity;
   reason: string;
+  previewImage?: string;
   imageTarget: {
     x: number;
     y: number;
@@ -106,6 +107,54 @@ function inferProvider(imageUrl: string): 'nanobanana' | 'gemini' | undefined {
   if (imageUrl.startsWith('data:image/')) return 'gemini';
   if (/^https?:\/\//i.test(imageUrl)) return 'nanobanana';
   return undefined;
+}
+
+async function loadImageForCrop(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('预览裁剪图加载失败'));
+    img.src = src;
+  });
+}
+
+async function buildPreviewMapFromAfterImage(
+  imageUrl: string,
+  items: GuideItem[],
+  cropSize: number
+): Promise<Record<number, string>> {
+  const img = await loadImageForCrop(imageUrl);
+  const imageW = Math.max(1, img.naturalWidth || img.width || 1);
+  const imageH = Math.max(1, img.naturalHeight || img.height || 1);
+  const maxCrop = Math.max(80, Math.min(imageW, imageH));
+  const sourceCrop = clamp(Math.round(cropSize), 120, maxCrop);
+  const outputSize = 220;
+
+  const map: Record<number, string> = {};
+
+  for (const item of items) {
+    const cx = (item.imageTarget.x / 100) * imageW;
+    const cy = (item.imageTarget.y / 100) * imageH;
+    const objectScale = clamp((item.imageTarget.width + item.imageTarget.height) / 32, 0.82, 1.26);
+    const dynamicCrop = clamp(Math.round(sourceCrop * objectScale), 110, maxCrop);
+
+    const rawLeft = Math.round(cx - dynamicCrop / 2);
+    const rawTop = Math.round(cy - dynamicCrop / 2);
+    const sx = clamp(rawLeft, 0, imageW - dynamicCrop);
+    const sy = clamp(rawTop, 0, imageH - dynamicCrop);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = outputSize;
+    canvas.height = outputSize;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) continue;
+
+    ctx.drawImage(img, sx, sy, dynamicCrop, dynamicCrop, 0, 0, outputSize, outputSize);
+    map[item.id] = canvas.toDataURL('image/jpeg', 0.88);
+  }
+
+  return map;
 }
 
 function hasChinese(text: string) {
@@ -309,6 +358,7 @@ export default function ResultPage() {
   const router = useRouter();
 
   const sliderRef = useRef<HTMLDivElement>(null);
+  const guidePanelRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<Record<number, HTMLElement | null>>({});
 
   const [originalUrl, setOriginalUrl] = useState('');
@@ -319,6 +369,8 @@ export default function ResultPage() {
   const [summary, setSummary] = useState('');
   const [items, setItems] = useState<GuideItem[]>([]);
   const [itemsBoardImageUrl, setItemsBoardImageUrl] = useState('');
+  const [previewMap, setPreviewMap] = useState<Record<number, string>>({});
+  const [cropSize, setCropSize] = useState(200);
   const [loadingGuide, setLoadingGuide] = useState(false);
   const [guideError, setGuideError] = useState('');
 
@@ -341,7 +393,15 @@ export default function ResultPage() {
   const afterImage = generatedUrl || originalUrl || '';
   const canCompare = Boolean(generatedUrl && originalUrl);
 
-  const filteredItems = useMemo(() => items.filter((item) => passFilter(item, filter)), [items, filter]);
+  const itemsWithPreview = useMemo(
+    () => items.map((item) => ({ ...item, previewImage: previewMap[item.id] || item.previewImage || '' })),
+    [items, previewMap]
+  );
+
+  const filteredItems = useMemo(
+    () => itemsWithPreview.filter((item) => passFilter(item, filter)),
+    [itemsWithPreview, filter]
+  );
 
   const activeId = selectedId ?? hoverId;
   const activeItem = useMemo(
@@ -387,6 +447,31 @@ export default function ResultPage() {
     const timer = window.setTimeout(() => setNotice(''), 2200);
     return () => window.clearTimeout(timer);
   }, [notice]);
+
+  useEffect(() => {
+    const panel = guidePanelRef.current;
+    if (!panel) return;
+
+    const recalc = () => {
+      const width = panel.clientWidth || 0;
+      if (!width) {
+        setCropSize(200);
+        return;
+      }
+      const responsive = Math.round(width * 0.48);
+      setCropSize(clamp(responsive, 160, 240));
+    };
+
+    recalc();
+    const observer = new ResizeObserver(recalc);
+    observer.observe(panel);
+    window.addEventListener('resize', recalc);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', recalc);
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -567,8 +652,38 @@ export default function ResultPage() {
     setCartIds([]);
     setFilter('all');
     setItemsBoardImageUrl('');
+    setPreviewMap({});
     void fetchGuide();
   }, [afterImage, fetchGuide]);
+
+  useEffect(() => {
+    if (!afterImage || items.length === 0) {
+      setPreviewMap({});
+      return;
+    }
+
+    let active = true;
+
+    const run = async () => {
+      try {
+        const map = await buildPreviewMapFromAfterImage(afterImage, items, cropSize);
+        if (!active) return;
+        setPreviewMap(map);
+      } catch {
+        if (!active) return;
+        const fallback: Record<number, string> = {};
+        for (const item of items) {
+          fallback[item.id] = '';
+        }
+        setPreviewMap(fallback);
+      }
+    };
+
+    void run();
+    return () => {
+      active = false;
+    };
+  }, [afterImage, items, cropSize]);
 
   useEffect(() => {
     if (groupedItems.length === 0) {
@@ -876,7 +991,10 @@ export default function ResultPage() {
             transition={{ ...spring, delay: 0.06 }}
             className="h-full"
           >
-            <section className="flex h-full min-h-[500px] flex-col rounded-[28px] bg-white p-5 shadow-sm ring-1 ring-stone-100 lg:min-h-[720px]">
+            <section
+              ref={guidePanelRef}
+              className="flex h-full min-h-[500px] flex-col rounded-[28px] bg-white p-5 shadow-sm ring-1 ring-stone-100 lg:min-h-[720px]"
+            >
               <div className="flex items-center justify-between">
                 <h2 className="text-base font-semibold text-stone-900">购物指南</h2>
                 <button
@@ -995,9 +1113,27 @@ export default function ResultPage() {
                                       }`}
                                     >
                                       <div className="flex items-center justify-between gap-2">
-                                        <div className="min-w-0">
-                                          <h3 className="text-sm font-medium text-stone-900">{item.name}</h3>
-                                          <p className="mt-0.5 text-xs text-stone-500">{item.priceRange}</p>
+                                        <div className="flex min-w-0 items-center gap-2.5">
+                                          <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-stone-100 ring-1 ring-stone-200">
+                                            {item.previewImage ? (
+                                              <img
+                                                src={item.previewImage}
+                                                alt={`${item.name} 预览`}
+                                                className="h-full w-full object-cover"
+                                              />
+                                            ) : (
+                                              <img
+                                                src={afterImage}
+                                                alt={`${item.name} 预览`}
+                                                className="h-full w-full scale-[2.1] object-cover"
+                                                style={{ objectPosition: `${item.imageTarget.x}% ${item.imageTarget.y}%` }}
+                                              />
+                                            )}
+                                          </div>
+                                          <div className="min-w-0">
+                                            <h3 className="text-sm font-medium text-stone-900">{item.name}</h3>
+                                            <p className="mt-0.5 text-xs text-stone-500">{item.priceRange}</p>
+                                          </div>
                                         </div>
 
                                         <button
