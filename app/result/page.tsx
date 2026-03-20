@@ -392,38 +392,11 @@ function passFilter(item: GuideItem, filter: FilterKey) {
   return item.necessity === 'Optional';
 }
 
-function getLabelStyle(target: GuideItem['imageTarget']) {
-  const rightEdge = target.left + target.width;
-  const leftEdge = target.left;
-  const topEdge = target.top;
-  const placeRight = rightEdge <= 78;
-  const x = placeRight ? clamp(rightEdge + 1.8, 4, 95) : clamp(leftEdge - 1.8, 5, 96);
-  const y = clamp(topEdge - 1.5, 7, 94);
-
-  return {
-    left: `${x}%`,
-    top: `${y}%`,
-    transform: placeRight ? 'translate(0, -100%)' : 'translate(-100%, -100%)',
-  } as const;
-}
-
-function getHighlightStyle(target: GuideItem['imageTarget']) {
-  const left = clamp(target.left, 0, 100 - target.width);
-  const top = clamp(target.top, 0, 100 - target.height);
-  return {
-    left: `${left}%`,
-    top: `${top}%`,
-    width: `${target.width}%`,
-    height: `${target.height}%`,
-  } as const;
-}
-
 export default function ResultPage() {
   const router = useRouter();
 
   const sliderRef = useRef<HTMLDivElement>(null);
   const guidePanelRef = useRef<HTMLDivElement>(null);
-  const cardRefs = useRef<Record<number, HTMLElement | null>>({});
 
   const [originalUrl, setOriginalUrl] = useState('');
   const [generatedUrl, setGeneratedUrl] = useState('');
@@ -440,7 +413,6 @@ export default function ResultPage() {
   const [guideError, setGuideError] = useState('');
 
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [hoverId, setHoverId] = useState<number | null>(null);
   const [cartIds, setCartIds] = useState<number[]>([]);
 
   const [filter, setFilter] = useState<FilterKey>('all');
@@ -471,12 +443,6 @@ export default function ResultPage() {
   const filteredItems = useMemo(
     () => itemsWithPreview.filter((item) => passFilter(item, filter)),
     [itemsWithPreview, filter]
-  );
-
-  const activeId = selectedId ?? hoverId;
-  const activeItem = useMemo(
-    () => filteredItems.find((item) => item.id === activeId) || null,
-    [filteredItems, activeId]
   );
 
   const groupedItems = useMemo(() => {
@@ -718,7 +684,6 @@ export default function ResultPage() {
   useEffect(() => {
     if (!afterImage) return;
     setSelectedId(null);
-    setHoverId(null);
     setCartIds([]);
     setFilter('all');
     setItemsBoardImageUrl('');
@@ -772,26 +737,17 @@ export default function ResultPage() {
     if (selectedId !== null && !visibleIds.has(selectedId)) {
       setSelectedId(null);
     }
-    if (hoverId !== null && !visibleIds.has(hoverId)) {
-      setHoverId(null);
-    }
-  }, [filteredItems, selectedId, hoverId]);
+  }, [filteredItems, selectedId]);
 
-  const handleSelectItem = (id: number, category: Category) => {
+  const handleSelectItem = (item: GuideItem, category: Category) => {
     setExpandedCategory(category);
-    setSelectedId((prev) => (prev === id ? null : id));
-    setHoverId(null);
-  };
-
-  const handleHoverStart = (id: number) => {
-    if (selectedId === null) {
-      setHoverId(id);
-    }
-  };
-
-  const handleHoverEnd = () => {
-    if (selectedId === null) {
-      setHoverId(null);
+    setSelectedId(item.id);
+    if (item.previewImageLarge || item.previewImage) {
+      setLightbox({
+        id: item.id,
+        src: item.previewImageLarge || item.previewImage || '',
+        title: item.name,
+      });
     }
   };
 
@@ -976,7 +932,7 @@ export default function ResultPage() {
           >
             <div className="mb-4 flex items-center justify-between">
               <p className="text-sm font-medium text-stone-700">改造前后对比</p>
-              <p className="text-xs text-stone-400">默认展示干净效果图，选择右侧物件后高亮对应区域</p>
+              <p className="text-xs text-stone-400">主图仅用于整体氛围预览，精准参考请查看右侧预览图</p>
             </div>
 
             <div
@@ -1008,22 +964,6 @@ export default function ResultPage() {
                   className="absolute inset-0 h-full w-full object-contain"
                   style={{ clipPath: canCompare ? afterClip : 'inset(0 0 0 0)' }}
                 />
-
-                {activeItem?.imageTarget.hasAnchor ? (
-                  <div className="absolute inset-0" style={{ clipPath: canCompare ? afterClip : 'inset(0 0 0 0)' }}>
-                    <div className="absolute inset-0 bg-black/28" />
-                    <div
-                      className="absolute rounded-[20px] border border-amber-100/90 bg-amber-200/22 shadow-[0_0_42px_rgba(251,191,36,0.46)]"
-                      style={getHighlightStyle(activeItem.imageTarget)}
-                    />
-                    <div
-                      className="pointer-events-none absolute z-30 rounded-full border border-stone-200 bg-white/95 px-3 py-1 text-xs text-stone-700 shadow-sm"
-                      style={getLabelStyle(activeItem.imageTarget)}
-                    >
-                      {activeItem.name}
-                    </div>
-                  </div>
-                ) : null}
               </div>
 
               {canCompare ? (
@@ -1146,24 +1086,16 @@ export default function ResultPage() {
                               >
                                 {group.list.map((item) => {
                                   const selected = selectedId === item.id;
-                                  const preview = hoverId === item.id && selectedId === null;
                                   const added = cartIds.includes(item.id);
 
                                   return (
                                     <article
                                       key={item.id}
-                                      ref={(node) => {
-                                        cardRefs.current[item.id] = node;
-                                      }}
-                                      onClick={() => handleSelectItem(item.id, group.category)}
-                                      onMouseEnter={() => handleHoverStart(item.id)}
-                                      onMouseLeave={handleHoverEnd}
+                                      onClick={() => handleSelectItem(item, group.category)}
                                       className={`cursor-pointer rounded-xl border px-3 py-2.5 transition ${
                                         selected
                                           ? 'border-amber-300 bg-amber-50/70 shadow-sm'
-                                          : preview
-                                            ? 'border-stone-300 bg-stone-50'
-                                            : 'border-stone-200 bg-white'
+                                          : 'border-stone-200 bg-white hover:border-stone-300 hover:bg-stone-50'
                                       }`}
                                     >
                                       <div className="flex items-center justify-between gap-2">

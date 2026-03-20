@@ -473,6 +473,9 @@ ABSOLUTE LAYOUT RULES (MUST FOLLOW):
 7) Do NOT output partial fragments, zoomed textures, or cropped corners.
 8) Include at least 10 purchasable objects in total.
 9) Forbidden targets: wall paint/color, ceiling, flooring material, doors/windows, architecture changes.
+10) no numbers, no labels, no arrows, no lines, no UI overlays.
+11) no index markers, no annotation text, no callouts.
+12) no frames around products, no cell borders, no grid lines or dividers.
 
 Fixed cell category ranges (must follow):
 ${categoryRanges}
@@ -485,8 +488,8 @@ all lamps, rugs/floor textiles, bedding/pillows/throws, decor objects, framed ar
 
 Output style:
 - clean asset-sheet style, product extraction board, not user-facing
-- each object isolated in its own frame cell
-- small numeric labels allowed inside each cell
+- each object isolated in its own cell area
+- clarity and recognizability are priority; minor positional variance is acceptable
 
 Theme context: ${theme || '日式原木风'}
 `.trim();
@@ -789,7 +792,7 @@ export async function POST(req: Request) {
           image: afterImage,
           prompt: boardPrompt,
           negativePrompt:
-            'room background, full room scene, clutter, watermark, long text paragraphs, logo, irregular collage, overlapping objects, architecture elements',
+            'room background, full room scene, clutter, watermark, logo, long paragraphs, irregular collage, overlapping objects, architecture elements, numbers, labels, arrows, guide lines, UI overlays, index markers, annotation text, callouts, frames around products, cell borders, grid lines, dividers',
           strength: 0.72,
           provider: boardProvider,
         });
