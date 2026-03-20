@@ -1,5 +1,12 @@
 import { NextResponse } from 'next/server';
 import { generateImage } from '../../lib/server/imageProvider';
+import {
+  assignItemsToBoardCells,
+  CATEGORY_SLOT_RANGES,
+  getFixedBoardCells,
+  ITEMS_BOARD_CONFIG,
+  type BoardCell,
+} from '../../lib/itemsBoard';
 
 export const runtime = 'nodejs';
 
@@ -59,15 +66,7 @@ type NormalizedItem = {
   placement: string;
   necessity: Necessity;
   reason: string;
-  boardCell?: {
-    index: number;
-    row: number;
-    col: number;
-    left: number;
-    top: number;
-    width: number;
-    height: number;
-  };
+  boardCell?: BoardCell;
   imageTarget: {
     x: number;
     y: number;
@@ -79,16 +78,6 @@ type NormalizedItem = {
     hasAnchor: boolean;
     hasPoint: boolean;
   };
-};
-
-type BoardCell = {
-  index: number;
-  row: number;
-  col: number;
-  left: number;
-  top: number;
-  width: number;
-  height: number;
 };
 
 function stripDataUrl(value: string) {
@@ -446,67 +435,61 @@ function getPrompt(theme: string, hasBefore: boolean) {
 `.trim();
 }
 
+function twoDigit(index: number) {
+  return String(index).padStart(2, '0');
+}
+
 function buildItemsBoardPrompt(theme: string, items: NormalizedItem[]) {
-  const lines = items
-    .map((item, index) => `${index + 1}. ${item.name}`)
+  const cells = getFixedBoardCells();
+  const assignedLines = items
+    .filter((item) => item.boardCell)
+    .sort((a, b) => (a.boardCell?.index || 99) - (b.boardCell?.index || 99))
+    .map((item) => {
+      const slot = item.boardCell?.index || 1;
+      return `CELL-${twoDigit(slot)} | ${item.category} | ${item.name}`;
+    })
     .join('\n');
-  const count = items.length;
+
+  const emptySlots = cells
+    .filter((cell) => !items.some((item) => item.boardCell?.index === cell.index))
+    .map((cell) => `CELL-${twoDigit(cell.index)}`)
+    .join(', ');
+
+  const categoryRanges = Object.entries(CATEGORY_SLOT_RANGES)
+    .map(([category, slots]) => `${category}: ${slots.map((slot) => `CELL-${twoDigit(slot)}`).join(', ')}`)
+    .join('\n');
 
   return `
 Use the provided generated room image as visual reference.
-Generate ONE internal extracted-items board image (not user-facing).
+Generate ONE hidden internal extraction board for deterministic thumbnail crops.
 
-Strict board requirements:
-- very light neutral or pure white background
-- include at least ${Math.max(10, count)} extracted purchasable objects
-- include all visible lamps, rugs/floor textiles, bedding/pillows/throws, decor objects, wall art, plants when present
-- each object must be isolated inside its own regular rectangular/square grid cell
-- neat grid layout, no overlap, no collage, no irregular arrangement
-- keep object style/material/color consistent with the generated room
-- each cell has enough padding for clean thumbnail crop
-- small index labels are allowed for internal mapping
+ABSOLUTE LAYOUT RULES (MUST FOLLOW):
+1) Final board canvas MUST be exactly ${ITEMS_BOARD_CONFIG.width}x${ITEMS_BOARD_CONFIG.height} pixels (4:3).
+2) Use a strict 4 columns x 3 rows grid (12 fixed cells).
+3) Every cell contains exactly one complete object, centered, with visible padding.
+4) No overlap, no collage, no perspective scene, no architecture, no background room.
+5) White or very light neutral background only.
+6) Objects must preserve color/material/style from the generated room.
+7) Do NOT output partial fragments, zoomed textures, or cropped corners.
+8) Include at least 10 purchasable objects in total.
+9) Forbidden targets: wall paint/color, ceiling, flooring material, doors/windows, architecture changes.
 
-Object list to include:
-${lines}
+Fixed cell category ranges (must follow):
+${categoryRanges}
+
+Primary mapping list (must place into exact assigned cells):
+${assignedLines || 'Use visible purchasable items from the room and place deterministically.'}
+
+If there are empty cells (${emptySlots || 'none'}), fill them with additional clearly visible purchasable objects from the same room style, prioritizing:
+all lamps, rugs/floor textiles, bedding/pillows/throws, decor objects, framed art, plants, and functional accessories.
 
 Output style:
-- clean product extraction board
-- no full-room scene, no architecture, no walls/floor/ceiling structure
-- no random new objects
+- clean asset-sheet style, product extraction board, not user-facing
+- each object isolated in its own frame cell
+- small numeric labels allowed inside each cell
 
 Theme context: ${theme || '日式原木风'}
 `.trim();
-}
-
-function buildBoardCells(count: number): BoardCell[] {
-  const safeCount = Math.max(1, count);
-  const cols = safeCount >= 15 ? 5 : safeCount >= 10 ? 4 : 3;
-  const rows = Math.ceil(safeCount / cols);
-  const padX = 4;
-  const padY = 4;
-  const gapX = 2.2;
-  const gapY = 2.2;
-  const cellW = (100 - padX * 2 - gapX * (cols - 1)) / cols;
-  const cellH = (100 - padY * 2 - gapY * (rows - 1)) / rows;
-  const cells: BoardCell[] = [];
-
-  for (let i = 0; i < safeCount; i += 1) {
-    const row = Math.floor(i / cols);
-    const col = i % cols;
-    const left = padX + col * (cellW + gapX);
-    const top = padY + row * (cellH + gapY);
-    cells.push({
-      index: i + 1,
-      row: row + 1,
-      col: col + 1,
-      left,
-      top,
-      width: cellW,
-      height: cellH,
-    });
-  }
-
-  return cells;
 }
 
 function dedupeByObject(items: RawItem[]) {
@@ -767,7 +750,7 @@ export async function POST(req: Request) {
       })
       .filter((item): item is NormalizedItem => Boolean(item));
 
-    const normalized = normalizedAll.filter((item) => item.imageTarget.confidence >= 0.2);
+    const normalized = normalizedAll.filter((item) => item.imageTarget.confidence >= 0.1);
 
     let reduced = normalized
       .sort((a, b) => {
@@ -777,29 +760,25 @@ export async function POST(req: Request) {
         }
         return b.imageTarget.confidence - a.imageTarget.confidence;
       })
-      .slice(0, 14);
+      .slice(0, 12);
 
     if (reduced.length < 10) {
       const picked = new Set(reduced.map((item) => item.id));
       const topUp = normalizedAll
         .filter((item) => !picked.has(item.id))
         .sort((a, b) => b.imageTarget.confidence - a.imageTarget.confidence)
-        .slice(0, 10 - reduced.length);
+        .slice(0, 12 - reduced.length);
       reduced = [...reduced, ...topUp];
     }
 
-    if (reduced.length < 10) {
+    if (reduced.length === 0) {
       return NextResponse.json(
-        { error: '识别到的可购买物件不足 10 个，请更换更清晰的效果图后重试' },
+        { error: '未识别到可购买物件，请更换更清晰的效果图后重试' },
         { status: 500 }
       );
     }
 
-    const boardCells = buildBoardCells(reduced.length);
-    const boardItems = reduced.map((item, index) => ({
-      ...item,
-      boardCell: boardCells[index],
-    }));
+    const boardItems = assignItemsToBoardCells(reduced.slice(0, 12));
     let itemsBoardImageUrl = '';
 
     try {

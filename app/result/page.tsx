@@ -5,6 +5,7 @@ import { Check, ChevronDown, Copy, Download, Plus, RefreshCw, Save } from 'lucid
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { loadResult, type StoredResult } from '../lib/imageStore';
+import { getBoardCellBySlot, getDefaultBoardCellForIndex } from '../lib/itemsBoard';
 
 type Category =
   | 'Ambient lighting'
@@ -135,34 +136,12 @@ async function loadImageForCrop(src: string): Promise<HTMLImageElement> {
   });
 }
 
-function fallbackBoardCell(index: number, total: number) {
-  const safeTotal = Math.max(1, total);
-  const cols = safeTotal >= 15 ? 5 : safeTotal >= 10 ? 4 : 3;
-  const rowCount = Math.ceil(safeTotal / cols);
-  const padX = 4;
-  const padY = 4;
-  const gapX = 2.2;
-  const gapY = 2.2;
-  const cellW = (100 - padX * 2 - gapX * (cols - 1)) / cols;
-  const cellH = (100 - padY * 2 - gapY * (rowCount - 1)) / rowCount;
-  const row = Math.floor(index / cols);
-  const col = index % cols;
-  const left = padX + col * (cellW + gapX);
-  const top = padY + row * (cellH + gapY);
-  return { index: index + 1, row: row + 1, col: col + 1, left, top, width: cellW, height: cellH };
-}
-
-function getItemBoardCell(item: GuideItem, index: number, total: number) {
-  if (
-    item.boardCell &&
-    Number.isFinite(item.boardCell.left) &&
-    Number.isFinite(item.boardCell.top) &&
-    Number.isFinite(item.boardCell.width) &&
-    Number.isFinite(item.boardCell.height)
-  ) {
-    return item.boardCell;
+function getItemBoardCell(item: GuideItem, index: number) {
+  const slot = Number(item.boardCell?.index);
+  if (Number.isFinite(slot) && slot >= 1 && slot <= 12) {
+    return getBoardCellBySlot(slot);
   }
-  return fallbackBoardCell(index, total);
+  return getDefaultBoardCellForIndex(index);
 }
 
 function drawCellToSquare(
@@ -195,10 +174,14 @@ function drawCellToSquare(
   return canvas.toDataURL('image/jpeg', 0.9);
 }
 
-function isLikelyTexturePatch(sw: number, sh: number, boardW: number, boardH: number) {
-  const wRatio = sw / boardW;
-  const hRatio = sh / boardH;
-  return wRatio < 0.08 || hRatio < 0.08;
+function drawCellRaw(img: HTMLImageElement, sx: number, sy: number, sw: number, sh: number) {
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(sw));
+  canvas.height = Math.max(1, Math.round(sh));
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return '';
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/jpeg', 0.92);
 }
 
 async function buildPreviewMapFromBoardImage(
@@ -213,7 +196,7 @@ async function buildPreviewMapFromBoardImage(
   const map: Record<number, PreviewAsset> = {};
 
   for (const [index, item] of items.entries()) {
-    const cell = getItemBoardCell(item, index, items.length);
+    const cell = getItemBoardCell(item, index);
     const cellLeftPx = (cell.left / 100) * imageW;
     const cellTopPx = (cell.top / 100) * imageH;
     const cellW = (cell.width / 100) * imageW;
@@ -224,25 +207,14 @@ async function buildPreviewMapFromBoardImage(
     const sw = Math.max(1, Math.round(clamp(cellW, 1, imageW - sx)));
     const sh = Math.max(1, Math.round(clamp(cellH, 1, imageH - sy)));
 
-    const fallbackCell = fallbackBoardCell(index, items.length);
-    const fsx = clamp(Math.round((fallbackCell.left / 100) * imageW), 0, imageW - 1);
-    const fsy = clamp(Math.round((fallbackCell.top / 100) * imageH), 0, imageH - 1);
-    const fsw = Math.max(1, Math.round(clamp((fallbackCell.width / 100) * imageW, 1, imageW - fsx)));
-    const fsh = Math.max(1, Math.round(clamp((fallbackCell.height / 100) * imageH, 1, imageH - fsy)));
-
-    const shouldFallback = isLikelyTexturePatch(sw, sh, imageW, imageH);
-    const source = shouldFallback
-      ? { sx: fsx, sy: fsy, sw: fsw, sh: fsh }
-      : { sx, sy, sw, sh };
-
     const thumbSize = clamp(Math.round(cropSize), 160, 240);
-    const thumb = drawCellToSquare(img, source.sx, source.sy, source.sw, source.sh, thumbSize, 0.08);
-    const full = drawCellToSquare(img, source.sx, source.sy, source.sw, source.sh, 720, 0.04);
+    const thumb = drawCellToSquare(img, sx, sy, sw, sh, thumbSize, 0.03);
+    const full = drawCellRaw(img, sx, sy, sw, sh);
 
     map[item.id] = {
       thumb,
       full,
-      usedFallback: shouldFallback,
+      usedFallback: false,
     };
   }
 
@@ -675,7 +647,7 @@ export default function ResultPage() {
     setLoadingGuide(true);
     setGuideError('');
 
-    const cacheKey = `nookai_guide_v8_${hashString(`${theme}__${beforeImage.slice(0, 180)}__${afterImage.slice(0, 180)}`)}`;
+    const cacheKey = `nookai_guide_v9_${hashString(`${theme}__${beforeImage.slice(0, 180)}__${afterImage.slice(0, 180)}`)}`;
     const cached = sessionStorage.getItem(cacheKey);
     if (cached) {
       try {
