@@ -4,7 +4,6 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   ArrowLeft,
   ArrowRight,
-  Camera,
   Cat,
   Check,
   CheckCircle2,
@@ -297,18 +296,18 @@ export default function Page() {
               animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
               exit={{ opacity: 0, y: -16, scale: 0.98, filter: 'blur(6px)' }}
               transition={spring}
-              className="relative flex h-full flex-col justify-between overflow-hidden rounded-3xl bg-white p-6 md:p-8"
+              className="relative flex h-full flex-col justify-center overflow-hidden rounded-3xl bg-white p-6 md:p-8"
             >
               <div className="absolute -left-20 -top-20 h-52 w-52 rounded-full bg-[#ffdbcc]/40 blur-3xl" />
               <div className="absolute -bottom-16 -right-16 h-44 w-44 rounded-full bg-[#ffb695]/25 blur-3xl" />
 
-              <div className="relative z-10 mx-auto flex h-full w-full max-w-4xl flex-col justify-between text-center">
-                <div className="space-y-4">
+              <div className="relative z-10 mx-auto flex w-full max-w-4xl flex-col items-center text-center">
+                <div className="space-y-3">
                   <div className="inline-flex items-center gap-2 rounded-full bg-[#f1e7d9] px-4 py-1.5 text-sm font-medium text-[#8f4d2c]">
                     <Sparkles className="h-3.5 w-3.5" />
                     出租屋美学策展人
                   </div>
-                  <h1 className="text-4xl font-bold tracking-tight text-[#52372d] md:text-5xl md:leading-[1.1]">
+                  <h1 className="text-4xl font-bold tracking-tight text-[#52372d] md:text-[56px] md:leading-[1.08]">
                     欢迎来到 NookAI
                   </h1>
                   <p className="mx-auto max-w-2xl text-base font-light leading-relaxed text-[#504440]/80 md:text-lg">
@@ -318,44 +317,28 @@ export default function Page() {
                   </p>
                 </div>
 
-                <div className="mt-5 flex flex-col items-center gap-4">
-                  <button
-                    type="button"
-                    onClick={goNext}
-                    className="group relative overflow-hidden rounded-2xl bg-[#52372d] px-10 py-4 text-lg font-semibold text-white shadow-2xl shadow-[#52372d]/10 transition-all duration-500 hover:scale-[1.02] active:scale-95"
-                  >
-                    <span className="relative z-10">开始改造</span>
-                    <div className="absolute inset-0 bg-gradient-to-r from-[#52372d] via-[#6b4e43] to-[#52372d] opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
-                  </button>
-                  <p className="flex items-center gap-2 text-sm text-[#504440]/60">
+                <div className="mt-5 flex flex-col items-center gap-3">
+                  <p className="flex items-center gap-2 text-sm text-[#504440]/65">
                     <Sparkles className="h-4 w-4" />
-                    AI 已准备好为你重新定义空间
+                    AI 已准备好为你重新定义空间，点击下方“下一步”开始
                   </p>
                 </div>
 
-                <div className="mt-6 grid grid-cols-1 gap-4 text-left md:grid-cols-3">
-                  <div className="space-y-3 rounded-3xl border border-[#d4c3be]/20 bg-[#fcf2e4] p-5">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#fca780]/20 text-[#8f4d2c]">
-                      <Palette className="h-5 w-5" />
+                <div className="mt-6 grid w-full max-w-3xl grid-cols-1 gap-3 text-left md:grid-cols-2">
+                  <div className="space-y-2 rounded-2xl border border-[#d4c3be]/20 bg-[#fcf2e4] p-4">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#fca780]/20 text-[#8f4d2c]">
+                      <Palette className="h-4 w-4" />
                     </div>
-                    <h3 className="text-base font-bold text-[#52372d]">软装配色方案</h3>
-                    <p className="text-xs leading-relaxed text-[#504440]/70">基于现有家具，推荐最契合的软装色系与材质组合。</p>
+                    <h3 className="text-sm font-bold text-[#52372d]">软装配色方案</h3>
+                    <p className="text-xs leading-relaxed text-[#504440]/70">低预算软装组合，保持租房友好。</p>
                   </div>
 
-                  <div className="space-y-3 rounded-3xl border border-[#d4c3be]/20 bg-[#fcf2e4] p-5">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#fca780]/20 text-[#8f4d2c]">
-                      <Camera className="h-5 w-5" />
+                  <div className="space-y-2 rounded-2xl border border-[#d4c3be]/20 bg-[#fcf2e4] p-4">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#fca780]/20 text-[#8f4d2c]">
+                      <Wand2 className="h-4 w-4" />
                     </div>
-                    <h3 className="text-base font-bold text-[#52372d]">AI 实景改造</h3>
-                    <p className="text-xs leading-relaxed text-[#504440]/70">拍照上传，即刻预览不同风格在你房间的真实效果。</p>
-                  </div>
-
-                  <div className="space-y-3 rounded-3xl border border-[#d4c3be]/20 bg-[#fcf2e4] p-5">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#fca780]/20 text-[#8f4d2c]">
-                      <Wand2 className="h-5 w-5" />
-                    </div>
-                    <h3 className="text-base font-bold text-[#52372d]">精选物料清单</h3>
-                    <p className="text-xs leading-relaxed text-[#504440]/70">为你匹配高性价比好物，一键落地方案。</p>
+                    <h3 className="text-sm font-bold text-[#52372d]">AI 实景改造 + 清单</h3>
+                    <p className="text-xs leading-relaxed text-[#504440]/70">生成效果图后同步输出购物建议。</p>
                   </div>
                 </div>
               </div>
@@ -517,54 +500,40 @@ export default function Page() {
               exit={{ opacity: 0, y: -16, scale: 0.98, filter: 'blur(6px)' }}
               transition={spring}
             >
-              <div className="mb-10 text-center">
+              <div className="mb-8 text-center">
                 <h1 className="text-3xl font-extrabold tracking-tight text-[#52372d] md:text-4xl">最后一步：上传房间照片</h1>
-                <p className="mt-4 text-lg text-[#504440]">请拍摄一张光线充足、能看清房间布局的照片</p>
+                <p className="mt-3 text-lg text-[#504440]">请拍摄一张光线充足、能看清房间布局的照片</p>
               </div>
 
-              <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12">
-                <div className="lg:col-span-7">
-                  <button type="button" onClick={() => fileInputRef.current?.click()} className="group relative w-full cursor-pointer transition-transform duration-300 active:scale-[0.98]">
-                    <div
-                      className="flex aspect-[4/3] w-full flex-col items-center justify-center rounded-[24px] border-2 border-dashed border-[#d4c3be] bg-[#fcf2e4] transition-colors group-hover:bg-[#f1e7d9]"
-                      style={{
-                        backgroundImage:
-                          "url(\"data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' rx='24' ry='24' stroke='%23d4c3be' stroke-width='2' stroke-dasharray='12%2c12'/%3e%3c/svg%3e\")",
-                      }}
-                    >
-                      {previewUrl ? (
-                        <img src={previewUrl} alt="上传预览" className="h-full w-full rounded-[22px] object-contain" />
-                      ) : (
-                        <>
-                          <div className="mb-4 rounded-full bg-[#52372d]/5 p-6">
-                            <UploadCloud className="h-10 w-10 text-[#52372d]" />
-                          </div>
-                          <p className="font-semibold text-[#52372d]">点击或拖拽上传</p>
-                          <p className="mt-1 text-sm text-[#504440]">支持 JPG, PNG (最大 10MB)</p>
-                        </>
-                      )}
-                    </div>
-                  </button>
-                </div>
-
-                <div className="lg:col-span-5">
-                  <div className="rounded-3xl border border-[#d4c3be]/20 bg-[#ebe1d3] p-4 shadow-sm">
-                    <div className="group relative mb-4 aspect-[3/4] overflow-hidden rounded-2xl bg-[#fcf2e4]">
-                      {previewUrl ? (
-                        <img src={previewUrl} alt="房间预览" className="h-full w-full object-contain" />
-                      ) : (
-                        <div className="flex h-full items-center justify-center px-6 text-center text-sm text-[#827470]">上传后这里会显示你的房间预览图</div>
-                      )}
-                    </div>
-
-                    <div className="space-y-2 px-1 text-sm">
-                      <div className="flex items-center gap-2 text-[#52372d]">
-                        <CheckCircle2 className="h-5 w-5" />
-                        <span className="font-semibold">照片质量良好</span>
-                      </div>
-                      <p className="leading-relaxed text-[#504440]">我们会保留原有布局，仅提供软装建议。光影处理已自动优化。</p>
-                    </div>
+              <div className="mx-auto w-full max-w-3xl">
+                <button type="button" onClick={() => fileInputRef.current?.click()} className="group relative w-full cursor-pointer transition-transform duration-300 active:scale-[0.98]">
+                  <div
+                    className="flex aspect-[16/10] w-full flex-col items-center justify-center rounded-[24px] border-2 border-dashed border-[#d4c3be] bg-[#fcf2e4] transition-colors group-hover:bg-[#f1e7d9]"
+                    style={{
+                      backgroundImage:
+                        "url(\"data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' rx='24' ry='24' stroke='%23d4c3be' stroke-width='2' stroke-dasharray='12%2c12'/%3e%3c/svg%3e\")",
+                    }}
+                  >
+                    {previewUrl ? (
+                      <img src={previewUrl} alt="上传预览" className="h-full w-full rounded-[22px] object-contain" />
+                    ) : (
+                      <>
+                        <div className="mb-4 rounded-full bg-[#52372d]/5 p-6">
+                          <UploadCloud className="h-10 w-10 text-[#52372d]" />
+                        </div>
+                        <p className="font-semibold text-[#52372d]">点击或拖拽上传</p>
+                        <p className="mt-1 text-sm text-[#504440]">支持 JPG, PNG (最大 10MB)</p>
+                      </>
+                    )}
                   </div>
+                </button>
+
+                <div className="mt-4 space-y-2 px-1 text-sm">
+                  <div className="flex items-center gap-2 text-[#52372d]">
+                    <CheckCircle2 className="h-5 w-5" />
+                    <span className="font-semibold">{previewUrl ? '照片质量良好' : '等待上传照片'}</span>
+                  </div>
+                  <p className="leading-relaxed text-[#504440]">我们会保留原有布局，仅提供软装建议。光影处理已自动优化。</p>
                 </div>
               </div>
 
@@ -576,19 +545,18 @@ export default function Page() {
 
       <footer className="fixed bottom-0 left-0 z-50 w-full border-t border-[#ebe1d3]/30 bg-[#fff8f2]/90 backdrop-blur-md">
         <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-6 py-6">
-          <button
-            type="button"
-            onClick={goPrev}
-            disabled={step === 1}
-            className={`flex items-center gap-2 rounded-2xl border-2 px-6 py-3 font-bold transition-all active:scale-95 ${
-              step === 1
-                ? 'cursor-not-allowed border-[#d4c3be] text-[#b8a8a2]'
-                : 'border-[#d4c3be] text-[#52372d] hover:bg-[#fcf2e4]'
-            }`}
-          >
-            <ArrowLeft className="h-4 w-4" />
-            上一步
-          </button>
+          {step === 1 ? (
+            <div />
+          ) : (
+            <button
+              type="button"
+              onClick={goPrev}
+              className="flex items-center gap-2 rounded-2xl border-2 border-[#d4c3be] px-6 py-3 font-bold text-[#52372d] transition-all hover:bg-[#fcf2e4] active:scale-95"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              上一步
+            </button>
+          )}
 
           {step < 6 ? (
             <button
