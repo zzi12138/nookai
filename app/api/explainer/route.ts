@@ -465,7 +465,7 @@ Generate ONE hidden internal extraction board for deterministic thumbnail crops.
 
 ABSOLUTE LAYOUT RULES (MUST FOLLOW):
 1) Final board canvas MUST be exactly ${ITEMS_BOARD_CONFIG.width}x${ITEMS_BOARD_CONFIG.height} pixels (4:3).
-2) Use a strict 4 columns x 3 rows grid (12 fixed cells).
+2) Use a strict 4 columns x 3 rows grid (12 fixed cells with transparent sidelines).
 3) Every cell contains exactly one complete object, centered, with visible padding.
 4) No overlap, no collage, no perspective scene, no architecture, no background room.
 5) White or very light neutral background only.
@@ -473,9 +473,7 @@ ABSOLUTE LAYOUT RULES (MUST FOLLOW):
 7) Do NOT output partial fragments, zoomed textures, or cropped corners.
 8) Include at least 10 purchasable objects in total.
 9) Forbidden targets: wall paint/color, ceiling, flooring material, doors/windows, architecture changes.
-10) no numbers, no labels, no arrows, no lines, no UI overlays.
-11) no index markers, no annotation text, no callouts.
-12) no frames around products, no cell borders, no grid lines or dividers.
+10) no any nubmers or letters, just picutres
 
 Fixed cell category ranges (must follow):
 ${categoryRanges}
