@@ -1,7 +1,20 @@
 'use client';
 
 import { AnimatePresence, motion } from 'framer-motion';
-import { UploadCloud } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowRight,
+  Camera,
+  Cat,
+  Check,
+  CheckCircle2,
+  Layers3,
+  Palette,
+  Sparkles,
+  UploadCloud,
+  UserCircle2,
+  Wand2,
+} from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { saveResult } from './lib/imageStore';
@@ -259,7 +272,7 @@ export default function Page() {
             </nav>
             <div className="flex items-center gap-3">
               <span className="hidden text-sm font-medium text-primary/70 md:inline-block">步骤 {step} / 6</span>
-              <span className="material-symbols-outlined text-primary">account_circle</span>
+              <UserCircle2 className="h-6 w-6 text-primary" />
             </div>
           </div>
         </div>
@@ -269,7 +282,13 @@ export default function Page() {
         </div>
       </header>
 
-      <main className="mx-auto min-h-screen w-full max-w-5xl px-6 pb-32 pt-28">
+      <main
+        className={`mx-auto w-full max-w-5xl px-6 ${
+          step === 1
+            ? 'pb-24 pt-24 md:h-[calc(100vh-132px)] md:overflow-hidden'
+            : 'min-h-screen pb-32 pt-28'
+        }`}
+      >
         <AnimatePresence mode="wait" initial={false}>
           {step === 1 && (
             <motion.section
@@ -278,67 +297,65 @@ export default function Page() {
               animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
               exit={{ opacity: 0, y: -16, scale: 0.98, filter: 'blur(6px)' }}
               transition={spring}
-              className="relative overflow-hidden rounded-3xl bg-white p-8 md:p-12"
+              className="relative flex h-full flex-col justify-between overflow-hidden rounded-3xl bg-white p-6 md:p-8"
             >
               <div className="absolute -left-20 -top-20 h-52 w-52 rounded-full bg-[#ffdbcc]/40 blur-3xl" />
               <div className="absolute -bottom-16 -right-16 h-44 w-44 rounded-full bg-[#ffb695]/25 blur-3xl" />
 
-              <div className="relative z-10 mx-auto max-w-4xl space-y-12 text-center">
-                <div className="space-y-6">
+              <div className="relative z-10 mx-auto flex h-full w-full max-w-4xl flex-col justify-between text-center">
+                <div className="space-y-4">
                   <div className="inline-flex items-center gap-2 rounded-full bg-[#f1e7d9] px-4 py-1.5 text-sm font-medium text-[#8f4d2c]">
-                    <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>
-                      colors_spark
-                    </span>
+                    <Sparkles className="h-3.5 w-3.5" />
                     出租屋美学策展人
                   </div>
-                  <h1 className="text-5xl font-bold tracking-tight text-[#52372d] md:text-7xl md:leading-[1.1]">
+                  <h1 className="text-4xl font-bold tracking-tight text-[#52372d] md:text-5xl md:leading-[1.1]">
                     欢迎来到 NookAI
                   </h1>
-                  <p className="mx-auto max-w-2xl text-xl font-light leading-relaxed text-[#504440]/80 md:text-2xl">
+                  <p className="mx-auto max-w-2xl text-base font-light leading-relaxed text-[#504440]/80 md:text-lg">
                     帮你把出租屋慢慢变成理想的小角落。
                     <br className="hidden md:block" />
                     不改硬装，也能看到明显变化。
                   </p>
                 </div>
 
-                <div className="flex flex-col items-center gap-6">
+                <div className="mt-5 flex flex-col items-center gap-4">
                   <button
                     type="button"
                     onClick={goNext}
-                    className="group relative overflow-hidden rounded-2xl bg-[#52372d] px-12 py-5 text-xl font-semibold text-white shadow-2xl shadow-[#52372d]/10 transition-all duration-500 hover:scale-[1.02] active:scale-95"
+                    className="group relative overflow-hidden rounded-2xl bg-[#52372d] px-10 py-4 text-lg font-semibold text-white shadow-2xl shadow-[#52372d]/10 transition-all duration-500 hover:scale-[1.02] active:scale-95"
                   >
                     <span className="relative z-10">开始改造</span>
                     <div className="absolute inset-0 bg-gradient-to-r from-[#52372d] via-[#6b4e43] to-[#52372d] opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
                   </button>
                   <p className="flex items-center gap-2 text-sm text-[#504440]/60">
-                    <span className="material-symbols-outlined text-base">auto_awesome</span>
+                    <Sparkles className="h-4 w-4" />
                     AI 已准备好为你重新定义空间
                   </p>
                 </div>
 
-                <div className="mt-8 grid grid-cols-1 gap-6 text-left md:grid-cols-3">
-                  <div className="space-y-4 rounded-3xl border border-[#d4c3be]/20 bg-[#fcf2e4] p-8">
+                <div className="mt-6 grid grid-cols-1 gap-4 text-left md:grid-cols-3">
+                  <div className="space-y-3 rounded-3xl border border-[#d4c3be]/20 bg-[#fcf2e4] p-5">
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#fca780]/20 text-[#8f4d2c]">
-                      <span className="material-symbols-outlined">palette</span>
+                      <Palette className="h-5 w-5" />
                     </div>
-                    <h3 className="text-lg font-bold text-[#52372d]">软装配色方案</h3>
-                    <p className="text-sm leading-relaxed text-[#504440]/70">基于现有家具，推荐最契合的软装色系与材质组合。</p>
+                    <h3 className="text-base font-bold text-[#52372d]">软装配色方案</h3>
+                    <p className="text-xs leading-relaxed text-[#504440]/70">基于现有家具，推荐最契合的软装色系与材质组合。</p>
                   </div>
 
-                  <div className="space-y-4 rounded-3xl border border-[#d4c3be]/20 bg-[#fcf2e4] p-8">
+                  <div className="space-y-3 rounded-3xl border border-[#d4c3be]/20 bg-[#fcf2e4] p-5">
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#fca780]/20 text-[#8f4d2c]">
-                      <span className="material-symbols-outlined">photo_camera</span>
+                      <Camera className="h-5 w-5" />
                     </div>
-                    <h3 className="text-lg font-bold text-[#52372d]">AI 实景改造</h3>
-                    <p className="text-sm leading-relaxed text-[#504440]/70">拍照上传，即刻预览不同风格在你房间的真实效果。</p>
+                    <h3 className="text-base font-bold text-[#52372d]">AI 实景改造</h3>
+                    <p className="text-xs leading-relaxed text-[#504440]/70">拍照上传，即刻预览不同风格在你房间的真实效果。</p>
                   </div>
 
-                  <div className="space-y-4 rounded-3xl border border-[#d4c3be]/20 bg-[#fcf2e4] p-8">
+                  <div className="space-y-3 rounded-3xl border border-[#d4c3be]/20 bg-[#fcf2e4] p-5">
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#fca780]/20 text-[#8f4d2c]">
-                      <span className="material-symbols-outlined">shopping_bag</span>
+                      <Wand2 className="h-5 w-5" />
                     </div>
-                    <h3 className="text-lg font-bold text-[#52372d]">精选物料清单</h3>
-                    <p className="text-sm leading-relaxed text-[#504440]/70">为你匹配高性价比好物，一键落地方案。</p>
+                    <h3 className="text-base font-bold text-[#52372d]">精选物料清单</h3>
+                    <p className="text-xs leading-relaxed text-[#504440]/70">为你匹配高性价比好物，一键落地方案。</p>
                   </div>
                 </div>
               </div>
@@ -378,12 +395,19 @@ export default function Page() {
                       }`}
                     >
                       <div className={`relative w-full ${aspectClass}`}>
-                        <img src={option.image} alt={option.label} className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                        <img
+                          src={option.image}
+                          alt={option.label}
+                          loading="lazy"
+                          decoding="async"
+                          referrerPolicy="no-referrer"
+                          className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                        />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/10 to-transparent" />
 
                         {selected && (
                           <div className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-[#52372d] text-white">
-                            <span className="material-symbols-outlined text-lg">check</span>
+                            <Check className="h-4 w-4" />
                           </div>
                         )}
 
@@ -509,7 +533,7 @@ export default function Page() {
                       }}
                     >
                       {previewUrl ? (
-                        <img src={previewUrl} alt="上传预览" className="h-full w-full rounded-[22px] object-cover" />
+                        <img src={previewUrl} alt="上传预览" className="h-full w-full rounded-[22px] object-contain" />
                       ) : (
                         <>
                           <div className="mb-4 rounded-full bg-[#52372d]/5 p-6">
@@ -527,7 +551,7 @@ export default function Page() {
                   <div className="rounded-3xl border border-[#d4c3be]/20 bg-[#ebe1d3] p-4 shadow-sm">
                     <div className="group relative mb-4 aspect-[3/4] overflow-hidden rounded-2xl bg-[#fcf2e4]">
                       {previewUrl ? (
-                        <img src={previewUrl} alt="房间预览" className="h-full w-full object-cover" />
+                        <img src={previewUrl} alt="房间预览" className="h-full w-full object-contain" />
                       ) : (
                         <div className="flex h-full items-center justify-center px-6 text-center text-sm text-[#827470]">上传后这里会显示你的房间预览图</div>
                       )}
@@ -535,7 +559,7 @@ export default function Page() {
 
                     <div className="space-y-2 px-1 text-sm">
                       <div className="flex items-center gap-2 text-[#52372d]">
-                        <span className="material-symbols-outlined text-[20px]">check_circle</span>
+                        <CheckCircle2 className="h-5 w-5" />
                         <span className="font-semibold">照片质量良好</span>
                       </div>
                       <p className="leading-relaxed text-[#504440]">我们会保留原有布局，仅提供软装建议。光影处理已自动优化。</p>
@@ -562,7 +586,7 @@ export default function Page() {
                 : 'border-[#d4c3be] text-[#52372d] hover:bg-[#fcf2e4]'
             }`}
           >
-            <span className="material-symbols-outlined">arrow_back</span>
+            <ArrowLeft className="h-4 w-4" />
             上一步
           </button>
 
@@ -573,7 +597,7 @@ export default function Page() {
               className="flex items-center gap-2 rounded-2xl bg-[#52372d] px-10 py-3 font-bold text-white shadow-lg shadow-[#52372d]/20 transition-all hover:bg-[#6b4e43] active:scale-95"
             >
               下一步
-              <span className="material-symbols-outlined">arrow_forward</span>
+              <ArrowRight className="h-4 w-4" />
             </button>
           ) : (
             <button
@@ -587,7 +611,7 @@ export default function Page() {
               }`}
             >
               开始生成
-              <span className="material-symbols-outlined">magic_button</span>
+              <Wand2 className="h-4 w-4" />
             </button>
           )}
         </div>
@@ -606,14 +630,12 @@ export default function Page() {
             <div className="relative mb-12 flex h-48 w-48 items-center justify-center">
               <div className="absolute inset-0 rounded-full border border-[#ebe1d3]/20" />
               <div className="relative flex flex-col items-center text-[#fff8f2]">
-                <motion.span
-                  className="material-symbols-outlined text-6xl"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
+                <motion.div
                   animate={{ y: [0, -12, 0] }}
                   transition={{ duration: 0.95, repeat: Infinity, ease: 'easeInOut' }}
                 >
-                  pets
-                </motion.span>
+                  <Cat className="h-14 w-14" />
+                </motion.div>
                 <p className="mt-4 text-xs font-semibold uppercase tracking-widest text-[#fff8f2]/40">AI Curator is working</p>
               </div>
             </div>
@@ -631,9 +653,7 @@ export default function Page() {
 
             <div className="w-full max-w-md rounded-2xl border border-[#fff8f2]/10 bg-[#fff8f2]/5 p-6 text-left backdrop-blur-md">
               <div className="flex items-start gap-4">
-                <span className="material-symbols-outlined text-[#fca780]" style={{ fontVariationSettings: "'FILL' 1" }}>
-                  auto_awesome
-                </span>
+                <Sparkles className="h-5 w-5 text-[#fca780]" />
                 <div>
                   <h4 className="mb-1 text-sm font-semibold text-[#fff8f2]">赋予空间灵魂</h4>
                   <p className="text-xs leading-relaxed text-[#fff8f2]/65">我们不仅是在重新排列家具，更是在为你编织一个更有温度的居住空间。</p>
@@ -657,9 +677,10 @@ export default function Page() {
               key={label}
               className={`flex flex-col items-center justify-center px-5 py-2 ${active ? 'rounded-2xl bg-[#6b4e43] text-[#fff8f2]' : 'text-[#52372d]/60'}`}
             >
-              <span className="material-symbols-outlined" style={active ? { fontVariationSettings: "'FILL' 1" } : undefined}>
-                {index === 0 ? 'auto_awesome' : index === 1 ? 'architecture' : index === 2 ? 'layers' : 'person'}
-              </span>
+              {index === 0 ? <Sparkles className="h-4 w-4" /> : null}
+              {index === 1 ? <Wand2 className="h-4 w-4" /> : null}
+              {index === 2 ? <Layers3 className="h-4 w-4" /> : null}
+              {index === 3 ? <UserCircle2 className="h-4 w-4" /> : null}
               <span className="mt-1 text-[11px] font-medium tracking-wider">{label}</span>
             </div>
           );
