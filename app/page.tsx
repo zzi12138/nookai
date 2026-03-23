@@ -14,10 +14,10 @@ import {
 import { saveResult } from './lib/imageStore';
 
 const styles = [
-  { label: '日式原木风', desc: '安静、克制、自然木感' },
-  { label: '奶油温柔风', desc: '柔软、温暖、低饱和' },
-  { label: '文艺复古风', desc: '有故事感和生活细节' },
-  { label: '现代极简风', desc: '清爽、留白、结构感' },
+  { label: '日式原木风', desc: '自然木质、低饱和、安静放松' },
+  { label: '奶油温柔风', desc: '柔和奶油色、轻盈松弛' },
+  { label: '文艺复古风', desc: '有故事感，层次丰富' },
+  { label: '现代极简风', desc: '清爽克制，功能优先' },
 ];
 
 const constraintOptions = [
@@ -232,305 +232,292 @@ export default function Page() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FDF9F1] px-4 py-10">
-      <div className="mx-auto w-full max-w-[560px] md:max-w-[700px]">
+    <div className="min-h-screen bg-[#fff8f2] text-[#1f1b13]">
+      <header className="fixed top-0 z-40 w-full border-b border-[#ebe1d3]/60 bg-[#fff8f2]/85 backdrop-blur-xl">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-4">
+          <div className="text-2xl font-bold tracking-tight text-[#52372d]">NookAI</div>
+          <div className="hidden items-center gap-8 text-sm text-[#52372d]/70 md:flex">
+            <span>灵感</span>
+            <span className="font-semibold text-[#8f4d2c]">改造</span>
+            <span>方案</span>
+          </div>
+          <div className="inline-flex items-center rounded-full bg-[#fcf2e4] px-3 py-1 text-xs font-semibold text-[#8f4d2c]">
+            Step {step}/{totalSteps}
+          </div>
+        </div>
+      </header>
+
+      <main className="mx-auto w-full max-w-6xl px-6 pb-40 pt-28">
+        <div className="mb-8">
+          <div className="mb-3 flex items-end justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#8f4d2c]">Nook Wizard</p>
+              <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-[#52372d] md:text-4xl">
+                {step === 1 && '欢迎来到 NookAI'}
+                {step === 2 && '选择你偏爱的空间风格'}
+                {step === 3 && '确认租房改造边界'}
+                {step === 4 && '添加生活方式偏好'}
+                {step === 5 && '补充个性化细节'}
+                {step === 6 && '上传房间照片，开始改造'}
+              </h1>
+            </div>
+            <p className="hidden text-2xl font-bold text-[#52372d] md:block">{Math.round(progress)}%</p>
+          </div>
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#ebe1d3]">
+            <motion.div className="h-full rounded-full bg-[#8f4d2c]" animate={{ width: `${progress}%` }} transition={spring} />
+          </div>
+        </div>
+
         <motion.div
           layout
-          initial={{ opacity: 0, y: 40, scale: 0.96, filter: 'blur(6px)' }}
-          animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
-          transition={{ ...spring, layout: { type: 'spring', stiffness: 135, damping: 22 } }}
-          className="overflow-hidden rounded-3xl bg-white p-7 shadow-xl shadow-stone-200/50 md:p-10"
+          transition={{ type: 'spring', stiffness: 135, damping: 22 }}
+          className="rounded-3xl border border-[#ebe1d3]/70 bg-[#fcf2e4] p-5 md:p-7"
         >
-          <div className="mb-7">
-            <div className="mb-2 flex items-center justify-between text-xs text-stone-400">
-              <span>STEP {step}</span>
-              <span>{totalSteps}</span>
-            </div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-stone-100">
-              <motion.div
-                className="h-full rounded-full bg-stone-800"
-                animate={{ width: `${progress}%` }}
-                transition={spring}
-              />
-            </div>
-          </div>
-
-          <motion.div
-            layout
-            transition={{ type: 'spring', stiffness: 135, damping: 22 }}
-            className="min-h-[360px] md:min-h-[390px]"
-          >
           <AnimatePresence mode="wait" initial={false}>
             {step === 1 ? (
               <motion.section
-                layout
                 key="step-1"
-                initial={{ opacity: 0, y: 40, scale: 0.96, filter: 'blur(6px)' }}
+                initial={{ opacity: 0, y: 28, scale: 0.98, filter: 'blur(6px)' }}
                 animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
-                exit={{ opacity: 0, y: -20, scale: 0.98, filter: 'blur(4px)' }}
+                exit={{ opacity: 0, y: -12, scale: 0.99, filter: 'blur(4px)' }}
                 transition={spring}
-                className="space-y-5"
+                className="space-y-6 rounded-3xl bg-white p-8"
               >
-                <div className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-xs text-amber-700">
-                  <Cat size={14} />
-                  NookAI 小窝
+                <div className="inline-flex items-center gap-2 rounded-full bg-[#ffdbcc]/70 px-4 py-1.5 text-xs font-medium text-[#713618]">
+                  <Sparkles size={14} />
+                  出租屋美学策展人
                 </div>
-                <h1 className="text-3xl font-semibold tracking-tight text-stone-900">
-                  住在出租屋，也能有松弛感和高级感
-                </h1>
-                <p className="text-sm leading-7 text-stone-500">
-                  我们会保留原有结构，用低预算可落地的软装方案，帮你把房间变成更舒服的小窝。
+                <h2 className="text-4xl font-extrabold tracking-tight text-[#52372d] md:text-5xl">让出租屋，也有家的温度</h2>
+                <p className="max-w-2xl text-base leading-8 text-[#504440]">
+                  我们保留你房间的结构与硬装，只通过灯光、布艺、装饰和收纳来完成低预算焕新。
                 </p>
               </motion.section>
             ) : null}
 
             {step === 2 ? (
               <motion.section
-                layout
                 key="step-2"
-                initial={{ opacity: 0, y: 40, scale: 0.96, filter: 'blur(6px)' }}
+                initial={{ opacity: 0, y: 28, scale: 0.98, filter: 'blur(6px)' }}
                 animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
-                exit={{ opacity: 0, y: -20, scale: 0.98, filter: 'blur(4px)' }}
+                exit={{ opacity: 0, y: -12, scale: 0.99, filter: 'blur(4px)' }}
                 transition={spring}
-                className="space-y-4"
+                className="grid grid-cols-1 gap-4 md:grid-cols-2"
               >
-                <h2 className="text-2xl font-semibold text-stone-900">你想要哪种氛围？</h2>
-                <p className="text-sm text-stone-500">先定一个主基调，后面我们再细化。</p>
-                <div className="grid gap-3">
-                  {styles.map((item) => {
-                    const selected = item.label === selectedStyle;
-                    return (
-                      <motion.button
-                        key={item.label}
-                        type="button"
-                        whileHover={{ y: -2 }}
-                        whileTap={{ scale: 0.99 }}
-                        animate={{ scale: selected ? 1.03 : 1 }}
-                        transition={spring}
-                        onClick={() => setSelectedStyle(item.label)}
-                        className={`rounded-2xl border p-4 text-left transition ${
-                          selected
-                            ? 'border-stone-800 bg-stone-50 shadow-lg shadow-stone-200/70'
-                            : 'border-stone-200 bg-white hover:shadow-md'
-                        }`}
-                      >
-                        <p className="text-sm font-medium text-stone-800">{item.label}</p>
-                        <p className="mt-1 text-xs text-stone-500">{item.desc}</p>
-                      </motion.button>
-                    );
-                  })}
-                </div>
+                {styles.map((item) => {
+                  const selected = item.label === selectedStyle;
+                  return (
+                    <motion.button
+                      key={item.label}
+                      type="button"
+                      whileHover={{ y: -2 }}
+                      whileTap={{ scale: 0.99 }}
+                      transition={spring}
+                      onClick={() => setSelectedStyle(item.label)}
+                      className={`rounded-3xl border p-5 text-left transition ${
+                        selected
+                          ? 'border-[#6b4e43] bg-white shadow-lg shadow-[#52372d]/10'
+                          : 'border-[#d4c3be] bg-[#fff8f2] hover:bg-white'
+                      }`}
+                    >
+                      <p className="text-lg font-bold text-[#52372d]">{item.label}</p>
+                      <p className="mt-1 text-sm text-[#504440]">{item.desc}</p>
+                    </motion.button>
+                  );
+                })}
               </motion.section>
             ) : null}
 
             {step === 3 ? (
               <motion.section
-                layout
                 key="step-3"
-                initial={{ opacity: 0, y: 40, scale: 0.96, filter: 'blur(6px)' }}
+                initial={{ opacity: 0, y: 28, scale: 0.98, filter: 'blur(6px)' }}
                 animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
-                exit={{ opacity: 0, y: -20, scale: 0.98, filter: 'blur(4px)' }}
+                exit={{ opacity: 0, y: -12, scale: 0.99, filter: 'blur(4px)' }}
                 transition={spring}
-                className="space-y-4"
+                className="grid grid-cols-2 gap-3 md:grid-cols-3"
               >
-                <h2 className="text-2xl font-semibold text-stone-900">改造边界怎么定？</h2>
-                <p className="text-sm text-stone-500">这些约束会写进提示词，帮你守住租房底线。</p>
-                <div className="grid grid-cols-2 gap-3">
-                  {constraintOptions.map((item) => {
-                    const selected = selectedConstraints.includes(item.label);
-                    return (
-                      <motion.button
-                        key={item.label}
-                        type="button"
-                        whileHover={{ y: -2 }}
-                        whileTap={{ scale: 0.99 }}
-                        animate={{ scale: selected ? 1.03 : 1 }}
-                        transition={spring}
-                        onClick={() =>
-                          toggleInArray(item.label, selectedConstraints, setSelectedConstraints)
-                        }
-                        className={`rounded-2xl border p-4 text-left text-sm transition ${
-                          selected
-                            ? 'border-stone-800 bg-stone-50 shadow-lg shadow-stone-200/70'
-                            : 'border-stone-200 bg-white hover:shadow-md'
-                        }`}
-                      >
-                        {item.label}
-                      </motion.button>
-                    );
-                  })}
-                </div>
+                {constraintOptions.map((item) => {
+                  const selected = selectedConstraints.includes(item.label);
+                  return (
+                    <motion.button
+                      key={item.label}
+                      type="button"
+                      whileHover={{ y: -2 }}
+                      whileTap={{ scale: 0.99 }}
+                      transition={spring}
+                      onClick={() => toggleInArray(item.label, selectedConstraints, setSelectedConstraints)}
+                      className={`rounded-2xl border px-4 py-3 text-sm transition ${
+                        selected
+                          ? 'border-[#52372d] bg-white font-semibold text-[#52372d]'
+                          : 'border-[#d4c3be] bg-[#fff8f2] text-[#504440]'
+                      }`}
+                    >
+                      {item.label}
+                    </motion.button>
+                  );
+                })}
               </motion.section>
             ) : null}
 
             {step === 4 ? (
               <motion.section
-                layout
                 key="step-4"
-                initial={{ opacity: 0, y: 40, scale: 0.96, filter: 'blur(6px)' }}
+                initial={{ opacity: 0, y: 28, scale: 0.98, filter: 'blur(6px)' }}
                 animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
-                exit={{ opacity: 0, y: -20, scale: 0.98, filter: 'blur(4px)' }}
+                exit={{ opacity: 0, y: -12, scale: 0.99, filter: 'blur(4px)' }}
                 transition={spring}
-                className="space-y-4"
+                className="grid grid-cols-2 gap-3 md:grid-cols-3"
               >
-                <h2 className="text-2xl font-semibold text-stone-900">再加一点生活偏好</h2>
-                <p className="text-sm text-stone-500">多选你在意的生活方式，我们会重点优化。</p>
-                <div className="grid grid-cols-2 gap-3">
-                  {requirementOptions.map((item) => {
-                    const selected = selectedRequirements.includes(item.label);
-                    return (
-                      <motion.button
-                        key={item.label}
-                        type="button"
-                        whileHover={{ y: -2 }}
-                        whileTap={{ scale: 0.99 }}
-                        animate={{ scale: selected ? 1.03 : 1 }}
-                        transition={spring}
-                        onClick={() =>
-                          toggleInArray(item.label, selectedRequirements, setSelectedRequirements)
-                        }
-                        className={`rounded-2xl border p-4 text-left text-sm transition ${
-                          selected
-                            ? 'border-stone-800 bg-stone-50 shadow-lg shadow-stone-200/70'
-                            : 'border-stone-200 bg-white hover:shadow-md'
-                        }`}
-                      >
-                        {item.label}
-                      </motion.button>
-                    );
-                  })}
-                </div>
+                {requirementOptions.map((item) => {
+                  const selected = selectedRequirements.includes(item.label);
+                  return (
+                    <motion.button
+                      key={item.label}
+                      type="button"
+                      whileHover={{ y: -2 }}
+                      whileTap={{ scale: 0.99 }}
+                      transition={spring}
+                      onClick={() => toggleInArray(item.label, selectedRequirements, setSelectedRequirements)}
+                      className={`rounded-2xl border px-4 py-3 text-sm transition ${
+                        selected
+                          ? 'border-[#52372d] bg-white font-semibold text-[#52372d]'
+                          : 'border-[#d4c3be] bg-[#fff8f2] text-[#504440]'
+                      }`}
+                    >
+                      {item.label}
+                    </motion.button>
+                  );
+                })}
               </motion.section>
             ) : null}
 
             {step === 5 ? (
               <motion.section
-                layout
                 key="step-5"
-                initial={{ opacity: 0, y: 40, scale: 0.96, filter: 'blur(6px)' }}
+                initial={{ opacity: 0, y: 28, scale: 0.98, filter: 'blur(6px)' }}
                 animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
-                exit={{ opacity: 0, y: -20, scale: 0.98, filter: 'blur(4px)' }}
+                exit={{ opacity: 0, y: -12, scale: 0.99, filter: 'blur(4px)' }}
                 transition={spring}
-                className="space-y-4"
+                className="rounded-3xl bg-white p-5"
               >
-                <h2 className="text-2xl font-semibold text-stone-900">还有什么偏好吗？</h2>
-                <p className="text-sm text-stone-500">可以写一句你最在意的小细节。</p>
                 <textarea
                   value={customRequirement}
                   onChange={(event) => setCustomRequirement(event.target.value)}
-                  placeholder="例如：希望看电影时有更温暖的角落光线"
-                  className="min-h-[140px] w-full resize-none rounded-2xl bg-stone-50 p-4 text-sm text-stone-700 outline-none placeholder:text-stone-400"
+                  placeholder="例如：希望有一个更适合下班放松的暖光角落"
+                  className="min-h-[180px] w-full resize-none rounded-2xl border border-[#ebe1d3] bg-[#fff8f2] p-4 text-sm text-[#1f1b13] outline-none placeholder:text-[#827470]"
                 />
               </motion.section>
             ) : null}
 
             {step === 6 ? (
               <motion.section
-                layout
                 key="step-6"
-                initial={{ opacity: 0, y: 40, scale: 0.96, filter: 'blur(6px)' }}
+                initial={{ opacity: 0, y: 28, scale: 0.98, filter: 'blur(6px)' }}
                 animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
-                exit={{ opacity: 0, y: -20, scale: 0.98, filter: 'blur(4px)' }}
+                exit={{ opacity: 0, y: -12, scale: 0.99, filter: 'blur(4px)' }}
                 transition={spring}
-                className="space-y-4"
+                className="grid grid-cols-1 gap-6 lg:grid-cols-12"
               >
-                <h2 className="text-2xl font-semibold text-stone-900">上传你的房间照片</h2>
-                <p className="text-sm text-stone-500">正面视角、光线清楚，生成效果会更稳定。</p>
-                <motion.button
-                  type="button"
-                  onClick={() => inputRef.current?.click()}
-                  whileHover={{ y: -2 }}
-                  whileTap={{ scale: 0.99 }}
-                  transition={spring}
-                  className="group flex h-[220px] w-full items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-amber-300/70 bg-amber-50/70 md:h-[250px]"
-                >
-                  {previewUrl ? (
-                    <img
-                      src={previewUrl}
-                      alt="上传预览"
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="text-center">
-                      <UploadCloud
-                        size={30}
-                        className="mx-auto text-stone-500 transition group-hover:text-stone-700"
-                      />
-                      <p className="mt-3 text-sm text-stone-700">传一张照片，开始改造</p>
-                      <p className="mt-1 text-xs text-stone-400">支持 JPG / PNG</p>
+                <div className="lg:col-span-7">
+                  <motion.button
+                    type="button"
+                    onClick={() => inputRef.current?.click()}
+                    whileHover={{ y: -2 }}
+                    whileTap={{ scale: 0.99 }}
+                    transition={spring}
+                    className="group flex aspect-[4/3] w-full items-center justify-center overflow-hidden rounded-3xl border-2 border-dashed border-[#d4c3be] bg-[#f1e7d9]"
+                  >
+                    {previewUrl ? (
+                      <img src={previewUrl} alt="上传预览" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="text-center">
+                        <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-white/70 text-[#52372d]">
+                          <UploadCloud size={30} />
+                        </div>
+                        <p className="text-sm font-semibold text-[#52372d]">点击或拖拽上传</p>
+                        <p className="mt-1 text-xs text-[#504440]">支持 JPG / PNG</p>
+                      </div>
+                    )}
+                  </motion.button>
+                </div>
+                <div className="lg:col-span-5">
+                  <div className="rounded-3xl border border-[#d4c3be]/50 bg-white p-4">
+                    <div className="relative mb-4 aspect-[3/4] overflow-hidden rounded-2xl bg-[#fcf2e4]">
+                      {previewUrl ? (
+                        <img src={previewUrl} alt="预览图" className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-sm text-[#827470]">等待上传照片</div>
+                      )}
                     </div>
-                  )}
-                </motion.button>
-                {error ? <p className="text-sm text-red-500">{error}</p> : null}
+                    <div className="space-y-1 text-sm text-[#504440]">
+                      <p className="font-semibold text-[#52372d]">照片建议：正面视角、光线充足</p>
+                      <p>我们会保留结构，仅做软装与氛围优化。</p>
+                    </div>
+                  </div>
+                </div>
+                {error ? <p className="text-sm text-[#ba1a1a] lg:col-span-12">{error}</p> : null}
               </motion.section>
             ) : null}
           </AnimatePresence>
-          </motion.div>
+        </motion.div>
+      </main>
 
-          <div className="mt-8 flex items-center justify-between">
+      <footer className="fixed bottom-0 left-0 z-40 w-full border-t border-[#ebe1d3]/60 bg-[#fff8f2]/92 backdrop-blur-xl">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-5">
+          <motion.button
+            type="button"
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.98 }}
+            transition={spring}
+            onClick={prevStep}
+            disabled={step === 1}
+            className={`inline-flex items-center gap-2 rounded-2xl border px-5 py-3 text-sm font-semibold ${
+              step === 1
+                ? 'cursor-not-allowed border-[#d4c3be] text-[#b8a8a2]'
+                : 'border-[#d4c3be] text-[#52372d] hover:bg-[#fcf2e4]'
+            }`}
+          >
+            <ChevronLeft size={16} /> 上一步
+          </motion.button>
+
+          {step < totalSteps ? (
             <motion.button
               type="button"
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.98 }}
               transition={spring}
-              onClick={prevStep}
-              disabled={step === 1}
-              className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm ${
-                step === 1
-                  ? 'cursor-not-allowed text-stone-300'
-                  : 'text-stone-500 hover:bg-stone-100'
+              onClick={nextStep}
+              className="inline-flex items-center gap-2 rounded-2xl bg-[#52372d] px-8 py-3 text-sm font-bold text-white shadow-lg shadow-[#52372d]/20"
+            >
+              下一步 <ChevronRight size={16} />
+            </motion.button>
+          ) : (
+            <motion.button
+              type="button"
+              whileHover={{ scale: canProceed ? 1.03 : 1 }}
+              whileTap={{ scale: canProceed ? 0.98 : 1 }}
+              transition={spring}
+              onClick={handleSubmit}
+              disabled={!canProceed || isLoading}
+              className={`inline-flex items-center gap-2 rounded-2xl px-8 py-3 text-sm font-bold ${
+                canProceed && !isLoading
+                  ? 'bg-[#52372d] text-white shadow-lg shadow-[#52372d]/20'
+                  : 'cursor-not-allowed bg-[#d4c3be] text-[#827470]'
               }`}
             >
-              <ChevronLeft size={16} />
-              上一步
+              <Check size={16} />
+              {canProceed ? '开始生成' : '请先上传图片'}
             </motion.button>
+          )}
+        </div>
+      </footer>
 
-            {step < totalSteps ? (
-              <motion.button
-                type="button"
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.98 }}
-                transition={spring}
-                onClick={nextStep}
-                className="inline-flex items-center gap-2 rounded-full bg-stone-900 px-6 py-3 text-sm font-medium text-white shadow-sm"
-              >
-                下一步
-                <ChevronRight size={16} />
-              </motion.button>
-            ) : (
-              <motion.button
-                type="button"
-                whileHover={{ scale: canProceed ? 1.03 : 1 }}
-                whileTap={{ scale: canProceed ? 0.98 : 1 }}
-                transition={spring}
-                onClick={handleSubmit}
-                disabled={!canProceed || isLoading}
-                className={`inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-medium ${
-                  canProceed && !isLoading
-                    ? 'bg-stone-900 text-white shadow-sm'
-                    : 'cursor-not-allowed bg-stone-200 text-stone-500'
-                }`}
-              >
-                <Check size={16} />
-                {canProceed ? '开始生成' : '请先上传图片'}
-              </motion.button>
-            )}
-          </div>
-        </motion.div>
-      </div>
-
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={handleFileChange}
-      />
+      <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
 
       <AnimatePresence>
         {isLoading ? (
           <motion.div
-            className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/45 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#1f1b13]/88 backdrop-blur-xl"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -538,14 +525,14 @@ export default function Page() {
             <motion.div
               animate={{ y: [0, -14, 0] }}
               transition={{ duration: 0.9, repeat: Infinity, ease: 'easeInOut' }}
-              className="mb-6 rounded-full bg-amber-100 p-4"
+              className="mb-6 rounded-full bg-[#ffdbcc]/20 p-5"
             >
-              <Cat size={40} className="text-amber-600" />
+              <Cat size={42} className="text-[#ffb695]" />
             </motion.div>
-            <p className="text-sm text-white/90">AI 正在为你设计小窝...</p>
-            <div className="mt-5 h-1.5 w-56 overflow-hidden rounded-full bg-white/30">
+            <p className="text-base font-medium text-[#f9efe1]">AI 正在为你生成理想空间...</p>
+            <div className="mt-5 h-1.5 w-64 overflow-hidden rounded-full bg-white/20">
               <motion.div
-                className="h-full rounded-full bg-amber-300"
+                className="h-full rounded-full bg-[#fca780]"
                 animate={{ width: `${loadingProgress}%` }}
                 transition={{ type: 'spring', stiffness: 80, damping: 18 }}
               />

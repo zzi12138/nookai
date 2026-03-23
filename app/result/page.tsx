@@ -888,40 +888,51 @@ export default function ResultPage() {
   const afterClip = `inset(0 ${100 - comparePercent}% 0 0)`;
 
   return (
-    <div className="min-h-screen bg-[#FDF9F1] px-5 py-7 text-stone-800 lg:px-8 lg:py-8">
-      <div className="mx-auto w-full max-w-[1680px] space-y-5">
-        <motion.header
+    <div className="min-h-screen bg-[#fff8f2] text-[#1f1b13]">
+      <header className="fixed top-0 z-40 w-full border-b border-[#ebe1d3]/60 bg-[#fff8f2]/85 backdrop-blur-xl">
+        <div className="mx-auto flex w-full max-w-[1680px] items-center justify-between px-6 py-4 lg:px-8">
+          <div className="text-2xl font-bold tracking-tight text-[#52372d]">NookAI</div>
+          <div className="hidden items-center gap-8 text-sm text-[#52372d]/70 md:flex">
+            <span>灵感</span>
+            <span className="font-semibold text-[#8f4d2c]">改造</span>
+            <span>方案</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => router.push('/')}
+            className="inline-flex items-center gap-2 rounded-2xl bg-[#52372d] px-4 py-2 text-sm font-semibold text-white"
+          >
+            <RefreshCw size={15} />
+            重新生成
+          </button>
+        </div>
+      </header>
+
+      <div className="mx-auto w-full max-w-[1680px] space-y-5 px-5 pb-8 pt-24 text-stone-800 lg:px-8">
+        <motion.section
           initial={{ opacity: 0, y: 20, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={spring}
-          className="rounded-[28px] bg-white px-7 py-6 shadow-sm ring-1 ring-stone-100"
+          className="rounded-[28px] border border-[#ebe1d3]/70 bg-[#fcf2e4] px-7 py-6"
         >
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <p className="text-xs uppercase tracking-[0.24em] text-stone-400">RESULT + PURCHASE GUIDE</p>
-              <h1 className="mt-1 text-3xl font-semibold text-stone-900">效果图与购物指南</h1>
-              <p className="mt-2 text-sm text-stone-500">{summary || '已从当前效果图识别关键可购买物件。'}</p>
+              <p className="text-xs uppercase tracking-[0.24em] text-[#8f4d2c]">RESULT + PURCHASE GUIDE</p>
+              <h1 className="mt-1 text-3xl font-semibold text-[#52372d]">效果图与购物指南</h1>
+              <p className="mt-2 text-sm text-[#504440]">{summary || '已从当前效果图识别关键可购买物件。'}</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={saveResult}
-                className="inline-flex items-center gap-2 rounded-full border border-stone-200 px-4 py-2 text-sm text-stone-700"
+                className="inline-flex items-center gap-2 rounded-full border border-[#d4c3be] bg-white px-4 py-2 text-sm font-semibold text-[#52372d]"
               >
                 <Save size={15} />
                 保存效果图
               </button>
-              <button
-                type="button"
-                onClick={() => router.push('/')}
-                className="inline-flex items-center gap-2 rounded-full bg-stone-900 px-4 py-2 text-sm text-white"
-              >
-                <RefreshCw size={15} />
-                重新生成
-              </button>
             </div>
           </div>
-        </motion.header>
+        </motion.section>
 
         <div className="grid items-stretch gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
           <motion.section
