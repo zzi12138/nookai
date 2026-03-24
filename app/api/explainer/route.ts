@@ -2,8 +2,6 @@ import { NextResponse } from 'next/server';
 import { generateImage } from '../../lib/server/imageProvider';
 import {
   assignItemsToBoardCells,
-  CATEGORY_SLOT_RANGES,
-  getFixedBoardCells,
   ITEMS_BOARD_CONFIG,
   type BoardCell,
 } from '../../lib/itemsBoard';
@@ -435,29 +433,12 @@ function getPrompt(theme: string, hasBefore: boolean) {
 `.trim();
 }
 
-function twoDigit(index: number) {
-  return String(index).padStart(2, '0');
-}
-
 function buildItemsBoardPrompt(theme: string, items: NormalizedItem[]) {
-  const cells = getFixedBoardCells();
-  const assignedLines = items
+  const assignedOrder = items
     .filter((item) => item.boardCell)
     .sort((a, b) => (a.boardCell?.index || 99) - (b.boardCell?.index || 99))
-    .map((item) => {
-      const slot = item.boardCell?.index || 1;
-      return `CELL-${twoDigit(slot)} | ${item.category} | ${item.name}`;
-    })
-    .join('\n');
-
-  const emptySlots = cells
-    .filter((cell) => !items.some((item) => item.boardCell?.index === cell.index))
-    .map((cell) => `CELL-${twoDigit(cell.index)}`)
-    .join(', ');
-
-  const categoryRanges = Object.entries(CATEGORY_SLOT_RANGES)
-    .map(([category, slots]) => `${category}: ${slots.map((slot) => `CELL-${twoDigit(slot)}`).join(', ')}`)
-    .join('\n');
+    .map((item) => `${item.name}（${item.category}）`)
+    .join('、');
 
   return `
 Use the provided generated room image as visual reference.
@@ -465,24 +446,25 @@ Generate ONE hidden internal extraction board for deterministic thumbnail crops.
 
 ABSOLUTE LAYOUT RULES (MUST FOLLOW):
 1) Final board canvas MUST be exactly ${ITEMS_BOARD_CONFIG.width}x${ITEMS_BOARD_CONFIG.height} pixels (4:3).
-2) Use a strict 4 columns x 3 rows grid (12 fixed cells with transparent sidelines).
-3) Every cell contains exactly one complete object, centered, with visible padding.
-4) No overlap, no collage, no perspective scene, no architecture, no background room.
-5) White or very light neutral background only.
-6) Objects must preserve color/material/style from the generated room.
-7) Do NOT output partial fragments, zoomed textures, or cropped corners.
-8) Include at least 10 purchasable objects in total.
-9) Forbidden targets: wall paint/color, ceiling, flooring material, doors/windows, architecture changes.
-10) no any nubmers or letters, just picutres
+2) Use an INVISIBLE 4 columns x 3 rows layout map (12 fixed slots). Do NOT draw slot borders or grid lines.
+3) Each slot contains exactly ONE complete object, centered both horizontally and vertically.
+4) Object scale in each slot: 60% to 70% of slot area, keep clear blank margin around the object.
+5) No overlap, no collage, no perspective room scene, no architecture, no background room.
+6) Background must be pure white or very light neutral only.
+7) Keep object color/material/style consistent with the generated room image.
+8) No partial fragments, no zoomed texture patches, no cut corners.
+9) Include at least 10 purchasable objects total.
+10) Forbidden extraction targets: wall paint/color, ceiling, floor material, doors/windows, architecture.
+11) Absolutely no annotations and no UI graphics:
+   no text, no letters, no numbers, no labels, no arrows, no callouts, no lines, no overlays.
+12) Absolutely no frames:
+   no cell borders, no boxes, no dividers, no panel outlines.
 
-Fixed cell category ranges (must follow):
-${categoryRanges}
+Place key objects in this exact top-left to bottom-right order:
+${assignedOrder || 'Use visible purchasable objects from the room and place deterministically.'}
 
-Primary mapping list (must place into exact assigned cells):
-${assignedLines || 'Use visible purchasable items from the room and place deterministically.'}
-
-If there are empty cells (${emptySlots || 'none'}), fill them with additional clearly visible purchasable objects from the same room style, prioritizing:
-all lamps, rugs/floor textiles, bedding/pillows/throws, decor objects, framed art, plants, and functional accessories.
+If there are still empty slots, fill with additional clearly visible purchasable objects from the same room style.
+Priority: all lamps, rugs/floor textiles, bedding/pillows/throws, decor objects, framed art, plants, functional accessories.
 
 Output style:
 - clean asset-sheet style, product extraction board, not user-facing
@@ -790,7 +772,7 @@ export async function POST(req: Request) {
           image: afterImage,
           prompt: boardPrompt,
           negativePrompt:
-            'room background, full room scene, clutter, watermark, logo, long paragraphs, irregular collage, overlapping objects, architecture elements, numbers, labels, arrows, guide lines, UI overlays, index markers, annotation text, callouts, frames around products, cell borders, grid lines, dividers',
+            'room background, full room scene, clutter, watermark, logo, text, letters, numbers, labels, captions, arrows, guide lines, callouts, UI overlays, index markers, annotation text, frames around products, cell borders, boxes, panel outlines, grid lines, table lines, dividers, collage layout, overlapping objects, architecture elements',
           strength: 0.72,
           provider: boardProvider,
         });
