@@ -56,6 +56,14 @@ type GuideResponse = {
   error?: string;
 };
 
+type FallingDecor = {
+  id: number;
+  x: number;
+  y: number;
+  speed: number;
+  kind: 'lamp' | 'rug' | 'plant' | 'art' | 'pillow' | 'basket';
+};
+
 const spring = { type: 'spring', stiffness: 120, damping: 20 } as const;
 
 const CATEGORY_ORDER: Category[] = [
@@ -91,6 +99,27 @@ const NECESSITY_LABEL: Record<Necessity, string> = {
 
 const defaultSummary =
   '基于你的房间结构，我们优先推荐了更容易落地的灯光、布艺和装饰单品。整体目标是用低预算完成高体感升级。';
+
+const DECOR_META: Record<
+  FallingDecor['kind'],
+  { label: string; score: number; className: string }
+> = {
+  lamp: { label: '灯', score: 12, className: 'bg-amber-100 text-amber-700' },
+  rug: { label: '毯', score: 10, className: 'bg-stone-100 text-stone-700' },
+  plant: { label: '植', score: 14, className: 'bg-emerald-100 text-emerald-700' },
+  art: { label: '画', score: 11, className: 'bg-orange-100 text-orange-700' },
+  pillow: { label: '枕', score: 9, className: 'bg-rose-100 text-rose-700' },
+  basket: { label: '筐', score: 13, className: 'bg-yellow-100 text-yellow-700' },
+};
+
+const DECOR_KINDS: FallingDecor['kind'][] = [
+  'lamp',
+  'rug',
+  'plant',
+  'art',
+  'pillow',
+  'basket',
+];
 
 function normalizeNecessity(value?: string): Necessity {
   const v = (value || '').toLowerCase();
@@ -337,6 +366,202 @@ function BeforeAfterSlider({ before, after }: { before: string; after: string })
   );
 }
 
+function LoadingMiniGame({
+  active,
+  progress,
+}: {
+  active: boolean;
+  progress: number;
+}) {
+  const gameRef = useRef<HTMLDivElement>(null);
+  const rafRef = useRef<number | null>(null);
+  const lastTimeRef = useRef(0);
+  const spawnAccumulatorRef = useRef(0);
+  const idRef = useRef(1);
+  const userControlUntilRef = useRef(0);
+  const scoreRef = useRef(0);
+  const basketXRef = useRef(50);
+  const itemsRef = useRef<FallingDecor[]>([]);
+
+  const [timeLeft, setTimeLeft] = useState(60);
+  const [score, setScore] = useState(0);
+  const [basketX, setBasketX] = useState(50);
+  const [items, setItems] = useState<FallingDecor[]>([]);
+
+  useEffect(() => {
+    basketXRef.current = basketX;
+  }, [basketX]);
+
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
+
+  useEffect(() => {
+    if (!active) return;
+    setTimeLeft(60);
+    setScore(0);
+    scoreRef.current = 0;
+    setBasketX(50);
+    basketXRef.current = 50;
+    setItems([]);
+    itemsRef.current = [];
+    idRef.current = 1;
+    spawnAccumulatorRef.current = 0;
+    userControlUntilRef.current = 0;
+
+    const timer = window.setInterval(() => {
+      setTimeLeft((prev) => (prev > 0 ? prev - 1 : 60));
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [active]);
+
+  useEffect(() => {
+    if (!active) return;
+
+    lastTimeRef.current = performance.now();
+
+    const loop = (now: number) => {
+      const deltaMs = now - lastTimeRef.current;
+      lastTimeRef.current = now;
+      const delta = Math.min(0.05, deltaMs / 1000);
+      spawnAccumulatorRef.current += delta;
+
+      setItems((prev) => {
+        let next = prev;
+
+        if (spawnAccumulatorRef.current >= 0.65) {
+          spawnAccumulatorRef.current = 0;
+          const kind = DECOR_KINDS[Math.floor(Math.random() * DECOR_KINDS.length)];
+          const fresh: FallingDecor = {
+            id: idRef.current++,
+            x: 8 + Math.random() * 84,
+            y: -8,
+            speed: 14 + Math.random() * 10,
+            kind,
+          };
+          next = [...next, fresh];
+        }
+
+        const moved = next
+          .map((item) => ({ ...item, y: item.y + item.speed * delta }))
+          .filter((item) => item.y <= 112);
+
+        const catches: number[] = [];
+        const remained = moved.filter((item) => {
+          const inCatchY = item.y >= 84 && item.y <= 97;
+          const inCatchX = Math.abs(item.x - basketXRef.current) <= 9.8;
+          if (inCatchY && inCatchX) {
+            catches.push(DECOR_META[item.kind].score);
+            return false;
+          }
+          return true;
+        });
+
+        if (catches.length > 0) {
+          const add = catches.reduce((sum, s) => sum + s, 0);
+          scoreRef.current += add;
+          setScore(scoreRef.current);
+        }
+
+        itemsRef.current = remained;
+        return remained;
+      });
+
+      setBasketX((prev) => {
+        const underUserControl = performance.now() < userControlUntilRef.current;
+        if (underUserControl) {
+          basketXRef.current = prev;
+          return prev;
+        }
+
+        const list = itemsRef.current;
+        const target = list.length > 0 ? list.reduce((best, cur) => (cur.y > best.y ? cur : best)).x : 50;
+        const next = prev + (target - prev) * 0.12;
+        basketXRef.current = next;
+        return next;
+      });
+
+      rafRef.current = window.requestAnimationFrame(loop);
+    };
+
+    rafRef.current = window.requestAnimationFrame(loop);
+
+    return () => {
+      if (rafRef.current !== null) {
+        window.cancelAnimationFrame(rafRef.current);
+      }
+    };
+  }, [active]);
+
+  const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const rect = gameRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const x = ((event.clientX - rect.left) / rect.width) * 100;
+    setBasketX(Math.max(6, Math.min(94, x)));
+    userControlUntilRef.current = performance.now() + 1800;
+  };
+
+  return (
+    <div className="rounded-2xl border border-[#d4c3be]/60 bg-white/60 p-4">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-bold text-[#52372d]">装修加速小游戏（自动进行）</p>
+          <p className="text-xs text-[#504440]">移动鼠标可接管收纳篮，不操作也会自动游玩。</p>
+        </div>
+        <div className="text-right text-xs text-[#504440]">
+          <p>剩余 {timeLeft}s</p>
+          <p>得分 {score}</p>
+        </div>
+      </div>
+
+      <div className="mb-4">
+        <div className="mb-1 flex items-center justify-between text-xs text-[#504440]">
+          <span>购物指南生成进度</span>
+          <span>{Math.round(progress)}%</span>
+        </div>
+        <div className="h-2 overflow-hidden rounded-full bg-[#ebe1d3]">
+          <motion.div
+            className="h-full rounded-full bg-[#8f4d2c]"
+            animate={{ width: `${Math.max(6, Math.min(100, progress))}%` }}
+            transition={{ type: 'spring', stiffness: 90, damping: 16 }}
+          />
+        </div>
+      </div>
+
+      <div
+        ref={gameRef}
+        onPointerMove={handlePointerMove}
+        className="relative h-[260px] overflow-hidden rounded-2xl border border-[#d4c3be]/45 bg-gradient-to-b from-[#fff8f2] to-[#f7edde]"
+      >
+        {items.map((item) => {
+          const meta = DECOR_META[item.kind];
+          return (
+            <div
+              key={item.id}
+              className={`absolute -translate-x-1/2 rounded-full px-3 py-1 text-xs font-semibold shadow-sm ${meta.className}`}
+              style={{ left: `${item.x}%`, top: `${item.y}%` }}
+            >
+              {meta.label}
+            </div>
+          );
+        })}
+
+        <div
+          className="absolute bottom-3 h-7 w-24 -translate-x-1/2 rounded-full border border-[#8f4d2c]/30 bg-[#8f4d2c]/15"
+          style={{ left: `${basketX}%` }}
+        >
+          <div className="flex h-full items-center justify-center text-[11px] font-bold text-[#52372d]">
+            收纳篮
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ResultPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -348,6 +573,7 @@ function ResultPageContent() {
   const [itemsBoardImageUrl, setItemsBoardImageUrl] = useState('');
   const [loading, setLoading] = useState(true);
   const [guideLoading, setGuideLoading] = useState(false);
+  const [guideProgress, setGuideProgress] = useState(0);
   const [error, setError] = useState('');
 
   const [filter, setFilter] = useState<FilterKey>('all');
@@ -407,6 +633,7 @@ function ResultPageContent() {
 
     async function fetchGuide() {
       setGuideLoading(true);
+      setGuideProgress(8);
       setError('');
 
       try {
@@ -431,6 +658,7 @@ function ResultPageContent() {
           setItems(normalized);
           setSummary(data.summary?.trim() || defaultSummary);
           setItemsBoardImageUrl(data.itemsBoardImageUrl || '');
+          setGuideProgress(100);
         }
       } catch (err) {
         if (!cancelled) {
@@ -438,6 +666,7 @@ function ResultPageContent() {
           setItems(fallback);
           setSummary(current.suggestions || defaultSummary);
           setError(err instanceof Error ? err.message : '购物指南生成失败');
+          setGuideProgress(100);
         }
       } finally {
         if (!cancelled) setGuideLoading(false);
@@ -450,6 +679,18 @@ function ResultPageContent() {
       cancelled = true;
     };
   }, [stored]);
+
+  useEffect(() => {
+    if (!guideLoading) return;
+
+    const timer = window.setInterval(() => {
+      setGuideProgress((prev) => Math.min(95, prev + 1 + Math.random() * 4));
+    }, 900);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [guideLoading]);
 
   const grouped = useMemo(() => {
     const map = new Map<Category, GuideItem[]>();
@@ -595,7 +836,7 @@ function ResultPageContent() {
         <div className="mb-6 flex flex-col gap-2">
           <h1 className="text-3xl font-bold tracking-tight text-[#52372d]">改造方案已就绪</h1>
           <p className="text-sm leading-relaxed text-[#504440]">{summary || defaultSummary}</p>
-          {guideLoading ? <p className="text-xs text-[#8f4d2c]">正在生成购物指南...</p> : null}
+          {guideLoading ? <p className="text-xs text-[#8f4d2c]">正在生成购物指南... {Math.round(guideProgress)}%</p> : null}
           {error ? <p className="text-xs text-[#ba1a1a]">{error}</p> : null}
         </div>
 
@@ -637,10 +878,13 @@ function ResultPageContent() {
                       key={tab.key}
                       type="button"
                       onClick={() => setFilter(tab.key)}
+                      disabled={guideLoading}
                       className={`flex-1 rounded-lg py-2 text-sm transition ${
                         filter === tab.key
                           ? 'bg-[#52372d] font-semibold text-white'
-                          : 'font-medium text-[#504440] hover:bg-[#ebe1d3]/60'
+                          : guideLoading
+                            ? 'cursor-not-allowed font-medium text-[#b8a8a2]'
+                            : 'font-medium text-[#504440] hover:bg-[#ebe1d3]/60'
                       }`}
                     >
                       {tab.label}
@@ -650,7 +894,10 @@ function ResultPageContent() {
               </div>
 
               <div className="no-scrollbar flex-1 space-y-5 overflow-y-auto px-6 pb-6">
-                {CATEGORY_ORDER.map((category) => {
+                {guideLoading ? (
+                  <LoadingMiniGame active={guideLoading} progress={guideProgress} />
+                ) : (
+                  CATEGORY_ORDER.map((category) => {
                   const categoryItems = grouped.get(category) || [];
                   const expanded = expandedCategory === category;
 
@@ -761,7 +1008,8 @@ function ResultPageContent() {
                       ) : null}
                     </div>
                   );
-                })}
+                })
+                )}
               </div>
 
               <div className="border-t border-[#d4c3be]/40 bg-gradient-to-t from-[#f1e7d9] via-[#f1e7d9]/95 to-transparent p-6">
@@ -769,7 +1017,8 @@ function ResultPageContent() {
                   <button
                     type="button"
                     onClick={handleCopy}
-                    className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-white py-3 text-sm font-bold text-[#52372d] transition-colors hover:bg-[#fff8f2]"
+                    disabled={guideLoading}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-white py-3 text-sm font-bold text-[#52372d] transition-colors hover:bg-[#fff8f2] disabled:cursor-not-allowed disabled:text-[#b8a8a2]"
                   >
                     <Copy size={16} />
                     复制清单
@@ -777,7 +1026,8 @@ function ResultPageContent() {
                   <button
                     type="button"
                     onClick={handleExport}
-                    className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-white py-3 text-sm font-bold text-[#52372d] transition-colors hover:bg-[#fff8f2]"
+                    disabled={guideLoading}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-white py-3 text-sm font-bold text-[#52372d] transition-colors hover:bg-[#fff8f2] disabled:cursor-not-allowed disabled:text-[#b8a8a2]"
                   >
                     <Download size={16} />
                     导出清单
@@ -787,7 +1037,8 @@ function ResultPageContent() {
                 <button
                   type="button"
                   onClick={addAllVisible}
-                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#52372d] py-4 text-sm font-bold text-white shadow-xl shadow-[#52372d]/10 transition-all hover:bg-[#6b4e43] active:scale-[0.99]"
+                  disabled={guideLoading}
+                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#52372d] py-4 text-sm font-bold text-white shadow-xl shadow-[#52372d]/10 transition-all hover:bg-[#6b4e43] active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-[#b8a8a2] disabled:shadow-none"
                 >
                   <ShoppingCart size={18} />
                   一键加入购物车
