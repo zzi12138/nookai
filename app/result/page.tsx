@@ -231,6 +231,40 @@ function formatBudget(min: number, max: number) {
   return `最低 ¥${min} · 最高 ¥${max}`;
 }
 
+async function shrinkGuideImageDataUrl(dataUrl: string, maxEdge = 1280, quality = 0.82) {
+  if (!dataUrl || !dataUrl.startsWith('data:image/')) return dataUrl;
+
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('image-load-failed'));
+      img.src = dataUrl;
+    });
+
+    const width = image.naturalWidth || image.width;
+    const height = image.naturalHeight || image.height;
+    if (!width || !height) return dataUrl;
+
+    const scale = Math.min(1, maxEdge / Math.max(width, height));
+    if (scale >= 1 && dataUrl.length < 1_500_000) return dataUrl;
+
+    const targetW = Math.max(1, Math.round(width * scale));
+    const targetH = Math.max(1, Math.round(height * scale));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = targetW;
+    canvas.height = targetH;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return dataUrl;
+    ctx.drawImage(image, 0, 0, targetW, targetH);
+
+    return canvas.toDataURL('image/jpeg', quality);
+  } catch {
+    return dataUrl;
+  }
+}
+
 function getItemBoardCell(item: GuideItem, index: number) {
   const slot = Number(item.boardCell?.index);
   if (Number.isFinite(slot) && slot >= 1 && slot <= 12) {
@@ -676,14 +710,16 @@ function ResultPageContent() {
       setError('');
 
       try {
+        const afterForGuide = await shrinkGuideImageDataUrl(current.generated, 1280, 0.82);
         const response = await fetch('/api/explainer', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            beforeImage: current.original,
-            afterImage: current.generated,
+            // Keep payload lean to avoid browser/network "Failed to fetch" on large bodies.
+            // Only after image is required for the shopping-guide extraction step.
+            afterImage: afterForGuide,
             theme: current.theme || '日式原木风',
-            provider: current.provider,
+            provider: current.provider === 'nanobanana' || current.provider === 'gemini' ? current.provider : undefined,
           }),
         });
 
