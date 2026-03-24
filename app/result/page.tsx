@@ -6,9 +6,14 @@ import {
   ChevronDown,
   Copy,
   Download,
+  Layers3,
+  MoveHorizontal,
   Plus,
   Share2,
   ShoppingCart,
+  Sparkles,
+  UserCircle2,
+  Wand2,
 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -240,33 +245,70 @@ function BeforeAfterSlider({ before, after }: { before: string; after: string })
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
     const next = (clientX - rect.left) / rect.width;
-    setRatio(Math.min(0.95, Math.max(0.05, next)));
+    setRatio(Math.min(1, Math.max(0, next)));
   }, []);
 
   const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-    event.currentTarget.setPointerCapture(event.pointerId);
+    event.preventDefault();
     setDragging(true);
     updateFromClientX(event.clientX);
   };
 
-  const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+  useEffect(() => {
     if (!dragging) return;
-    updateFromClientX(event.clientX);
-  };
 
-  const onPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
-    setDragging(false);
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
+    const onMove = (event: PointerEvent) => {
+      updateFromClientX(event.clientX);
+    };
+    const onUp = () => {
+      setDragging(false);
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+  }, [dragging, updateFromClientX]);
+
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      setRatio((prev) => Math.max(0, prev - 0.02));
+    }
+    if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      setRatio((prev) => Math.min(1, prev + 0.02));
+    }
+    if (event.key === 'Home') {
+      event.preventDefault();
+      setRatio(0);
+    }
+    if (event.key === 'End') {
+      event.preventDefault();
+      setRatio(1);
     }
   };
 
   return (
-    <div ref={containerRef} className="relative aspect-[4/3] overflow-hidden rounded-3xl bg-[#f7edde] shadow-2xl" onPointerMove={onPointerMove}>
+    <div
+      ref={containerRef}
+      className="relative aspect-[4/3] overflow-hidden rounded-3xl bg-[#f7edde] shadow-2xl"
+      onPointerDown={onPointerDown}
+    >
       <img src={before} alt="Before" className="absolute inset-0 h-full w-full object-cover" />
 
-      <div className="absolute inset-y-0 left-0 overflow-hidden" style={{ width: `${ratio * 100}%` }}>
-        <img src={after} alt="After" className="absolute inset-0 h-full w-full max-w-none object-cover" style={{ width: `${(1 / Math.max(ratio, 0.01)) * 100}%` }} />
+      <div
+        className="absolute inset-0"
+        style={{
+          clipPath: `inset(0 ${100 - ratio * 100}% 0 0)`,
+        }}
+      >
+        <img src={after} alt="After" className="h-full w-full object-cover" />
       </div>
 
       <div className="pointer-events-none absolute left-6 top-6 rounded-full bg-black/20 px-4 py-2 text-xs font-medium uppercase tracking-widest text-white">
@@ -278,18 +320,17 @@ function BeforeAfterSlider({ before, after }: { before: string; after: string })
 
       <div
         role="slider"
-        aria-valuemin={5}
-        aria-valuemax={95}
+        aria-valuemin={0}
+        aria-valuemax={100}
         aria-valuenow={Math.round(ratio * 100)}
         tabIndex={0}
-        onPointerDown={onPointerDown}
-        onPointerUp={onPointerUp}
+        onKeyDown={onKeyDown}
         className="absolute inset-y-0 z-20 w-0"
         style={{ left: `${ratio * 100}%` }}
       >
         <div className="absolute inset-y-0 -left-[1px] w-[2px] bg-white/70" />
         <div className="absolute left-1/2 top-1/2 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-[#52372d]/10 bg-white/90 shadow-lg">
-          <span className="material-symbols-outlined text-[#52372d]">unfold_more</span>
+          <MoveHorizontal className="h-5 w-5 text-[#52372d]" />
         </div>
       </div>
     </div>
@@ -544,13 +585,13 @@ function ResultPageContent() {
               <Share2 size={20} />
             </button>
             <button className="text-[#52372d] transition-opacity hover:opacity-80">
-              <span className="material-symbols-outlined">account_circle</span>
+              <UserCircle2 size={22} />
             </button>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-7xl px-6 pb-16 pt-24">
+      <main className="mx-auto w-full max-w-7xl px-6 pb-16 pt-28">
         <div className="mb-6 flex flex-col gap-2">
           <h1 className="text-3xl font-bold tracking-tight text-[#52372d]">改造方案已就绪</h1>
           <p className="text-sm leading-relaxed text-[#504440]">{summary || defaultSummary}</p>
@@ -766,9 +807,10 @@ function ResultPageContent() {
               className={`flex flex-col items-center justify-center px-5 py-2 ${active ? 'rounded-2xl bg-[#6b4e43] text-[#fff8f2]' : 'text-[#52372d]/60'}`}
               href="#"
             >
-              <span className="material-symbols-outlined mb-1" style={active ? { fontVariationSettings: "'FILL' 1" } : undefined}>
-                {index === 0 ? 'auto_awesome' : index === 1 ? 'architecture' : index === 2 ? 'layers' : 'person'}
-              </span>
+              {index === 0 ? <Sparkles className="mb-1 h-4 w-4" /> : null}
+              {index === 1 ? <Wand2 className="mb-1 h-4 w-4" /> : null}
+              {index === 2 ? <Layers3 className="mb-1 h-4 w-4" /> : null}
+              {index === 3 ? <UserCircle2 className="mb-1 h-4 w-4" /> : null}
               <span className="text-[11px] font-medium tracking-wider">{label}</span>
             </a>
           );
