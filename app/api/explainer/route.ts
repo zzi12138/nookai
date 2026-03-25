@@ -514,6 +514,119 @@ function getFallbackRawItems(theme: string): RawItem[] {
   ];
 }
 
+function normalizeGuideRawItems(rawItems: RawItem[]) {
+  return rawItems
+    .slice(0, 18)
+    .map((item, index) => {
+      const id = index + 1;
+      const name = toChineseName(item.name || '');
+      if (!name || shouldExcludeItem(name)) return null;
+
+      const category = inferCategory(name);
+      const necessity = normalizeNecessity(item.necessity);
+      const quantity = Math.round(clamp(Number(item.quantity || 1), 1, 3));
+      const price = normalizePrice(name, item.priceMin, item.priceMax);
+
+      const rawCenterX = Number(item.anchor?.centerX ?? item.anchor?.cx);
+      const rawCenterY = Number(item.anchor?.centerY ?? item.anchor?.cy);
+      const rawX = Number(item.anchor?.x);
+      const rawY = Number(item.anchor?.y);
+      const rawLeft = Number(item.anchor?.left);
+      const rawTop = Number(item.anchor?.top);
+      const rawRight = Number(item.anchor?.right);
+      const rawBottom = Number(item.anchor?.bottom);
+      const rawW = Number(item.anchor?.width ?? item.anchor?.w);
+      const rawH = Number(item.anchor?.height ?? item.anchor?.h);
+      const hasRightBottom = Number.isFinite(rawRight) && Number.isFinite(rawBottom);
+      const hasBoxFromSide = hasRightBottom && Number.isFinite(rawLeft) && Number.isFinite(rawTop);
+      const hasBox = Number.isFinite(rawW) && Number.isFinite(rawH);
+      const hasCenter = Number.isFinite(rawCenterX) && Number.isFinite(rawCenterY);
+      const hasXY = Number.isFinite(rawX) && Number.isFinite(rawY);
+      const hasLeftTop = Number.isFinite(rawLeft) && Number.isFinite(rawTop);
+      const hasAnchor = hasCenter || hasXY || hasLeftTop || hasRightBottom;
+      const confidence = Number.isFinite(item.anchor?.confidence as number)
+        ? clamp(Number(item.anchor?.confidence), 0, 1)
+        : 0;
+
+      const fallbackSize = fallbackSizeByName(name);
+      const width = hasBox
+        ? clamp(rawW, 6, 56)
+        : hasBoxFromSide
+          ? clamp(rawRight - rawLeft, 6, 56)
+          : fallbackSize.width;
+      const height = hasBox
+        ? clamp(rawH, 6, 56)
+        : hasBoxFromSide
+          ? clamp(rawBottom - rawTop, 6, 56)
+          : fallbackSize.height;
+
+      let left = Number.NaN;
+      let top = Number.NaN;
+
+      if (hasLeftTop) {
+        left = rawLeft;
+        top = rawTop;
+      } else if (hasCenter) {
+        left = rawCenterX - width / 2;
+        top = rawCenterY - height / 2;
+      } else if (hasXY) {
+        const centerCandidateLeft = rawX - width / 2;
+        const centerCandidateTop = rawY - height / 2;
+        const centerCandidateValid =
+          centerCandidateLeft >= -5 &&
+          centerCandidateTop >= -5 &&
+          centerCandidateLeft + width <= 105 &&
+          centerCandidateTop + height <= 105;
+
+        if (centerCandidateValid) {
+          left = centerCandidateLeft;
+          top = centerCandidateTop;
+        } else {
+          left = rawX;
+          top = rawY;
+        }
+      } else if (hasRightBottom) {
+        left = rawRight - width;
+        top = rawBottom - height;
+      }
+
+      const safeLeft = Number.isFinite(left) ? clamp(left, 0, 100 - width) : 50 - width / 2;
+      const safeTop = Number.isFinite(top) ? clamp(top, 0, 100 - height) : 50 - height / 2;
+      const x = clamp(safeLeft + width / 2, width / 2 + 1, 100 - width / 2 - 1);
+      const y = clamp(safeTop + height / 2, height / 2 + 1, 100 - height / 2 - 1);
+      const hasPoint = hasAnchor && confidence >= 0.63;
+
+      const placement = toChinesePlacement(item.placement || '');
+      const reason = toChineseReason(item.reason || '');
+
+      return {
+        id,
+        name,
+        category,
+        quantity,
+        priceMin: price.min,
+        priceMax: price.max,
+        priceRange: `¥${price.min}-${price.max}`,
+        placement,
+        necessity,
+        reason,
+        imageTarget: {
+          x,
+          y,
+          left: safeLeft,
+          top: safeTop,
+          width,
+          height,
+          confidence,
+          hasAnchor,
+          hasPoint,
+        },
+      } satisfies NormalizedItem;
+    })
+    .filter((item): item is NormalizedItem => Boolean(item))
+    .filter((item) => item.imageTarget.confidence >= 0.1);
+}
+
 function resolveInlineImagePart(image: string) {
   if (isDataUrl(image)) {
     return {
@@ -1039,7 +1152,7 @@ export async function POST(req: Request) {
       try {
         analyzed = await withTimeout(
           analyzeItems(beforeImage || undefined, afterImage, theme, apiKey),
-          22000,
+          12000,
           'analysis timeout'
         );
       } catch (error) {
@@ -1047,117 +1160,15 @@ export async function POST(req: Request) {
       }
     }
 
-    const normalizedAll: NormalizedItem[] = analyzed.items
-      .slice(0, 18)
-      .map((item, index) => {
-        const id = index + 1;
-        const name = toChineseName(item.name || '');
-        if (!name || shouldExcludeItem(name)) return null;
+    let normalizedAll = normalizeGuideRawItems(analyzed.items);
+    let usedThemeFallback = false;
 
-        const category = inferCategory(name);
-        const necessity = normalizeNecessity(item.necessity);
-        const quantity = Math.round(clamp(Number(item.quantity || 1), 1, 3));
-        const price = normalizePrice(name, item.priceMin, item.priceMax);
+    if (normalizedAll.length === 0) {
+      normalizedAll = normalizeGuideRawItems(getFallbackRawItems(theme));
+      usedThemeFallback = true;
+    }
 
-        const rawCenterX = Number(item.anchor?.centerX ?? item.anchor?.cx);
-        const rawCenterY = Number(item.anchor?.centerY ?? item.anchor?.cy);
-        const rawX = Number(item.anchor?.x);
-        const rawY = Number(item.anchor?.y);
-        const rawLeft = Number(item.anchor?.left);
-        const rawTop = Number(item.anchor?.top);
-        const rawRight = Number(item.anchor?.right);
-        const rawBottom = Number(item.anchor?.bottom);
-        const rawW = Number(item.anchor?.width ?? item.anchor?.w);
-        const rawH = Number(item.anchor?.height ?? item.anchor?.h);
-        const hasRightBottom = Number.isFinite(rawRight) && Number.isFinite(rawBottom);
-        const hasBoxFromSide = hasRightBottom && Number.isFinite(rawLeft) && Number.isFinite(rawTop);
-        const hasBox = Number.isFinite(rawW) && Number.isFinite(rawH);
-        const hasCenter = Number.isFinite(rawCenterX) && Number.isFinite(rawCenterY);
-        const hasXY = Number.isFinite(rawX) && Number.isFinite(rawY);
-        const hasLeftTop = Number.isFinite(rawLeft) && Number.isFinite(rawTop);
-        const hasAnchor = hasCenter || hasXY || hasLeftTop || hasRightBottom;
-        const confidence = Number.isFinite(item.anchor?.confidence as number)
-          ? clamp(Number(item.anchor?.confidence), 0, 1)
-          : 0;
-
-        const fallbackSize = fallbackSizeByName(name);
-        const width = hasBox
-          ? clamp(rawW, 6, 56)
-          : hasBoxFromSide
-            ? clamp(rawRight - rawLeft, 6, 56)
-            : fallbackSize.width;
-        const height = hasBox
-          ? clamp(rawH, 6, 56)
-          : hasBoxFromSide
-            ? clamp(rawBottom - rawTop, 6, 56)
-            : fallbackSize.height;
-
-        let left = Number.NaN;
-        let top = Number.NaN;
-
-        if (hasLeftTop) {
-          left = rawLeft;
-          top = rawTop;
-        } else if (hasCenter) {
-          left = rawCenterX - width / 2;
-          top = rawCenterY - height / 2;
-        } else if (hasXY) {
-          const centerCandidateLeft = rawX - width / 2;
-          const centerCandidateTop = rawY - height / 2;
-          const centerCandidateValid =
-            centerCandidateLeft >= -5 &&
-            centerCandidateTop >= -5 &&
-            centerCandidateLeft + width <= 105 &&
-            centerCandidateTop + height <= 105;
-
-          if (centerCandidateValid) {
-            left = centerCandidateLeft;
-            top = centerCandidateTop;
-          } else {
-            left = rawX;
-            top = rawY;
-          }
-        } else if (hasRightBottom) {
-          left = rawRight - width;
-          top = rawBottom - height;
-        }
-
-        const safeLeft = Number.isFinite(left) ? clamp(left, 0, 100 - width) : 50 - width / 2;
-        const safeTop = Number.isFinite(top) ? clamp(top, 0, 100 - height) : 50 - height / 2;
-        const x = clamp(safeLeft + width / 2, width / 2 + 1, 100 - width / 2 - 1);
-        const y = clamp(safeTop + height / 2, height / 2 + 1, 100 - height / 2 - 1);
-        const hasPoint = hasAnchor && confidence >= 0.63;
-
-        const placement = toChinesePlacement(item.placement || '');
-        const reason = toChineseReason(item.reason || '');
-
-        return {
-          id,
-          name,
-          category,
-          quantity,
-          priceMin: price.min,
-          priceMax: price.max,
-          priceRange: `¥${price.min}-${price.max}`,
-          placement,
-          necessity,
-          reason,
-          imageTarget: {
-            x,
-            y,
-            left: safeLeft,
-            top: safeTop,
-            width,
-            height,
-            confidence,
-            hasAnchor,
-            hasPoint,
-          },
-        };
-      })
-      .filter((item): item is NormalizedItem => Boolean(item));
-
-    const normalized = normalizedAll.filter((item) => item.imageTarget.confidence >= 0.1);
+    const normalized = normalizedAll;
 
     let reduced = normalized
       .sort((a, b) => {
@@ -1178,16 +1189,14 @@ export async function POST(req: Request) {
       reduced = [...reduced, ...topUp];
     }
 
-    if (reduced.length === 0) {
-      return NextResponse.json(
-        { error: '未识别到可购买物件，请更换更清晰的效果图后重试' },
-        { status: 500 }
-      );
-    }
-
     const boardItems = assignItemsToBoardCells(reduced.slice(0, 12));
     let itemsBoardImageUrl = '';
     const boardDebug = makeDefaultBoardDebug();
+    if (usedThemeFallback) {
+      boardDebug.failureCode = 'analysis_fallback';
+      boardDebug.failureReason = 'analysis returned no valid purchasable items; used theme fallback list';
+      boardDebug.fallbackReason = 'analysis_fallback';
+    }
 
     try {
       if (boardItems.length > 0) {
@@ -1199,7 +1208,7 @@ export async function POST(req: Request) {
             boardPrompt,
             'room background, full room scene, interior scene, architecture, walls, floor, windows, clutter, watermark, logo, text, letters, numbers, labels, captions, arrows, guide lines, callouts, UI overlays, annotation text, index markers, borders, frames, boxes, cards, dividers, panel outlines, grid lines, table lines, collage layout, poster layout, infographic layout, overlapping objects, cropped fragments, texture close-up'
           ),
-          55000,
+          35000,
           'items board timeout'
         );
         const rawMeta = getImageDebugMeta(candidateUrl);
@@ -1224,19 +1233,21 @@ export async function POST(req: Request) {
           try {
             rawValidation = await withTimeout(
               validateExtractedBoardImage(candidateUrl, theme, apiKey),
-              22000,
+              6000,
               'board validation timeout'
             );
           } catch (validationError) {
-            boardDebug.status = 'extracted_board_invalid';
-            boardDebug.failureCode = 'validation_failed';
+            itemsBoardImageUrl = candidateUrl;
+            boardDebug.status = 'generated_unchecked';
+            boardDebug.thumbnailSource = 'extracted_board';
+            boardDebug.failureCode = 'validation_unavailable';
             boardDebug.failureReason =
               validationError instanceof Error ? validationError.message : 'board validation failed';
-            boardDebug.fallbackReason = 'validation_failed';
+            boardDebug.fallbackReason = null;
             rawValidation = {
               ...makeDefaultValidation(),
-              checked: true,
-              failureCode: 'validation_failed',
+              checked: false,
+              failureCode: 'validation_unavailable',
               reasons: [boardDebug.failureReason],
             };
           }
@@ -1246,56 +1257,13 @@ export async function POST(req: Request) {
             itemsBoardImageUrl = candidateUrl;
             boardDebug.status = 'generated_valid';
             boardDebug.thumbnailSource = 'extracted_board';
-          } else if (boardDebug.failureCode !== 'validation_failed') {
+          } else if (boardDebug.status !== 'generated_unchecked') {
             boardDebug.status = 'generated_invalid';
             boardDebug.failureCode = rawValidation.failureCode || 'extracted_board_invalid';
             boardDebug.failureReason = rawValidation.reasons.join(' | ') || rawValidation.failureCode || 'validation failed';
-            boardDebug.cleanupAttempted = true;
-
-            try {
-              const cleanedImageUrl = await cleanupExtractedBoardImage(candidateUrl, theme);
-              const cleanedMeta = getImageDebugMeta(cleanedImageUrl);
-              boardDebug.cleanupSucceeded = Boolean(cleanedImageUrl);
-              boardDebug.cleanedImageKind = cleanedMeta.kind;
-              boardDebug.cleanedImageRef = cleanedMeta.ref;
-              boardDebug.cleanedImageLength = cleanedMeta.length;
-
-              if (cleanedImageUrl) {
-                const cleanedValidation = await withTimeout(
-                  validateExtractedBoardImage(cleanedImageUrl, theme, apiKey),
-                  22000,
-                  'cleaned board validation timeout'
-                );
-                boardDebug.validation = cleanedValidation;
-
-                if (cleanedValidation.valid) {
-                  itemsBoardImageUrl = cleanedImageUrl;
-                  boardDebug.status = 'cleaned_valid';
-                  boardDebug.thumbnailSource = 'extracted_board';
-                  boardDebug.failureCode = null;
-                  boardDebug.failureReason = null;
-                } else {
-                  boardDebug.status = 'extracted_board_invalid';
-                  boardDebug.failureCode = cleanedValidation.failureCode || 'extracted_board_invalid';
-                  boardDebug.failureReason =
-                    cleanedValidation.reasons.join(' | ') ||
-                    cleanedValidation.failureCode ||
-                    'cleaned board still invalid';
-                  boardDebug.fallbackReason = boardDebug.failureCode;
-                }
-              } else {
-                boardDebug.status = 'extracted_board_invalid';
-                boardDebug.failureCode = 'cleanup_failed';
-                boardDebug.failureReason = 'cleanup returned empty image';
-                boardDebug.fallbackReason = 'cleanup_failed';
-              }
-            } catch (cleanupError) {
-              boardDebug.status = 'extracted_board_invalid';
-              boardDebug.failureCode = 'cleanup_failed';
-              boardDebug.failureReason =
-                cleanupError instanceof Error ? cleanupError.message : 'cleanup failed';
-              boardDebug.fallbackReason = 'cleanup_failed';
-            }
+            boardDebug.cleanupAttempted = false;
+            boardDebug.cleanupSucceeded = false;
+            boardDebug.fallbackReason = boardDebug.failureCode;
           }
         }
       }
