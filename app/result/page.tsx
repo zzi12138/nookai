@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { getBoardCellBySlot, getDefaultBoardCellForIndex, ITEMS_BOARD_CONFIG, type BoardCell } from '../lib/itemsBoard';
+import { getBoardCellBySlot, getDefaultBoardCellForIndex, type BoardCell } from '../lib/itemsBoard';
 import { loadResult, type StoredResult } from '../lib/imageStore';
 
 type Necessity = 'Must-have' | 'Recommended' | 'Optional';
@@ -282,21 +282,26 @@ function BoardCellPreview({
   cell: BoardCell;
   className?: string;
 }) {
-  const left = (cell.left / 100) * ITEMS_BOARD_CONFIG.width;
-  const top = (cell.top / 100) * ITEMS_BOARD_CONFIG.height;
-  const width = (cell.width / 100) * ITEMS_BOARD_CONFIG.width;
-  const height = (cell.height / 100) * ITEMS_BOARD_CONFIG.height;
+  const leftPercent = cell.left;
+  const topPercent = cell.top;
+  const widthPercent = cell.width;
+  const heightPercent = cell.height;
 
   return (
-    <svg
-      viewBox={`${left} ${top} ${width} ${height}`}
-      preserveAspectRatio="xMidYMid meet"
-      className={className}
-      role="img"
-      aria-label="物件预览"
-    >
-      <image href={boardUrl} x="0" y="0" width={ITEMS_BOARD_CONFIG.width} height={ITEMS_BOARD_CONFIG.height} preserveAspectRatio="xMidYMid meet" />
-    </svg>
+    <div className={`relative overflow-hidden ${className || ''}`} role="img" aria-label="物件预览">
+      <img
+        src={boardUrl}
+        alt=""
+        className="pointer-events-none absolute max-w-none select-none"
+        draggable={false}
+        style={{
+          width: `${(100 / widthPercent) * 100}%`,
+          height: `${(100 / heightPercent) * 100}%`,
+          left: `-${(leftPercent / widthPercent) * 100}%`,
+          top: `-${(topPercent / heightPercent) * 100}%`,
+        }}
+      />
+    </div>
   );
 }
 

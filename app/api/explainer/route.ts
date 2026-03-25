@@ -469,39 +469,63 @@ function buildItemsBoardPrompt(theme: string, items: NormalizedItem[]) {
   const assignedOrder = items
     .filter((item) => item.boardCell)
     .sort((a, b) => (a.boardCell?.index || 99) - (b.boardCell?.index || 99))
-    .map((item) => `${item.name}（${item.category}）`)
+    .map((item, index) => `${index + 1}. ${item.name}`)
     .join('、');
 
   return `
-Use the provided generated room image as visual reference.
-Generate ONE hidden internal extraction board for deterministic thumbnail crops.
+Use the provided generated room image as the ONLY visual reference.
+Generate a single hidden extraction image for deterministic thumbnail crops.
 
-ABSOLUTE LAYOUT RULES (MUST FOLLOW):
-1) Final board canvas MUST be exactly ${ITEMS_BOARD_CONFIG.width}x${ITEMS_BOARD_CONFIG.height} pixels (4:3).
-2) Use an INVISIBLE 4 columns x 3 rows layout map (12 fixed slots). Do NOT draw slot borders or grid lines.
-3) Each slot contains exactly ONE complete object, centered both horizontally and vertically.
-4) Object scale in each slot: 60% to 70% of slot area, keep clear blank margin around the object.
-5) No overlap, no collage, no perspective room scene, no architecture, no background room.
-6) Background must be pure white or very light neutral only.
-7) Keep object color/material/style consistent with the generated room image.
-8) No partial fragments, no zoomed texture patches, no cut corners.
-9) Include at least 10 purchasable objects total.
-10) Forbidden extraction targets: wall paint/color, ceiling, floor material, doors/windows, architecture.
-11) Absolutely no annotations and no UI graphics:
-   no text, no letters, no numbers, no labels, no arrows, no callouts, no lines, no overlays.
-12) Absolutely no frames:
-   no cell borders, no boxes, no dividers, no panel outlines.
+GOAL:
+Create one clean white-background composite image containing isolated purchasable objects from the room.
+This image is for internal cropping only, not for user display.
 
-Place key objects in this exact top-left to bottom-right order:
-${assignedOrder || 'Use visible purchasable objects from the room and place deterministically.'}
+STRICT LAYOUT:
+1) Final canvas must be exactly ${ITEMS_BOARD_CONFIG.width}x${ITEMS_BOARD_CONFIG.height} pixels.
+2) Use an invisible 4 columns x 3 rows placement map with 12 equal regions.
+3) Do NOT draw the map. Do NOT render region borders, frames, dividers, cards, boxes, tiles, or outlines.
+4) Put exactly one complete object in each region.
+5) Every object must be centered in its region with large empty white margin around it.
+6) Each object should occupy only about 60% to 70% of its region, never touching edges.
+7) No overlap between objects.
+8) No room background, no architecture, no furniture scene, no walls, no floor, no windows.
 
-If there are still empty slots, fill with additional clearly visible purchasable objects from the same room style.
-Priority: all lamps, rugs/floor textiles, bedding/pillows/throws, decor objects, framed art, plants, functional accessories.
+OBJECT RULES:
+1) Preserve the same color, material, and overall styling seen in the generated room.
+2) Show complete recognizable objects, never texture fragments or cropped corners.
+3) Prioritize visible purchasable items only: lamps, rugs, bedding, pillows, throws, decor objects, framed art, plants, accessories.
+4) Forbidden: wall paint, wall color, ceiling, flooring material, doors, windows, architectural elements.
 
-Output style:
-- clean asset-sheet style, product extraction board, not user-facing
-- each object isolated in its own cell area
-- clarity and recognizability are priority; minor positional variance is acceptable
+ABSOLUTELY FORBIDDEN:
+- text
+- letters
+- numbers
+- labels
+- arrows
+- callouts
+- guide lines
+- captions
+- logos
+- watermarks
+- UI overlays
+- borders
+- frames
+- boxes
+- dividers
+- poster layouts
+- magazine layouts
+- infographic styling
+
+VISUAL STYLE:
+- e-commerce product photography
+- pure white or very light neutral background
+- soft studio lighting
+- realistic materials
+- clean, sharp edges
+- no decorative composition
+
+PLACE OBJECTS in exact reading order from top-left to bottom-right:
+${assignedOrder || 'Use visible purchasable objects from the generated room and place them deterministically.'}
 
 Theme context: ${theme || '日式原木风'}
 `.trim();
@@ -789,20 +813,15 @@ export async function POST(req: Request) {
             image: afterImage,
             prompt: boardPrompt,
             negativePrompt:
-              'room background, full room scene, clutter, watermark, logo, text, letters, numbers, labels, captions, arrows, guide lines, callouts, UI overlays, index markers, annotation text, frames around products, cell borders, boxes, panel outlines, grid lines, table lines, dividers, collage layout, overlapping objects, architecture elements',
+              'room background, full room scene, interior scene, architecture, walls, floor, windows, clutter, watermark, logo, text, letters, numbers, labels, captions, arrows, guide lines, callouts, UI overlays, annotation text, index markers, borders, frames, boxes, cards, dividers, panel outlines, grid lines, table lines, collage layout, poster layout, infographic layout, overlapping objects, cropped fragments, texture close-up',
             strength: 0.72,
             provider: boardProvider,
           }),
-          28000,
+          55000,
           'items board timeout'
         );
         const candidateUrl = boardResult.imageUrl || '';
-        if (candidateUrl.startsWith('data:image/') && candidateUrl.length > 2_000_000) {
-          console.warn('items board too large, fallback to placeholder previews');
-          itemsBoardImageUrl = '';
-        } else {
-          itemsBoardImageUrl = candidateUrl;
-        }
+        itemsBoardImageUrl = candidateUrl;
       }
     } catch (error) {
       console.error('items board generation failed:', error);
