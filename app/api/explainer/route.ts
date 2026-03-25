@@ -79,6 +79,54 @@ type NormalizedItem = {
   };
 };
 
+type ValidationRegion = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  confidence: number;
+  label: string;
+};
+
+type ExtractedBoardValidation = {
+  checked: boolean;
+  valid: boolean;
+  hasText: boolean;
+  hasGridOrFrames: boolean;
+  whiteBackgroundScore: number;
+  backgroundMostlyWhite: boolean;
+  textRegions: ValidationRegion[];
+  frameRegions: ValidationRegion[];
+  reasons: string[];
+  failureCode: string | null;
+};
+
+type ExtractedBoardDebug = {
+  status:
+    | 'not_attempted'
+    | 'generation_failed'
+    | 'generated_unchecked'
+    | 'generated_valid'
+    | 'generated_invalid'
+    | 'cleaned_valid'
+    | 'extracted_board_invalid';
+  generationAttempted: boolean;
+  generationSucceeded: boolean;
+  rawImageKind: 'data_url' | 'remote_url' | 'empty' | 'unknown';
+  rawImageRef: string;
+  rawImageLength: number;
+  cleanupAttempted: boolean;
+  cleanupSucceeded: boolean;
+  cleanedImageKind: 'data_url' | 'remote_url' | 'empty' | 'unknown';
+  cleanedImageRef: string;
+  cleanedImageLength: number;
+  validation: ExtractedBoardValidation;
+  failureCode: string | null;
+  failureReason: string | null;
+  fallbackReason: string | null;
+  thumbnailSource: 'extracted_board' | 'main_image_fallback';
+};
+
 function stripDataUrl(value: string) {
   return value.includes(',') ? value.split(',')[1] : value;
 }
@@ -103,6 +151,95 @@ function isProbablyBase64(value: string) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function toRegion(raw: any, fallbackLabel: string): ValidationRegion | null {
+  const left = Number(raw?.left);
+  const top = Number(raw?.top);
+  const width = Number(raw?.width);
+  const height = Number(raw?.height);
+  const confidence = clamp(Number(raw?.confidence || 0), 0, 1);
+
+  if (![left, top, width, height].every(Number.isFinite)) return null;
+
+  return {
+    left: clamp(left, 0, 100),
+    top: clamp(top, 0, 100),
+    width: clamp(width, 0, 100),
+    height: clamp(height, 0, 100),
+    confidence,
+    label: String(raw?.label || fallbackLabel || '').trim() || fallbackLabel,
+  };
+}
+
+function getImageDebugMeta(imageUrl?: string) {
+  const image = imageUrl || '';
+  if (!image) {
+    return {
+      kind: 'empty' as const,
+      ref: '',
+      length: 0,
+    };
+  }
+
+  if (isDataUrl(image)) {
+    const mimeType = extractMimeType(image);
+    return {
+      kind: 'data_url' as const,
+      ref: `data:${mimeType}`,
+      length: image.length,
+    };
+  }
+
+  if (isHttpUrl(image)) {
+    return {
+      kind: 'remote_url' as const,
+      ref: image,
+      length: image.length,
+    };
+  }
+
+  return {
+    kind: 'unknown' as const,
+    ref: image.slice(0, 80),
+    length: image.length,
+  };
+}
+
+function makeDefaultValidation(): ExtractedBoardValidation {
+  return {
+    checked: false,
+    valid: false,
+    hasText: false,
+    hasGridOrFrames: false,
+    whiteBackgroundScore: 0,
+    backgroundMostlyWhite: false,
+    textRegions: [],
+    frameRegions: [],
+    reasons: [],
+    failureCode: null,
+  };
+}
+
+function makeDefaultBoardDebug(): ExtractedBoardDebug {
+  return {
+    status: 'not_attempted',
+    generationAttempted: false,
+    generationSucceeded: false,
+    rawImageKind: 'empty',
+    rawImageRef: '',
+    rawImageLength: 0,
+    cleanupAttempted: false,
+    cleanupSucceeded: false,
+    cleanedImageKind: 'empty',
+    cleanedImageRef: '',
+    cleanedImageLength: 0,
+    validation: makeDefaultValidation(),
+    failureCode: null,
+    failureReason: null,
+    fallbackReason: null,
+    thumbnailSource: 'main_image_fallback',
+  };
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, message: string) {
@@ -531,6 +668,80 @@ Theme context: ${theme || '日式原木风'}
 `.trim();
 }
 
+function getBoardValidationPrompt(theme: string) {
+  return `
+You are validating an internal extracted-items board image for a shopping guide.
+Inspect the image and return strict JSON only.
+
+Validation goals:
+1) detect whether there are visible text or number regions
+2) detect whether there are visible frames, boxes, dividers, or grid-like lines
+3) estimate whether the background is mostly white or very light neutral
+4) provide rough bounding regions for text and frame artifacts when visible
+
+Rules:
+- text includes any letters, Chinese text, numbers, labels, captions, or watermarks
+- frame artifacts include borders, cell outlines, dividers, panel lines, box edges, grid lines
+- only mark regions when reasonably visible
+- coordinates must be percentages from 0 to 100
+- return at most 8 text regions and 8 frame regions
+
+Theme context: ${theme || '日式原木风'}
+
+Return JSON in this exact structure:
+{
+  "hasText": true,
+  "hasGridOrFrames": true,
+  "whiteBackgroundScore": 0.72,
+  "backgroundMostlyWhite": true,
+  "textRegions": [
+    { "left": 10, "top": 10, "width": 20, "height": 8, "confidence": 0.81, "label": "text" }
+  ],
+  "frameRegions": [
+    { "left": 0, "top": 0, "width": 100, "height": 100, "confidence": 0.78, "label": "frame" }
+  ],
+  "reasons": ["text detected", "frame lines detected"]
+}
+`.trim();
+}
+
+function getBoardCleanupPrompt(theme: string) {
+  return `
+Use the provided extracted-items board as the exact base image.
+
+Task:
+Remove only unwanted artifacts from the board:
+- any text
+- any letters
+- any numbers
+- any labels
+- any captions
+- any arrows
+- any guide lines
+- any borders
+- any frames
+- any boxes
+- any dividers
+- any faint UI chrome
+
+Preserve strictly:
+- same canvas size
+- same background whiteness
+- same object count
+- same object order
+- same object placement
+- same object scale
+- same object colors and materials
+
+Do not redesign the objects.
+Do not add new objects.
+Do not remove valid objects.
+Do not move objects.
+
+Theme context: ${theme || '日式原木风'}
+`.trim();
+}
+
 function dedupeByObject(items: RawItem[]) {
   const seen = new Set<string>();
   const out: RawItem[] = [];
@@ -550,6 +761,118 @@ function dedupeByObject(items: RawItem[]) {
   }
 
   return out;
+}
+
+async function validateExtractedBoardImage(image: string, theme: string, apiKey: string) {
+  const imagePart = await toInlineImagePart(image);
+  if (!imagePart) {
+    throw new Error('board image unsupported for validation');
+  }
+
+  const model = process.env.GEMINI_VISION_MODEL || 'gemini-2.5-flash';
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 18000);
+
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey,
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                { text: getBoardValidationPrompt(theme) },
+                {
+                  inline_data: {
+                    mime_type: imagePart.mimeType,
+                    data: imagePart.data,
+                  },
+                },
+              ],
+            },
+          ],
+          generationConfig: {
+            temperature: 0.1,
+            responseMimeType: 'application/json',
+          },
+        }),
+        signal: controller.signal,
+      }
+    );
+
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(result?.error?.message || result?.error || `Validation failed (${response.status})`);
+    }
+
+    const parts = result?.candidates?.[0]?.content?.parts ?? [];
+    const text = parts.map((p: any) => p?.text || '').join('\n').trim();
+    const parsed = safeParseJson<any>(text);
+    if (!parsed) {
+      throw new Error('validation parse failed');
+    }
+
+    const textRegions = Array.isArray(parsed.textRegions)
+      ? parsed.textRegions.map((region: any) => toRegion(region, 'text')).filter(Boolean).slice(0, 8) as ValidationRegion[]
+      : [];
+    const frameRegions = Array.isArray(parsed.frameRegions)
+      ? parsed.frameRegions.map((region: any) => toRegion(region, 'frame')).filter(Boolean).slice(0, 8) as ValidationRegion[]
+      : [];
+
+    const hasText = Boolean(parsed.hasText) || textRegions.length > 0;
+    const hasGridOrFrames = Boolean(parsed.hasGridOrFrames) || frameRegions.length > 0;
+    const whiteBackgroundScore = clamp(Number(parsed.whiteBackgroundScore || 0), 0, 1);
+    const backgroundMostlyWhite = Boolean(parsed.backgroundMostlyWhite) || whiteBackgroundScore >= 0.72;
+
+    const reasons = Array.isArray(parsed.reasons)
+      ? parsed.reasons.map((reason: unknown) => String(reason)).filter(Boolean)
+      : [];
+
+    let failureCode: string | null = null;
+    if (hasText) failureCode = 'text_regions_detected';
+    else if (hasGridOrFrames) failureCode = 'frame_lines_detected';
+    else if (!backgroundMostlyWhite) failureCode = 'background_not_white';
+
+    return {
+      checked: true,
+      valid: !hasText && !hasGridOrFrames && backgroundMostlyWhite,
+      hasText,
+      hasGridOrFrames,
+      whiteBackgroundScore,
+      backgroundMostlyWhite,
+      textRegions,
+      frameRegions,
+      reasons,
+      failureCode,
+    } satisfies ExtractedBoardValidation;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function cleanupExtractedBoardImage(
+  image: string,
+  theme: string,
+  provider?: 'nanobanana' | 'gemini'
+) {
+  return withTimeout(
+    generateImage({
+      image,
+      prompt: getBoardCleanupPrompt(theme),
+      negativePrompt:
+        'text, letters, numbers, labels, captions, arrows, guide lines, borders, frames, boxes, cards, tiles, dividers, panel outlines, grid lines, table lines, watermark, logo, ui overlay, infographic layout, poster layout',
+      strength: 0.18,
+      provider,
+    }),
+    45000,
+    'board cleanup timeout'
+  );
 }
 
 async function analyzeItems(beforeImage: string | undefined, afterImage: string, theme: string, apiKey: string) {
@@ -801,9 +1124,11 @@ export async function POST(req: Request) {
 
     const boardItems = assignItemsToBoardCells(reduced.slice(0, 12));
     let itemsBoardImageUrl = '';
+    const boardDebug = makeDefaultBoardDebug();
 
     try {
       if (boardItems.length > 0) {
+        boardDebug.generationAttempted = true;
         const boardPrompt = buildItemsBoardPrompt(theme, boardItems);
         const boardProvider =
           body.provider ||
@@ -821,11 +1146,119 @@ export async function POST(req: Request) {
           'items board timeout'
         );
         const candidateUrl = boardResult.imageUrl || '';
-        itemsBoardImageUrl = candidateUrl;
+        const rawMeta = getImageDebugMeta(candidateUrl);
+        boardDebug.generationSucceeded = Boolean(candidateUrl);
+        boardDebug.rawImageKind = rawMeta.kind;
+        boardDebug.rawImageRef = rawMeta.ref;
+        boardDebug.rawImageLength = rawMeta.length;
+
+        if (!candidateUrl) {
+          boardDebug.status = 'generation_failed';
+          boardDebug.failureCode = 'missing_board_image';
+          boardDebug.failureReason = 'board generator returned empty image';
+          boardDebug.fallbackReason = 'missing_board_image';
+        } else if (!apiKey) {
+          itemsBoardImageUrl = candidateUrl;
+          boardDebug.status = 'generated_unchecked';
+          boardDebug.thumbnailSource = 'extracted_board';
+          boardDebug.failureCode = 'validation_unavailable';
+          boardDebug.failureReason = 'missing GEMINI_API_KEY (or GOOGLE_API_KEY) for validation';
+        } else {
+          let rawValidation: ExtractedBoardValidation;
+          try {
+            rawValidation = await withTimeout(
+              validateExtractedBoardImage(candidateUrl, theme, apiKey),
+              22000,
+              'board validation timeout'
+            );
+          } catch (validationError) {
+            boardDebug.status = 'extracted_board_invalid';
+            boardDebug.failureCode = 'validation_failed';
+            boardDebug.failureReason =
+              validationError instanceof Error ? validationError.message : 'board validation failed';
+            boardDebug.fallbackReason = 'validation_failed';
+            rawValidation = {
+              ...makeDefaultValidation(),
+              checked: true,
+              failureCode: 'validation_failed',
+              reasons: [boardDebug.failureReason],
+            };
+          }
+          boardDebug.validation = rawValidation;
+
+          if (rawValidation.valid) {
+            itemsBoardImageUrl = candidateUrl;
+            boardDebug.status = 'generated_valid';
+            boardDebug.thumbnailSource = 'extracted_board';
+          } else if (boardDebug.failureCode !== 'validation_failed') {
+            boardDebug.status = 'generated_invalid';
+            boardDebug.failureCode = rawValidation.failureCode || 'extracted_board_invalid';
+            boardDebug.failureReason = rawValidation.reasons.join(' | ') || rawValidation.failureCode || 'validation failed';
+            boardDebug.cleanupAttempted = true;
+
+            try {
+              const cleaned = await cleanupExtractedBoardImage(candidateUrl, theme, boardProvider);
+              const cleanedMeta = getImageDebugMeta(cleaned.imageUrl);
+              boardDebug.cleanupSucceeded = Boolean(cleaned.imageUrl);
+              boardDebug.cleanedImageKind = cleanedMeta.kind;
+              boardDebug.cleanedImageRef = cleanedMeta.ref;
+              boardDebug.cleanedImageLength = cleanedMeta.length;
+
+              if (cleaned.imageUrl) {
+                const cleanedValidation = await withTimeout(
+                  validateExtractedBoardImage(cleaned.imageUrl, theme, apiKey),
+                  22000,
+                  'cleaned board validation timeout'
+                );
+                boardDebug.validation = cleanedValidation;
+
+                if (cleanedValidation.valid) {
+                  itemsBoardImageUrl = cleaned.imageUrl;
+                  boardDebug.status = 'cleaned_valid';
+                  boardDebug.thumbnailSource = 'extracted_board';
+                  boardDebug.failureCode = null;
+                  boardDebug.failureReason = null;
+                } else {
+                  boardDebug.status = 'extracted_board_invalid';
+                  boardDebug.failureCode = cleanedValidation.failureCode || 'extracted_board_invalid';
+                  boardDebug.failureReason =
+                    cleanedValidation.reasons.join(' | ') ||
+                    cleanedValidation.failureCode ||
+                    'cleaned board still invalid';
+                  boardDebug.fallbackReason = boardDebug.failureCode;
+                }
+              } else {
+                boardDebug.status = 'extracted_board_invalid';
+                boardDebug.failureCode = 'cleanup_failed';
+                boardDebug.failureReason = 'cleanup returned empty image';
+                boardDebug.fallbackReason = 'cleanup_failed';
+              }
+            } catch (cleanupError) {
+              boardDebug.status = 'extracted_board_invalid';
+              boardDebug.failureCode = 'cleanup_failed';
+              boardDebug.failureReason =
+                cleanupError instanceof Error ? cleanupError.message : 'cleanup failed';
+              boardDebug.fallbackReason = 'cleanup_failed';
+            }
+          }
+        }
       }
     } catch (error) {
       console.error('items board generation failed:', error);
       itemsBoardImageUrl = '';
+      boardDebug.status = 'generation_failed';
+      boardDebug.generationAttempted = true;
+      boardDebug.generationSucceeded = false;
+      boardDebug.failureCode = 'board_generation_failed';
+      boardDebug.failureReason = error instanceof Error ? error.message : 'board generation failed';
+      boardDebug.fallbackReason = 'board_generation_failed';
+    }
+
+    if (!itemsBoardImageUrl) {
+      boardDebug.thumbnailSource = 'main_image_fallback';
+      if (!boardDebug.fallbackReason) {
+        boardDebug.fallbackReason = boardDebug.failureCode || 'board_missing';
+      }
     }
 
     return NextResponse.json({
@@ -835,6 +1268,13 @@ export async function POST(req: Request) {
       items: boardItems,
       itemsBoardImageUrl,
       explainerImageUrl: itemsBoardImageUrl,
+      extractedBoardStatus: itemsBoardImageUrl
+        ? boardDebug.status
+        : boardDebug.status === 'not_attempted'
+          ? 'extracted_board_invalid'
+          : boardDebug.status,
+      extractedBoardDebug: boardDebug,
+      fallbackReason: boardDebug.fallbackReason,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Server error';

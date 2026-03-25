@@ -52,6 +52,35 @@ type GuideResponse = {
   summary?: string;
   items?: GuideItem[];
   itemsBoardImageUrl?: string;
+  extractedBoardStatus?: string;
+  fallbackReason?: string | null;
+  extractedBoardDebug?: {
+    status?: string;
+    generationAttempted?: boolean;
+    generationSucceeded?: boolean;
+    rawImageKind?: string;
+    rawImageRef?: string;
+    rawImageLength?: number;
+    cleanupAttempted?: boolean;
+    cleanupSucceeded?: boolean;
+    cleanedImageKind?: string;
+    cleanedImageRef?: string;
+    cleanedImageLength?: number;
+    failureCode?: string | null;
+    failureReason?: string | null;
+    fallbackReason?: string | null;
+    thumbnailSource?: 'extracted_board' | 'main_image_fallback';
+    validation?: {
+      checked?: boolean;
+      valid?: boolean;
+      hasText?: boolean;
+      hasGridOrFrames?: boolean;
+      whiteBackgroundScore?: number;
+      backgroundMostlyWhite?: boolean;
+      reasons?: string[];
+      failureCode?: string | null;
+    };
+  };
   error?: string;
 };
 
@@ -645,11 +674,15 @@ function ResultPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const id = searchParams.get('id') || '';
+  const debugMode = searchParams.get('debug') === '1' || process.env.NODE_ENV !== 'production';
 
   const [stored, setStored] = useState<StoredResult | null>(null);
   const [summary, setSummary] = useState(defaultSummary);
   const [items, setItems] = useState<GuideItem[]>([]);
   const [itemsBoardImageUrl, setItemsBoardImageUrl] = useState('');
+  const [extractedBoardStatus, setExtractedBoardStatus] = useState('');
+  const [fallbackReason, setFallbackReason] = useState('');
+  const [boardDebug, setBoardDebug] = useState<GuideResponse['extractedBoardDebug'] | null>(null);
   const [loading, setLoading] = useState(true);
   const [guideLoading, setGuideLoading] = useState(false);
   const [guideProgress, setGuideProgress] = useState(0);
@@ -765,6 +798,9 @@ function ResultPageContent() {
           setItems(normalized);
           setSummary(data.summary?.trim() || defaultSummary);
           setItemsBoardImageUrl(data.itemsBoardImageUrl || '');
+          setExtractedBoardStatus(data.extractedBoardStatus || '');
+          setFallbackReason(data.fallbackReason || '');
+          setBoardDebug(data.extractedBoardDebug || null);
           setGuideProgress(100);
           setError('');
         }
@@ -773,6 +809,16 @@ function ResultPageContent() {
           const fallback = getFallbackItems();
           setItems(fallback);
           setSummary(current.suggestions || defaultSummary);
+          setItemsBoardImageUrl('');
+          setExtractedBoardStatus('request_failed');
+          setFallbackReason('request_failed');
+          setBoardDebug({
+            status: 'request_failed',
+            thumbnailSource: 'main_image_fallback',
+            failureCode: 'request_failed',
+            failureReason: 'explainer request failed before extracted board became available',
+            fallbackReason: 'request_failed',
+          });
           setError('');
           setGuideProgress(100);
         }
@@ -834,6 +880,9 @@ function ResultPageContent() {
 
   const beforeImage = stored?.original || '';
   const afterImage = stored?.generated || '';
+  const thumbnailSource =
+    (boardDebug?.thumbnailSource as 'extracted_board' | 'main_image_fallback' | undefined) ||
+    (itemsBoardImageUrl ? 'extracted_board' : 'main_image_fallback');
 
   const activePreviewItem = useMemo(() => items.find((item) => item.id === previewItemId) || null, [items, previewItemId]);
 
@@ -947,6 +996,26 @@ function ResultPageContent() {
           {guideLoading ? <p className="text-xs text-[#8f4d2c]">正在生成购物指南... {Math.round(guideProgress)}%</p> : null}
           {error ? <p className="text-xs text-[#ba1a1a]">{error}</p> : null}
         </div>
+
+        {debugMode ? (
+          <div className="mb-6 rounded-2xl border border-[#d4c3be]/60 bg-white/70 p-4 text-xs text-[#504440]">
+            <div className="grid gap-2 md:grid-cols-2">
+              <p>当前缩略图来源：<span className="font-semibold text-[#52372d]">{thumbnailSource}</span></p>
+              <p>extracted board 状态：<span className="font-semibold text-[#52372d]">{extractedBoardStatus || boardDebug?.status || 'unknown'}</span></p>
+              <p>extracted board 是否存在：<span className="font-semibold text-[#52372d]">{itemsBoardImageUrl ? '是' : '否'}</span></p>
+              <p>fallback 原因：<span className="font-semibold text-[#52372d]">{fallbackReason || boardDebug?.fallbackReason || 'none'}</span></p>
+              <p>原始图片类型/长度：<span className="font-semibold text-[#52372d]">{boardDebug?.rawImageKind || 'none'} / {boardDebug?.rawImageLength || 0}</span></p>
+              <p>清洗后图片类型/长度：<span className="font-semibold text-[#52372d]">{boardDebug?.cleanedImageKind || 'none'} / {boardDebug?.cleanedImageLength || 0}</span></p>
+              <p>有效性检测：<span className="font-semibold text-[#52372d]">{boardDebug?.validation?.checked ? (boardDebug?.validation?.valid ? 'valid' : 'invalid') : 'unchecked'}</span></p>
+              <p>失败分类：<span className="font-semibold text-[#52372d]">{boardDebug?.validation?.failureCode || boardDebug?.failureCode || 'none'}</span></p>
+              <p>检测到文字：<span className="font-semibold text-[#52372d]">{boardDebug?.validation?.hasText ? '是' : '否'}</span></p>
+              <p>检测到框线/网格：<span className="font-semibold text-[#52372d]">{boardDebug?.validation?.hasGridOrFrames ? '是' : '否'}</span></p>
+              <p>白底评分：<span className="font-semibold text-[#52372d]">{typeof boardDebug?.validation?.whiteBackgroundScore === 'number' ? boardDebug.validation.whiteBackgroundScore.toFixed(2) : '0.00'}</span></p>
+              <p>原始图片地址：<span className="font-semibold break-all text-[#52372d]">{boardDebug?.rawImageRef || 'none'}</span></p>
+            </div>
+            <p className="mt-2 break-all">检测原因：<span className="font-semibold text-[#52372d]">{boardDebug?.validation?.reasons?.join(' | ') || boardDebug?.failureReason || 'none'}</span></p>
+          </div>
+        ) : null}
 
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
           <section className="space-y-6 lg:col-span-7">
@@ -1098,6 +1167,11 @@ function ResultPageContent() {
                                       <span className="rounded-full bg-[#ebe1d3] px-2 py-0.5 text-[11px] text-[#504440]">
                                         数量 x{item.quantity}
                                       </span>
+                                      {debugMode ? (
+                                        <span className="rounded-full bg-[#e8ddd0] px-2 py-0.5 text-[11px] text-[#6d5547]">
+                                          source: {thumbnailSource}
+                                        </span>
+                                      ) : null}
                                     </div>
                                   </div>
                                 </div>
