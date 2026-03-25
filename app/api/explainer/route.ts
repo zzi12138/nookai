@@ -819,8 +819,8 @@ STRICT LAYOUT:
 2) Use an invisible 4 columns x 3 rows placement map with 12 equal regions.
 3) Do NOT draw the map. Do NOT render region borders, frames, dividers, cards, boxes, tiles, or outlines.
 4) Put exactly one complete object in each region.
-5) Every object must be centered in its region with large empty white margin around it.
-6) Each object should occupy only about 60% to 70% of its region, never touching edges.
+5) Every object must be centered in its region with generous empty white margin around it.
+6) Each object should occupy only about 45% to 55% of its region, never touching edges.
 7) No overlap between objects.
 8) No room background, no architecture, no furniture scene, no walls, no floor, no windows.
 
@@ -851,12 +851,14 @@ ABSOLUTELY FORBIDDEN:
 - infographic styling
 
 VISUAL STYLE:
-- e-commerce product photography
+- high-resolution e-commerce product photography
 - pure white or very light neutral background
 - soft studio lighting
 - realistic materials
 - clean, sharp edges
+- strong object separation
 - no decorative composition
+- no clutter around objects
 
 PLACE OBJECTS in exact reading order from top-left to bottom-right:
 ${assignedOrder || 'Use visible purchasable objects from the generated room and place them deterministically.'}

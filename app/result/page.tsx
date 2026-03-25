@@ -21,7 +21,7 @@ import { getBoardCellBySlot, getDefaultBoardCellForIndex, type BoardCell } from 
 import { loadResult, type StoredResult } from '../lib/imageStore';
 
 type Necessity = 'Must-have' | 'Recommended' | 'Optional';
-type FilterKey = 'all' | 'must' | 'recommended' | 'optional';
+type FilterKey = 'all' | Category;
 
 type Category =
   | 'Ambient lighting'
@@ -107,18 +107,21 @@ const CATEGORY_ORDER: Category[] = [
 
 const CATEGORY_LABEL: Record<Category, string> = {
   'Ambient lighting': '灯具',
-  'Bedding & soft textiles': '布艺织物',
-  'Floor soft furnishings': '地毯地垫',
-  'Wall decor': '装饰物',
+  'Bedding & soft textiles': '床品布艺',
+  'Floor soft furnishings': '地毯',
+  'Wall decor': '墙面装饰',
   Plants: '绿植',
   'Functional accessories': '功能小物',
 };
 
 const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'all', label: '全部' },
-  { key: 'must', label: '必买' },
-  { key: 'recommended', label: '建议' },
-  { key: 'optional', label: '可选' },
+  { key: 'Ambient lighting', label: '灯具' },
+  { key: 'Bedding & soft textiles', label: '床品布艺' },
+  { key: 'Floor soft furnishings', label: '地毯' },
+  { key: 'Wall decor', label: '墙面装饰' },
+  { key: 'Plants', label: '绿植' },
+  { key: 'Functional accessories', label: '功能小物' },
 ];
 
 const NECESSITY_LABEL: Record<Necessity, string> = {
@@ -252,9 +255,7 @@ function normalizeItems(raw: GuideItem[] | undefined): GuideItem[] {
 
 function itemMatchesFilter(item: GuideItem, filter: FilterKey) {
   if (filter === 'all') return true;
-  if (filter === 'must') return item.necessity === 'Must-have';
-  if (filter === 'recommended') return item.necessity === 'Recommended';
-  return item.necessity === 'Optional';
+  return item.category === filter;
 }
 
 function formatBudget(min: number, max: number) {

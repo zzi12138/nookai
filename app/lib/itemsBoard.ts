@@ -21,14 +21,14 @@ export type BoardCell = {
 };
 
 export const ITEMS_BOARD_CONFIG = {
-  width: 1600,
-  height: 1200,
+  width: 2400,
+  height: 1800,
   columns: 4,
   rows: 3,
-  paddingX: 48,
-  paddingY: 48,
-  gapX: 24,
-  gapY: 24,
+  paddingX: 80,
+  paddingY: 80,
+  gapX: 40,
+  gapY: 40,
 } as const;
 
 export const CATEGORY_SLOT_RANGES: Record<BoardCategory, number[]> = {
