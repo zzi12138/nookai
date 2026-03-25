@@ -77,7 +77,7 @@ function dataUrlToBase64(dataUrl: string) {
   return dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
 }
 
-async function resizeDataUrl(dataUrl: string, maxSize = 1280, quality = 0.88) {
+async function resizeDataUrl(dataUrl: string, maxSize = 1024, quality = 0.8) {
   return new Promise<string>((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
@@ -159,7 +159,11 @@ export default function Page() {
 
     try {
       const raw = await fileToDataUrl(file);
-      const resized = await resizeDataUrl(raw, 1280, 0.88);
+      let resized = await resizeDataUrl(raw, 1024, 0.8);
+      if (resized.length > 2_000_000) {
+        resized = await resizeDataUrl(resized, 768, 0.72);
+      }
+
       setPreviewUrl(resized);
       setImageBase64(dataUrlToBase64(resized));
     } catch (err) {
@@ -186,6 +190,8 @@ export default function Page() {
       let lastMessage = '生成失败，请稍后再试';
 
       for (let attempt = 1; attempt <= 3; attempt += 1) {
+        const controller = new AbortController();
+        const timer = window.setTimeout(() => controller.abort(), 80000);
         try {
           response = await fetch('/api/generate', {
             method: 'POST',
@@ -196,6 +202,7 @@ export default function Page() {
               constraints: selectedConstraints,
               requirements,
             }),
+            signal: controller.signal,
           });
 
           data = await response.json().catch(() => null);
@@ -208,10 +215,16 @@ export default function Page() {
             await new Promise((resolve) => setTimeout(resolve, 700 * attempt));
           }
         } catch (err) {
-          lastMessage = err instanceof Error ? err.message : '网络异常，请重试';
+          const rawMessage = err instanceof Error ? err.message : '网络异常，请重试';
+          lastMessage =
+            rawMessage.includes('Failed to fetch') || rawMessage.includes('NetworkError')
+              ? '网络连接波动，请稍后重试（已自动重试）'
+              : rawMessage;
           if (attempt < 3) {
             await new Promise((resolve) => setTimeout(resolve, 700 * attempt));
           }
+        } finally {
+          window.clearTimeout(timer);
         }
       }
 

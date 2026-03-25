@@ -711,21 +711,48 @@ function ResultPageContent() {
 
       try {
         const afterForGuide = await shrinkGuideImageDataUrl(current.generated, 1280, 0.82);
-        const response = await fetch('/api/explainer', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            // Keep payload lean to avoid browser/network "Failed to fetch" on large bodies.
-            // Only after image is required for the shopping-guide extraction step.
-            afterImage: afterForGuide,
-            theme: current.theme || '日式原木风',
-            provider: current.provider === 'nanobanana' || current.provider === 'gemini' ? current.provider : undefined,
-          }),
-        });
+        let response: Response | null = null;
+        let data: GuideResponse = {};
+        let lastError = '购物指南生成失败';
 
-        const data = (await response.json().catch(() => ({}))) as GuideResponse;
-        if (!response.ok) {
-          throw new Error(data.error || '购物指南生成失败');
+        for (let attempt = 1; attempt <= 2; attempt += 1) {
+          const controller = new AbortController();
+          const timer = window.setTimeout(() => controller.abort(), 55000);
+
+          try {
+            response = await fetch('/api/explainer', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                // Keep payload lean to avoid browser/network "Failed to fetch" on large bodies.
+                // Only after image is required for the shopping-guide extraction step.
+                afterImage: afterForGuide,
+                theme: current.theme || '日式原木风',
+                provider: current.provider === 'nanobanana' || current.provider === 'gemini' ? current.provider : undefined,
+              }),
+              signal: controller.signal,
+            });
+
+            data = (await response.json().catch(() => ({}))) as GuideResponse;
+            if (response.ok) break;
+            lastError = data.error || `购物指南生成失败（第 ${attempt} 次）`;
+          } catch (err) {
+            const raw = err instanceof Error ? err.message : '网络异常';
+            lastError =
+              raw.includes('Failed to fetch') || raw.includes('aborted')
+                ? '网络波动，已切换为本地购物建议'
+                : raw;
+          } finally {
+            window.clearTimeout(timer);
+          }
+
+          if (attempt < 2) {
+            await new Promise((resolve) => setTimeout(resolve, 800 * attempt));
+          }
+        }
+
+        if (!response?.ok) {
+          throw new Error(lastError);
         }
 
         if (!cancelled) {
@@ -734,13 +761,15 @@ function ResultPageContent() {
           setSummary(data.summary?.trim() || defaultSummary);
           setItemsBoardImageUrl(data.itemsBoardImageUrl || '');
           setGuideProgress(100);
+          setError('');
         }
       } catch (err) {
         if (!cancelled) {
           const fallback = getFallbackItems();
           setItems(fallback);
           setSummary(current.suggestions || defaultSummary);
-          setError(err instanceof Error ? err.message : '购物指南生成失败');
+          const msg = err instanceof Error ? err.message : '购物指南生成失败';
+          setError(msg.includes('Failed to fetch') ? '网络波动，已切换为本地购物建议' : msg);
           setGuideProgress(100);
         }
       } finally {

@@ -7,6 +7,7 @@ import {
 } from '../../lib/itemsBoard';
 
 export const runtime = 'nodejs';
+export const maxDuration = 60;
 
 type Payload = {
   image?: string;
@@ -767,7 +768,9 @@ export async function POST(req: Request) {
     try {
       if (boardItems.length > 0) {
         const boardPrompt = buildItemsBoardPrompt(theme, boardItems);
-        const boardProvider = body.provider || inferProviderFromImage(afterImage);
+        const boardProvider =
+          body.provider ||
+          (process.env.NANOBANANA_API_KEY ? 'nanobanana' : inferProviderFromImage(afterImage));
         const boardResult = await generateImage({
           image: afterImage,
           prompt: boardPrompt,
@@ -776,15 +779,17 @@ export async function POST(req: Request) {
           strength: 0.72,
           provider: boardProvider,
         });
-        itemsBoardImageUrl = boardResult.imageUrl;
+        const candidateUrl = boardResult.imageUrl || '';
+        if (candidateUrl.startsWith('data:image/') && candidateUrl.length > 2_000_000) {
+          console.warn('items board too large, fallback to placeholder previews');
+          itemsBoardImageUrl = '';
+        } else {
+          itemsBoardImageUrl = candidateUrl;
+        }
       }
     } catch (error) {
       console.error('items board generation failed:', error);
-      throw new Error('提取物件板生成失败');
-    }
-
-    if (!itemsBoardImageUrl) {
-      throw new Error('提取物件板生成失败');
+      itemsBoardImageUrl = '';
     }
 
     return NextResponse.json({
