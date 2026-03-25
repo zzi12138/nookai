@@ -819,8 +819,8 @@ STRICT LAYOUT:
 2) Use an invisible 4 columns x 3 rows placement map with 12 equal regions.
 3) Do NOT draw the map. Do NOT render region borders, frames, dividers, cards, boxes, tiles, or outlines.
 4) Put exactly one complete object in each region.
-5) Every object must be centered in its region with generous empty white margin around it.
-6) Each object should occupy only about 45% to 55% of its region, never touching edges.
+5) Every object must be centered in its region with generous empty margin around it.
+6) Each object should occupy only about 40% to 50% of its region, never touching edges.
 7) No overlap between objects.
 8) No room background, no architecture, no furniture scene, no walls, no floor, no windows.
 
@@ -852,7 +852,10 @@ ABSOLUTELY FORBIDDEN:
 
 VISUAL STYLE:
 - high-resolution e-commerce product photography
-- pure white or very light neutral background
+- warm cream or very light neutral background
+- the entire background should carry a subtle tone-on-tone square / woven texture, low contrast and semi-transparent in feel
+- the texture must be continuous across the whole canvas, not separated into cells
+- the texture must never look like a frame, border, divider, or panel line
 - soft studio lighting
 - realistic materials
 - clean, sharp edges
@@ -874,13 +877,15 @@ Inspect the image and return strict JSON only.
 
 Validation goals:
 1) detect whether there are visible text or number regions
-2) detect whether there are visible frames, boxes, dividers, or grid-like lines
-3) estimate whether the background is mostly white or very light neutral
+2) detect whether there are visible frames, boxes, dividers, or hard grid-like lines
+3) estimate whether the background is mostly warm cream or very light neutral
 4) provide rough bounding regions for text and frame artifacts when visible
 
 Rules:
 - text includes any letters, Chinese text, numbers, labels, captions, or watermarks
-- frame artifacts include borders, cell outlines, dividers, panel lines, box edges, grid lines
+- frame artifacts include borders, cell outlines, dividers, panel lines, box edges, hard grid lines
+- do NOT treat subtle tone-on-tone woven or square background texture as a frame artifact
+- a soft repeating background pattern is allowed if it does not look like a border or panel
 - only mark regions when reasonably visible
 - coordinates must be percentages from 0 to 100
 - return at most 8 text regions and 8 frame regions
@@ -1030,7 +1035,7 @@ async function validateExtractedBoardImage(image: string, theme: string, apiKey:
     const hasText = Boolean(parsed.hasText) || textRegions.length > 0;
     const hasGridOrFrames = Boolean(parsed.hasGridOrFrames) || frameRegions.length > 0;
     const whiteBackgroundScore = clamp(Number(parsed.whiteBackgroundScore || 0), 0, 1);
-    const backgroundMostlyWhite = Boolean(parsed.backgroundMostlyWhite) || whiteBackgroundScore >= 0.72;
+    const backgroundMostlyWhite = Boolean(parsed.backgroundMostlyWhite) || whiteBackgroundScore >= 0.58;
 
     const reasons = Array.isArray(parsed.reasons)
       ? parsed.reasons.map((reason: unknown) => String(reason)).filter(Boolean)
@@ -1231,7 +1236,7 @@ export async function POST(req: Request) {
           generateGeminiImageFromReferences(
             boardReferences.length > 0 ? boardReferences : [afterImage],
             boardPrompt,
-            'room background, full room scene, interior scene, architecture, walls, floor, windows, clutter, watermark, logo, text, letters, numbers, labels, captions, arrows, guide lines, callouts, UI overlays, annotation text, index markers, borders, frames, boxes, cards, dividers, panel outlines, grid lines, table lines, collage layout, poster layout, infographic layout, overlapping objects, cropped fragments, texture close-up, unchanged original furniture, original bed, original sofa, original desk'
+        'room background, full room scene, interior scene, architecture, walls, floor, windows, clutter, watermark, logo, text, letters, numbers, labels, captions, arrows, guide lines, callouts, UI overlays, annotation text, index markers, borders, frames, boxes, cards, dividers, panel outlines, table lines, collage layout, poster layout, infographic layout, overlapping objects, cropped fragments, texture close-up, unchanged original furniture, original bed, original sofa, original desk'
           ),
           35000,
           'items board timeout'
