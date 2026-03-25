@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion';
 import {
+  Bug,
   Check,
   Copy,
   Download,
@@ -674,7 +675,7 @@ function ResultPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const id = searchParams.get('id') || '';
-  const debugMode = searchParams.get('debug') === '1' || process.env.NODE_ENV !== 'production';
+  const debugParamEnabled = searchParams.get('debug') === '1';
 
   const [stored, setStored] = useState<StoredResult | null>(null);
   const [summary, setSummary] = useState(defaultSummary);
@@ -692,6 +693,13 @@ function ResultPageContent() {
   const [expandedItemId, setExpandedItemId] = useState<number | null>(null);
   const [addedIds, setAddedIds] = useState<Set<number>>(new Set());
   const [previewItemId, setPreviewItemId] = useState<number | null>(null);
+  const [showDebug, setShowDebug] = useState(debugParamEnabled || process.env.NODE_ENV !== 'production');
+
+  useEffect(() => {
+    if (debugParamEnabled) {
+      setShowDebug(true);
+    }
+  }, [debugParamEnabled]);
 
   useEffect(() => {
     let mounted = true;
@@ -979,6 +987,18 @@ function ResultPageContent() {
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-4">
           <div className="text-2xl font-bold tracking-tight text-[#52372d]">NookAI</div>
           <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setShowDebug((prev) => !prev)}
+              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                showDebug
+                  ? 'border-[#8f4d2c] bg-[#8f4d2c] text-white'
+                  : 'border-[#d4c3be] bg-white/70 text-[#52372d] hover:border-[#8f4d2c]'
+              }`}
+            >
+              <Bug size={14} />
+              {showDebug ? '隐藏调试' : '调试信息'}
+            </button>
             <button className="text-[#52372d]/70 transition-opacity hover:opacity-80">
               <Share2 size={20} />
             </button>
@@ -997,7 +1017,7 @@ function ResultPageContent() {
           {error ? <p className="text-xs text-[#ba1a1a]">{error}</p> : null}
         </div>
 
-        {debugMode ? (
+        {showDebug ? (
           <div className="mb-6 rounded-2xl border border-[#d4c3be]/60 bg-white/70 p-4 text-xs text-[#504440]">
             <div className="grid gap-2 md:grid-cols-2">
               <p>当前缩略图来源：<span className="font-semibold text-[#52372d]">{thumbnailSource}</span></p>
@@ -1167,7 +1187,7 @@ function ResultPageContent() {
                                       <span className="rounded-full bg-[#ebe1d3] px-2 py-0.5 text-[11px] text-[#504440]">
                                         数量 x{item.quantity}
                                       </span>
-                                      {debugMode ? (
+                                      {showDebug ? (
                                         <span className="rounded-full bg-[#e8ddd0] px-2 py-0.5 text-[11px] text-[#6d5547]">
                                           source: {thumbnailSource}
                                         </span>
