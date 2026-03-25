@@ -922,6 +922,9 @@ Remove only unwanted artifacts from the board:
 - any boxes
 - any dividers
 - any faint UI chrome
+- any pale slot edges
+- any rectangle outlines around objects
+- any residual grid-like separators
 
 Preserve strictly:
 - same canvas size
@@ -1283,9 +1286,57 @@ export async function POST(req: Request) {
             boardDebug.status = 'generated_invalid';
             boardDebug.failureCode = rawValidation.failureCode || 'extracted_board_invalid';
             boardDebug.failureReason = rawValidation.reasons.join(' | ') || rawValidation.failureCode || 'validation failed';
-            boardDebug.cleanupAttempted = false;
-            boardDebug.cleanupSucceeded = false;
-            boardDebug.fallbackReason = boardDebug.failureCode;
+            boardDebug.cleanupAttempted = true;
+
+            try {
+              const cleanedImageUrl = await withTimeout(
+                cleanupExtractedBoardImage(candidateUrl, theme),
+                12000,
+                'board cleanup timeout'
+              );
+              const cleanedMeta = getImageDebugMeta(cleanedImageUrl);
+              boardDebug.cleanupSucceeded = Boolean(cleanedImageUrl);
+              boardDebug.cleanedImageKind = cleanedMeta.kind;
+              boardDebug.cleanedImageRef = cleanedMeta.ref;
+              boardDebug.cleanedImageLength = cleanedMeta.length;
+
+              if (cleanedImageUrl) {
+                const cleanedValidation = await withTimeout(
+                  validateExtractedBoardImage(cleanedImageUrl, theme, apiKey),
+                  5000,
+                  'cleaned board validation timeout'
+                );
+                boardDebug.validation = cleanedValidation;
+
+                if (cleanedValidation.valid) {
+                  itemsBoardImageUrl = cleanedImageUrl;
+                  boardDebug.status = 'cleaned_valid';
+                  boardDebug.thumbnailSource = 'extracted_board';
+                  boardDebug.failureCode = null;
+                  boardDebug.failureReason = null;
+                  boardDebug.fallbackReason = null;
+                } else {
+                  boardDebug.status = 'extracted_board_invalid';
+                  boardDebug.failureCode = cleanedValidation.failureCode || 'extracted_board_invalid';
+                  boardDebug.failureReason =
+                    cleanedValidation.reasons.join(' | ') ||
+                    cleanedValidation.failureCode ||
+                    'cleaned board still invalid';
+                  boardDebug.fallbackReason = boardDebug.failureCode;
+                }
+              } else {
+                boardDebug.status = 'extracted_board_invalid';
+                boardDebug.failureCode = 'cleanup_failed';
+                boardDebug.failureReason = 'cleanup returned empty image';
+                boardDebug.fallbackReason = 'cleanup_failed';
+              }
+            } catch (cleanupError) {
+              boardDebug.status = 'extracted_board_invalid';
+              boardDebug.failureCode = 'cleanup_failed';
+              boardDebug.failureReason =
+                cleanupError instanceof Error ? cleanupError.message : 'cleanup failed';
+              boardDebug.fallbackReason = 'cleanup_failed';
+            }
           }
         }
       }
@@ -1300,12 +1351,12 @@ export async function POST(req: Request) {
       boardDebug.fallbackReason = 'board_generation_failed';
     }
 
-    if (!itemsBoardImageUrl) {
-      boardDebug.thumbnailSource = 'main_image_fallback';
-      if (!boardDebug.fallbackReason) {
-        boardDebug.fallbackReason = boardDebug.failureCode || 'board_missing';
+      if (!itemsBoardImageUrl) {
+        boardDebug.thumbnailSource = 'main_image_fallback';
+        if (!boardDebug.fallbackReason) {
+          boardDebug.fallbackReason = boardDebug.failureCode || 'board_missing';
+        }
       }
-    }
 
     return NextResponse.json({
       summary:

@@ -262,6 +262,10 @@ function formatBudget(min: number, max: number) {
   return `最低 ¥${min} · 最高 ¥${max}`;
 }
 
+function clampNumber(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
 async function shrinkGuideImageDataUrl(dataUrl: string, maxEdge = 1280, quality = 0.82) {
   if (!dataUrl || !dataUrl.startsWith('data:image/')) return dataUrl;
 
@@ -308,15 +312,20 @@ function BoardCellPreview({
   boardUrl,
   cell,
   className,
+  cropInsetRatio = 0.1,
 }: {
   boardUrl: string;
   cell: BoardCell;
   className?: string;
+  cropInsetRatio?: number;
 }) {
-  const leftPercent = cell.left;
-  const topPercent = cell.top;
-  const widthPercent = cell.width;
-  const heightPercent = cell.height;
+  const inset = clampNumber(cropInsetRatio, 0, 0.25);
+  const cropLeft = clampNumber(cell.left - cell.width * inset, 0, 100);
+  const cropTop = clampNumber(cell.top - cell.height * inset, 0, 100);
+  const cropRight = clampNumber(cell.left + cell.width + cell.width * inset, 0, 100);
+  const cropBottom = clampNumber(cell.top + cell.height + cell.height * inset, 0, 100);
+  const widthPercent = Math.max(1, cropRight - cropLeft);
+  const heightPercent = Math.max(1, cropBottom - cropTop);
 
   return (
     <div className={`relative overflow-hidden ${className || ''}`} role="img" aria-label="物件预览">
@@ -328,8 +337,8 @@ function BoardCellPreview({
         style={{
           width: `${(100 / widthPercent) * 100}%`,
           height: `${(100 / heightPercent) * 100}%`,
-          left: `-${(leftPercent / widthPercent) * 100}%`,
-          top: `-${(topPercent / heightPercent) * 100}%`,
+          left: `-${(cropLeft / widthPercent) * 100}%`,
+          top: `-${(cropTop / heightPercent) * 100}%`,
         }}
       />
     </div>
@@ -1137,7 +1146,12 @@ function ResultPageContent() {
                                     aria-label={`预览 ${item.name}`}
                                   >
                                     {itemsBoardImageUrl ? (
-                                      <BoardCellPreview boardUrl={itemsBoardImageUrl} cell={cell} className="h-full w-full" />
+                                      <BoardCellPreview
+                                        boardUrl={itemsBoardImageUrl}
+                                        cell={cell}
+                                        className="h-full w-full"
+                                        cropInsetRatio={0.12}
+                                      />
                                     ) : (
                                       <img
                                         src={afterImage}
@@ -1291,6 +1305,7 @@ function ResultPageContent() {
                 boardUrl={itemsBoardImageUrl}
                 cell={getItemBoardCell(activePreviewItem, items.findIndex((item) => item.id === activePreviewItem.id))}
                 className="h-[420px] w-full"
+                cropInsetRatio={0.08}
               />
             </div>
           </div>
