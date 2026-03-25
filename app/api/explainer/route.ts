@@ -687,13 +687,22 @@ async function generateGeminiImageFromReference(
   prompt: string,
   negativePrompt?: string
 ) {
+  return generateGeminiImageFromReferences([image], prompt, negativePrompt);
+}
+
+async function generateGeminiImageFromReferences(
+  images: string[],
+  prompt: string,
+  negativePrompt?: string
+) {
   const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   if (!apiKey) {
     throw new Error('Missing GEMINI_API_KEY (or GOOGLE_API_KEY)');
   }
 
-  const imagePart = await toInlineImagePart(image);
-  if (!imagePart) {
+  const imageParts = await Promise.all(images.map((image) => toInlineImagePart(image)));
+  const validImageParts = imageParts.filter(Boolean) as NonNullable<Awaited<ReturnType<typeof toInlineImagePart>> >[];
+  if (validImageParts.length === 0) {
     throw new Error('Unsupported image format');
   }
 
@@ -716,12 +725,12 @@ async function generateGeminiImageFromReference(
             role: 'user',
             parts: [
               { text: finalPrompt },
-              {
+              ...validImageParts.map((imagePart) => ({
                 inline_data: {
                   mime_type: imagePart.mimeType,
                   data: imagePart.data,
                 },
-              },
+              })),
             ],
           },
         ],
@@ -1212,11 +1221,12 @@ export async function POST(req: Request) {
       if (boardItems.length > 0) {
         boardDebug.generationAttempted = true;
         const boardPrompt = buildItemsBoardPrompt(theme, boardItems);
+        const boardReferences = [beforeImage, afterImage].filter(Boolean);
         const candidateUrl = await withTimeout(
-          generateGeminiImageFromReference(
-            afterImage,
+          generateGeminiImageFromReferences(
+            boardReferences.length > 0 ? boardReferences : [afterImage],
             boardPrompt,
-            'room background, full room scene, interior scene, architecture, walls, floor, windows, clutter, watermark, logo, text, letters, numbers, labels, captions, arrows, guide lines, callouts, UI overlays, annotation text, index markers, borders, frames, boxes, cards, dividers, panel outlines, grid lines, table lines, collage layout, poster layout, infographic layout, overlapping objects, cropped fragments, texture close-up'
+            'room background, full room scene, interior scene, architecture, walls, floor, windows, clutter, watermark, logo, text, letters, numbers, labels, captions, arrows, guide lines, callouts, UI overlays, annotation text, index markers, borders, frames, boxes, cards, dividers, panel outlines, grid lines, table lines, collage layout, poster layout, infographic layout, overlapping objects, cropped fragments, texture close-up, unchanged original furniture, original bed, original sofa, original desk'
           ),
           35000,
           'items board timeout'
