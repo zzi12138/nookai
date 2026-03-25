@@ -1130,9 +1130,9 @@ export async function POST(req: Request) {
       if (boardItems.length > 0) {
         boardDebug.generationAttempted = true;
         const boardPrompt = buildItemsBoardPrompt(theme, boardItems);
-        const boardProvider =
-          body.provider ||
-          (process.env.NANOBANANA_API_KEY ? 'nanobanana' : inferProviderFromImage(afterImage));
+        // Do not hard-lock extracted-board generation to Nanobanana.
+        // Let generateImage fall back across available providers when Nano DNS/network fails.
+        const boardProvider = body.provider === 'gemini' ? 'gemini' : undefined;
         const boardResult = await withTimeout(
           generateImage({
             image: afterImage,
