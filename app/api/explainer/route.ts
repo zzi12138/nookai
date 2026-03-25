@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { generateImage } from '../../lib/server/imageProvider';
 import {
   assignItemsToBoardCells,
   ITEMS_BOARD_CONFIG,
@@ -562,6 +561,74 @@ async function toInlineImagePart(image?: string): Promise<InlineImagePart | null
   return null;
 }
 
+async function generateGeminiImageFromReference(
+  image: string,
+  prompt: string,
+  negativePrompt?: string
+) {
+  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+  if (!apiKey) {
+    throw new Error('Missing GEMINI_API_KEY (or GOOGLE_API_KEY)');
+  }
+
+  const imagePart = await toInlineImagePart(image);
+  if (!imagePart) {
+    throw new Error('Unsupported image format');
+  }
+
+  const model = process.env.GEMINI_IMAGE_MODEL || 'gemini-3.1-flash-image-preview';
+  const finalPrompt = negativePrompt
+    ? `${prompt}\n\nNegative prompt (must avoid):\n${negativePrompt}`
+    : prompt;
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { text: finalPrompt },
+              {
+                inline_data: {
+                  mime_type: imagePart.mimeType,
+                  data: imagePart.data,
+                },
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          responseModalities: ['IMAGE'],
+        },
+      }),
+    }
+  );
+
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(result?.error?.message || result?.error || `Gemini ${response.status}`);
+  }
+
+  const parts = result?.candidates?.[0]?.content?.parts ?? [];
+  const imageResultPart = parts.find((part: any) => part?.inline_data || part?.inlineData);
+  const inline = imageResultPart?.inline_data || imageResultPart?.inlineData;
+  const mimeType = inline?.mime_type || inline?.mimeType || 'image/png';
+  const data = inline?.data;
+
+  if (!data) {
+    throw new Error('No image data returned from Gemini');
+  }
+
+  return `data:${mimeType};base64,${data}`;
+}
+
 function getPrompt(theme: string, hasBefore: boolean) {
   return `
 你是租房改造购物助手。请基于${hasBefore ? '原图 + 效果图对照' : '效果图'}，识别可购买、可摆放的具体物件（目标 12-18 个）。
@@ -858,18 +925,14 @@ async function validateExtractedBoardImage(image: string, theme: string, apiKey:
 
 async function cleanupExtractedBoardImage(
   image: string,
-  theme: string,
-  provider?: 'nanobanana' | 'gemini'
+  theme: string
 ) {
   return withTimeout(
-    generateImage({
+    generateGeminiImageFromReference(
       image,
-      prompt: getBoardCleanupPrompt(theme),
-      negativePrompt:
-        'text, letters, numbers, labels, captions, arrows, guide lines, borders, frames, boxes, cards, tiles, dividers, panel outlines, grid lines, table lines, watermark, logo, ui overlay, infographic layout, poster layout',
-      strength: 0.18,
-      provider,
-    }),
+      getBoardCleanupPrompt(theme),
+      'text, letters, numbers, labels, captions, arrows, guide lines, borders, frames, boxes, cards, tiles, dividers, panel outlines, grid lines, table lines, watermark, logo, ui overlay, infographic layout, poster layout'
+    ),
     45000,
     'board cleanup timeout'
   );
@@ -1130,22 +1193,15 @@ export async function POST(req: Request) {
       if (boardItems.length > 0) {
         boardDebug.generationAttempted = true;
         const boardPrompt = buildItemsBoardPrompt(theme, boardItems);
-        // Do not hard-lock extracted-board generation to Nanobanana.
-        // Let generateImage fall back across available providers when Nano DNS/network fails.
-        const boardProvider = body.provider === 'gemini' ? 'gemini' : undefined;
-        const boardResult = await withTimeout(
-          generateImage({
-            image: afterImage,
-            prompt: boardPrompt,
-            negativePrompt:
-              'room background, full room scene, interior scene, architecture, walls, floor, windows, clutter, watermark, logo, text, letters, numbers, labels, captions, arrows, guide lines, callouts, UI overlays, annotation text, index markers, borders, frames, boxes, cards, dividers, panel outlines, grid lines, table lines, collage layout, poster layout, infographic layout, overlapping objects, cropped fragments, texture close-up',
-            strength: 0.72,
-            provider: boardProvider,
-          }),
+        const candidateUrl = await withTimeout(
+          generateGeminiImageFromReference(
+            afterImage,
+            boardPrompt,
+            'room background, full room scene, interior scene, architecture, walls, floor, windows, clutter, watermark, logo, text, letters, numbers, labels, captions, arrows, guide lines, callouts, UI overlays, annotation text, index markers, borders, frames, boxes, cards, dividers, panel outlines, grid lines, table lines, collage layout, poster layout, infographic layout, overlapping objects, cropped fragments, texture close-up'
+          ),
           55000,
           'items board timeout'
         );
-        const candidateUrl = boardResult.imageUrl || '';
         const rawMeta = getImageDebugMeta(candidateUrl);
         boardDebug.generationSucceeded = Boolean(candidateUrl);
         boardDebug.rawImageKind = rawMeta.kind;
@@ -1197,23 +1253,23 @@ export async function POST(req: Request) {
             boardDebug.cleanupAttempted = true;
 
             try {
-              const cleaned = await cleanupExtractedBoardImage(candidateUrl, theme, boardProvider);
-              const cleanedMeta = getImageDebugMeta(cleaned.imageUrl);
-              boardDebug.cleanupSucceeded = Boolean(cleaned.imageUrl);
+              const cleanedImageUrl = await cleanupExtractedBoardImage(candidateUrl, theme);
+              const cleanedMeta = getImageDebugMeta(cleanedImageUrl);
+              boardDebug.cleanupSucceeded = Boolean(cleanedImageUrl);
               boardDebug.cleanedImageKind = cleanedMeta.kind;
               boardDebug.cleanedImageRef = cleanedMeta.ref;
               boardDebug.cleanedImageLength = cleanedMeta.length;
 
-              if (cleaned.imageUrl) {
+              if (cleanedImageUrl) {
                 const cleanedValidation = await withTimeout(
-                  validateExtractedBoardImage(cleaned.imageUrl, theme, apiKey),
+                  validateExtractedBoardImage(cleanedImageUrl, theme, apiKey),
                   22000,
                   'cleaned board validation timeout'
                 );
                 boardDebug.validation = cleanedValidation;
 
                 if (cleanedValidation.valid) {
-                  itemsBoardImageUrl = cleaned.imageUrl;
+                  itemsBoardImageUrl = cleanedImageUrl;
                   boardDebug.status = 'cleaned_valid';
                   boardDebug.thumbnailSource = 'extracted_board';
                   boardDebug.failureCode = null;
