@@ -763,13 +763,12 @@ function ResultPageContent() {
           setGuideProgress(100);
           setError('');
         }
-      } catch (err) {
+      } catch {
         if (!cancelled) {
           const fallback = getFallbackItems();
           setItems(fallback);
           setSummary(current.suggestions || defaultSummary);
-          const msg = err instanceof Error ? err.message : '购物指南生成失败';
-          setError(msg.includes('Failed to fetch') ? '网络波动，已切换为本地购物建议' : msg);
+          setError('');
           setGuideProgress(100);
         }
       } finally {

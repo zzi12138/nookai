@@ -101,12 +101,23 @@ function isProbablyBase64(value: string) {
   return /^[A-Za-z0-9+/=\r\n]+$/.test(value) && value.length > 64;
 }
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string) {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms);
+    promise
+      .then((value) => {
+        clearTimeout(timer);
+        resolve(value);
+      })
+      .catch((error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+  });
 }
 
 function safeParseJson<T>(text: string): T | null {
@@ -347,6 +358,26 @@ function shouldExcludeItem(name: string) {
   return blocked.some((kw) => n.includes(kw));
 }
 
+function getFallbackRawItems(theme: string): RawItem[] {
+  const styleHint = (theme || '').toLowerCase();
+  const isMinimal = styleHint.includes('简约') || styleHint.includes('minimal');
+  const isVintage = styleHint.includes('复古') || styleHint.includes('vintage');
+  const isNature = styleHint.includes('绿植') || styleHint.includes('nature');
+
+  return [
+    { name: '暖光落地灯', quantity: 1, necessity: 'Must-have', priceMin: 159, priceMax: 239, placement: '沙发右侧', reason: '最快提升氛围感' },
+    { name: '桌面台灯', quantity: 1, necessity: 'Recommended', priceMin: 69, priceMax: 119, placement: '书桌右上角', reason: '补充局部照明' },
+    { name: isMinimal ? '素色几何地毯' : '圆形地毯', quantity: 1, necessity: 'Must-have', priceMin: 199, priceMax: 299, placement: '床尾或床侧', reason: '统一地面视觉' },
+    { name: '亚麻床品', quantity: 1, necessity: 'Must-have', priceMin: 179, priceMax: 259, placement: '床面整体', reason: '降低杂乱感' },
+    { name: isVintage ? '复古抱枕' : '装饰抱枕', quantity: 2, necessity: 'Recommended', priceMin: 49, priceMax: 99, placement: '床头或沙发', reason: '增加软装层次' },
+    { name: '针织披毯', quantity: 1, necessity: 'Optional', priceMin: 79, priceMax: 149, placement: '床尾', reason: '提升舒适度' },
+    { name: isVintage ? '复古装饰画' : '免打孔挂画', quantity: 1, necessity: 'Recommended', priceMin: 79, priceMax: 129, placement: '床头墙面', reason: '形成视觉焦点' },
+    { name: isNature ? '中型绿植（龟背竹）' : '中型绿植', quantity: 1, necessity: 'Recommended', priceMin: 89, priceMax: 169, placement: '窗边或角落', reason: '增强空间生气' },
+    { name: '收纳篮', quantity: 1, necessity: 'Optional', priceMin: 39, priceMax: 89, placement: '床边地面', reason: '收纳杂物更整洁' },
+    { name: '木质托盘', quantity: 1, necessity: 'Optional', priceMin: 39, priceMax: 89, placement: '桌面或边几', reason: '让台面更有秩序' },
+  ];
+}
+
 function resolveInlineImagePart(image: string) {
   if (isDataUrl(image)) {
     return {
@@ -505,102 +536,75 @@ async function analyzeItems(beforeImage: string | undefined, afterImage: string,
     throw new Error('Unsupported image format');
   }
 
-  const models = [process.env.GEMINI_VISION_MODEL || 'gemini-2.5-flash', 'gemini-2.5-flash-lite']
-    .filter((m, i, arr) => arr.indexOf(m) === i);
+  const model = process.env.GEMINI_VISION_MODEL || 'gemini-2.5-flash';
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 20000);
 
-  let lastError = 'Guide analysis failed';
-
-  for (const model of models) {
-    for (let attempt = 1; attempt <= 2; attempt += 1) {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 90000);
-
-      try {
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-goog-api-key': apiKey,
-            },
-            body: JSON.stringify({
-              contents: [
-                {
-                  role: 'user',
-                  parts: [
-                    { text: getPrompt(theme, Boolean(beforePart)) },
-                    ...(beforePart
-                      ? [
-                          { text: '[原图 BEFORE]' },
-                          {
-                            inline_data: {
-                              mime_type: beforePart.mimeType,
-                              data: beforePart.data,
-                            },
-                          },
-                        ]
-                      : []),
-                    { text: '[效果图 AFTER]' },
-                    {
-                      inline_data: {
-                        mime_type: afterPart.mimeType,
-                        data: afterPart.data,
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey,
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                { text: getPrompt(theme, Boolean(beforePart)) },
+                ...(beforePart
+                  ? [
+                      { text: '[原图 BEFORE]' },
+                      {
+                        inline_data: {
+                          mime_type: beforePart.mimeType,
+                          data: beforePart.data,
+                        },
                       },
-                    },
-                  ],
+                    ]
+                  : []),
+                { text: '[效果图 AFTER]' },
+                {
+                  inline_data: {
+                    mime_type: afterPart.mimeType,
+                    data: afterPart.data,
+                  },
                 },
               ],
-              generationConfig: {
-                temperature: 0.15,
-                responseMimeType: 'application/json',
-              },
-            }),
-            signal: controller.signal,
-          }
-        );
-
-        const result = await response.json().catch(() => ({}));
-
-        if (!response.ok) {
-          lastError = result?.error?.message || result?.error || `Analysis failed (${response.status})`;
-          if ((response.status === 429 || response.status >= 500) && attempt < 2) {
-            await sleep(900 * attempt);
-            continue;
-          }
-          throw new Error(lastError);
-        }
-
-        const parts = result?.candidates?.[0]?.content?.parts ?? [];
-        const text = parts.map((p: any) => p?.text || '').join('\n').trim();
-        const parsed = safeParseJson<{ summary?: string; items?: RawItem[] }>(text);
-
-        if (!parsed?.items || !Array.isArray(parsed.items) || parsed.items.length === 0) {
-          lastError = 'No items detected from image';
-          if (attempt < 2) {
-            await sleep(900 * attempt);
-            continue;
-          }
-          throw new Error(lastError);
-        }
-
-        return {
-          summary: (parsed.summary || '').trim(),
-          items: dedupeByObject(parsed.items),
-        };
-      } catch (error) {
-        lastError = error instanceof Error ? error.message : String(error);
-        if (attempt < 2) {
-          await sleep(900 * attempt);
-          continue;
-        }
-      } finally {
-        clearTimeout(timer);
+            },
+          ],
+          generationConfig: {
+            temperature: 0.15,
+            responseMimeType: 'application/json',
+          },
+        }),
+        signal: controller.signal,
       }
-    }
-  }
+    );
 
-  throw new Error(lastError);
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(result?.error?.message || result?.error || `Analysis failed (${response.status})`);
+    }
+
+    const parts = result?.candidates?.[0]?.content?.parts ?? [];
+    const text = parts.map((p: any) => p?.text || '').join('\n').trim();
+    const parsed = safeParseJson<{ summary?: string; items?: RawItem[] }>(text);
+
+    if (!parsed?.items || !Array.isArray(parsed.items) || parsed.items.length === 0) {
+      throw new Error('No items detected from image');
+    }
+
+    return {
+      summary: (parsed.summary || '').trim(),
+      items: dedupeByObject(parsed.items),
+    };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function POST(req: Request) {
@@ -615,14 +619,23 @@ export async function POST(req: Request) {
     }
 
     const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: 'Missing GEMINI_API_KEY (or GOOGLE_API_KEY)' },
-        { status: 500 }
-      );
-    }
+    let analyzed: { summary: string; items: RawItem[] } = {
+      summary:
+        '已根据效果图生成基础购物建议。你可以先从灯光、床品和地毯三项开始落地，最快看到空间变化。',
+      items: getFallbackRawItems(theme),
+    };
 
-    const analyzed = await analyzeItems(beforeImage || undefined, afterImage, theme, apiKey);
+    if (apiKey) {
+      try {
+        analyzed = await withTimeout(
+          analyzeItems(beforeImage || undefined, afterImage, theme, apiKey),
+          22000,
+          'analysis timeout'
+        );
+      } catch (error) {
+        console.error('guide analysis fallback:', error);
+      }
+    }
 
     const normalizedAll: NormalizedItem[] = analyzed.items
       .slice(0, 18)
@@ -771,14 +784,18 @@ export async function POST(req: Request) {
         const boardProvider =
           body.provider ||
           (process.env.NANOBANANA_API_KEY ? 'nanobanana' : inferProviderFromImage(afterImage));
-        const boardResult = await generateImage({
-          image: afterImage,
-          prompt: boardPrompt,
-          negativePrompt:
-            'room background, full room scene, clutter, watermark, logo, text, letters, numbers, labels, captions, arrows, guide lines, callouts, UI overlays, index markers, annotation text, frames around products, cell borders, boxes, panel outlines, grid lines, table lines, dividers, collage layout, overlapping objects, architecture elements',
-          strength: 0.72,
-          provider: boardProvider,
-        });
+        const boardResult = await withTimeout(
+          generateImage({
+            image: afterImage,
+            prompt: boardPrompt,
+            negativePrompt:
+              'room background, full room scene, clutter, watermark, logo, text, letters, numbers, labels, captions, arrows, guide lines, callouts, UI overlays, index markers, annotation text, frames around products, cell borders, boxes, panel outlines, grid lines, table lines, dividers, collage layout, overlapping objects, architecture elements',
+            strength: 0.72,
+            provider: boardProvider,
+          }),
+          28000,
+          'items board timeout'
+        );
         const candidateUrl = boardResult.imageUrl || '';
         if (candidateUrl.startsWith('data:image/') && candidateUrl.length > 2_000_000) {
           console.warn('items board too large, fallback to placeholder previews');
