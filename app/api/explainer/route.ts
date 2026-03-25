@@ -514,7 +514,8 @@ function getFallbackRawItems(theme: string): RawItem[] {
   ];
 }
 
-function normalizeGuideRawItems(rawItems: RawItem[]) {
+function normalizeGuideRawItems(rawItems: RawItem[], options?: { allowSyntheticAnchor?: boolean }) {
+  const allowSyntheticAnchor = Boolean(options?.allowSyntheticAnchor);
   return rawItems
     .slice(0, 18)
     .map((item, index) => {
@@ -547,6 +548,8 @@ function normalizeGuideRawItems(rawItems: RawItem[]) {
       const confidence = Number.isFinite(item.anchor?.confidence as number)
         ? clamp(Number(item.anchor?.confidence), 0, 1)
         : 0;
+      const syntheticConfidence = allowSyntheticAnchor ? 0.32 : 0;
+      const effectiveConfidence = confidence || syntheticConfidence;
 
       const fallbackSize = fallbackSizeByName(name);
       const width = hasBox
@@ -588,13 +591,18 @@ function normalizeGuideRawItems(rawItems: RawItem[]) {
       } else if (hasRightBottom) {
         left = rawRight - width;
         top = rawBottom - height;
+      } else if (allowSyntheticAnchor) {
+        const gridX = (index % 6) * 14 + 10;
+        const gridY = Math.floor(index / 6) * 28 + 16;
+        left = gridX;
+        top = gridY;
       }
 
       const safeLeft = Number.isFinite(left) ? clamp(left, 0, 100 - width) : 50 - width / 2;
       const safeTop = Number.isFinite(top) ? clamp(top, 0, 100 - height) : 50 - height / 2;
       const x = clamp(safeLeft + width / 2, width / 2 + 1, 100 - width / 2 - 1);
       const y = clamp(safeTop + height / 2, height / 2 + 1, 100 - height / 2 - 1);
-      const hasPoint = hasAnchor && confidence >= 0.63;
+      const hasPoint = (hasAnchor || allowSyntheticAnchor) && effectiveConfidence >= 0.25;
 
       const placement = toChinesePlacement(item.placement || '');
       const reason = toChineseReason(item.reason || '');
@@ -617,8 +625,8 @@ function normalizeGuideRawItems(rawItems: RawItem[]) {
           top: safeTop,
           width,
           height,
-          confidence,
-          hasAnchor,
+          confidence: effectiveConfidence,
+          hasAnchor: hasAnchor || allowSyntheticAnchor,
           hasPoint,
         },
       } satisfies NormalizedItem;
@@ -1164,7 +1172,9 @@ export async function POST(req: Request) {
     let usedThemeFallback = false;
 
     if (normalizedAll.length === 0) {
-      normalizedAll = normalizeGuideRawItems(getFallbackRawItems(theme));
+      normalizedAll = normalizeGuideRawItems(getFallbackRawItems(theme), {
+        allowSyntheticAnchor: true,
+      });
       usedThemeFallback = true;
     }
 
