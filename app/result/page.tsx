@@ -773,7 +773,7 @@ function ResultPageContent() {
 
         for (let attempt = 1; attempt <= 2; attempt += 1) {
           const controller = new AbortController();
-          const timer = window.setTimeout(() => controller.abort(), 70000);
+          const timer = window.setTimeout(() => controller.abort(), 90000);
 
           try {
             response = await fetch('/api/explainer', {

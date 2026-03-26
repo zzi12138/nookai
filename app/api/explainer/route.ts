@@ -6,7 +6,7 @@ import {
 } from '../../lib/itemsBoard';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 90;
 
 type Payload = {
   image?: string;
@@ -1291,57 +1291,11 @@ export async function POST(req: Request) {
             boardDebug.status = 'generated_invalid';
             boardDebug.failureCode = rawValidation.failureCode || 'extracted_board_invalid';
             boardDebug.failureReason = rawValidation.reasons.join(' | ') || rawValidation.failureCode || 'validation failed';
-            boardDebug.cleanupAttempted = true;
-
-            try {
-              const cleanedImageUrl = await withTimeout(
-                cleanupExtractedBoardImage(candidateUrl, theme),
-                12000,
-                'board cleanup timeout'
-              );
-              const cleanedMeta = getImageDebugMeta(cleanedImageUrl);
-              boardDebug.cleanupSucceeded = Boolean(cleanedImageUrl);
-              boardDebug.cleanedImageKind = cleanedMeta.kind;
-              boardDebug.cleanedImageRef = cleanedMeta.ref;
-              boardDebug.cleanedImageLength = cleanedMeta.length;
-
-              if (cleanedImageUrl) {
-                const cleanedValidation = await withTimeout(
-                  validateExtractedBoardImage(cleanedImageUrl, theme, apiKey),
-                  5000,
-                  'cleaned board validation timeout'
-                );
-                boardDebug.validation = cleanedValidation;
-
-                if (cleanedValidation.valid) {
-                  itemsBoardImageUrl = cleanedImageUrl;
-                  boardDebug.status = 'cleaned_valid';
-                  boardDebug.thumbnailSource = 'extracted_board';
-                  boardDebug.failureCode = null;
-                  boardDebug.failureReason = null;
-                  boardDebug.fallbackReason = null;
-                } else {
-                  boardDebug.status = 'extracted_board_invalid';
-                  boardDebug.failureCode = cleanedValidation.failureCode || 'extracted_board_invalid';
-                  boardDebug.failureReason =
-                    cleanedValidation.reasons.join(' | ') ||
-                    cleanedValidation.failureCode ||
-                    'cleaned board still invalid';
-                  boardDebug.fallbackReason = boardDebug.failureCode;
-                }
-              } else {
-                boardDebug.status = 'extracted_board_invalid';
-                boardDebug.failureCode = 'cleanup_failed';
-                boardDebug.failureReason = 'cleanup returned empty image';
-                boardDebug.fallbackReason = 'cleanup_failed';
-              }
-            } catch (cleanupError) {
-              boardDebug.status = 'extracted_board_invalid';
-              boardDebug.failureCode = 'cleanup_failed';
-              boardDebug.failureReason =
-                cleanupError instanceof Error ? cleanupError.message : 'cleanup failed';
-              boardDebug.fallbackReason = 'cleanup_failed';
-            }
+            boardDebug.cleanupAttempted = false;
+            boardDebug.cleanupSucceeded = false;
+            boardDebug.thumbnailSource = 'extracted_board';
+            boardDebug.fallbackReason = boardDebug.failureCode;
+            itemsBoardImageUrl = candidateUrl;
           }
         }
       }
