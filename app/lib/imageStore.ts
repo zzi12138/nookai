@@ -35,7 +35,7 @@ function generateId() {
 export type StoredResult = {
   original: string;
   generated: string;
-  provider?: 'nanobanana' | 'gemini';
+  provider?: 'nanobanana' | 'gemini' | 'seedream';
   explainerImage?: string;
   theme?: string;
   evaluation?: string;

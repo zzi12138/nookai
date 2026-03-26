@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { generateSeedreamImages } from '../../lib/server/seedream';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -174,71 +175,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing image' }, { status: 400 });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: 'Missing GEMINI_API_KEY (or GOOGLE_API_KEY)' },
-        { status: 500 }
-      );
-    }
-
-    const model = process.env.GEMINI_IMAGE_MODEL || 'gemini-3.1-flash-image-preview';
     const prompt = buildPrompt(theme, constraints, requirements);
-    const base64Image = stripDataUrl(image);
-
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey,
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              role: 'user',
-              parts: [
-                { text: prompt },
-                {
-                  inline_data: {
-                    mime_type: 'image/jpeg',
-                    data: base64Image,
-                  },
-                },
-              ],
-            },
-          ],
-          generationConfig: {
-            responseModalities: ['IMAGE'],
-          },
-        }),
-      }
-    );
-
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      return NextResponse.json(
-        { error: result?.error?.message || result?.error || 'Generation failed' },
-        { status: 500 }
-      );
-    }
-
-    const parts = result?.candidates?.[0]?.content?.parts ?? [];
-    const imagePart = parts.find((part: any) => part?.inline_data || part?.inlineData);
-    const inline = imagePart?.inline_data || imagePart?.inlineData;
-    const mimeType = inline?.mime_type || inline?.mimeType || 'image/png';
-    const data = inline?.data;
-
-    if (!data) {
-      return NextResponse.json(
-        { error: 'No image data returned from Gemini' },
-        { status: 500 }
-      );
-    }
+    const generated = await generateSeedreamImages({
+      prompt,
+      images: [image],
+      maxImages: 1,
+      provider:
+        process.env.SEEDREAM_PROVIDER === 'ark' || process.env.SEEDREAM_PROVIDER === 'operator'
+          ? (process.env.SEEDREAM_PROVIDER as 'ark' | 'operator')
+          : undefined,
+    });
 
     return NextResponse.json({
-      imageUrl: `data:${mimeType};base64,${data}`,
+      imageUrl: generated.imageUrls[0],
+      provider: 'seedream',
       evaluation: buildEvaluation(theme, requirements),
       suggestions: buildSuggestions(theme),
     });

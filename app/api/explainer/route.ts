@@ -4,6 +4,7 @@ import {
   ITEMS_BOARD_CONFIG,
   type BoardCell,
 } from '../../lib/itemsBoard';
+import { generateSeedreamImages } from '../../lib/server/seedream';
 
 export const runtime = 'nodejs';
 export const maxDuration = 90;
@@ -13,7 +14,7 @@ type Payload = {
   beforeImage?: string;
   afterImage?: string;
   theme?: string;
-  provider?: 'nanobanana' | 'gemini';
+  provider?: 'nanobanana' | 'gemini' | 'seedream';
 };
 
 type Category =
@@ -65,6 +66,7 @@ type NormalizedItem = {
   necessity: Necessity;
   reason: string;
   boardCell?: BoardCell;
+  previewImage?: string;
   imageTarget: {
     x: number;
     y: number;
@@ -123,7 +125,7 @@ type ExtractedBoardDebug = {
   failureCode: string | null;
   failureReason: string | null;
   fallbackReason: string | null;
-  thumbnailSource: 'extracted_board' | 'main_image_fallback';
+  thumbnailSource: 'seedream_item_preview' | 'main_image_fallback';
 };
 
 function stripDataUrl(value: string) {
@@ -429,9 +431,10 @@ function normalizePrice(name: string, minRaw?: number, maxRaw?: number) {
   return { min, max };
 }
 
-function inferProviderFromImage(image: string): 'nanobanana' | 'gemini' | undefined {
+function inferProviderFromImage(image: string): 'nanobanana' | 'gemini' | 'seedream' | undefined {
   if (!image) return undefined;
   if (image.startsWith('data:image/')) return 'gemini';
+  if (/volces\.com|volcengine/i.test(image)) return 'seedream' as const;
   if (/^https?:\/\//i.test(image)) return 'nanobanana';
   return undefined;
 }
@@ -866,7 +869,37 @@ VISUAL STYLE:
 PLACE OBJECTS in exact reading order from top-left to bottom-right:
 ${assignedOrder || 'Use visible purchasable objects from the generated room and place them deterministically.'}
 
+  Theme context: ${theme || '日式原木风'}
+`.trim();
+}
+
+function buildItemPreviewPrompt(theme: string, items: NormalizedItem[]) {
+  const orderedItems = items
+    .map(
+      (item, index) =>
+        `${index + 1}. ${item.name}｜分类：${item.category}｜摆放：${item.placement}｜重点：${item.reason}`
+    )
+    .join('\n');
+
+  return `
+Use the provided room images as the visual reference.
+Generate ${items.length} separate product preview images in the exact order listed below.
+Each output image must show only one item, isolated like a clean product shot.
+
+Rules:
+1) Keep the item color, material, and overall style consistent with the room.
+2) Use a pure white or very light warm neutral background.
+3) No room scene, no furniture scene, no floor, no walls, no windows, no architecture.
+4) No text, no labels, no numbers, no arrows, no borders, no boxes, no frames.
+5) No collage and no mixed items in one image.
+6) Make each object large, clear, centered, and easy to recognize.
+7) Preserve the same decorative tone seen in the generated room, but isolate the product.
+8) Output images in the exact same order as the list.
+
 Theme context: ${theme || '日式原木风'}
+
+Items:
+${orderedItems}
 `.trim();
 }
 
@@ -1218,8 +1251,9 @@ export async function POST(req: Request) {
       reduced = [...reduced, ...topUp];
     }
 
-    const boardItems = assignItemsToBoardCells(reduced.slice(0, 12));
+    const previewItems = assignItemsToBoardCells(reduced.slice(0, 8));
     let itemsBoardImageUrl = '';
+    let finalItems = previewItems;
     const boardDebug = makeDefaultBoardDebug();
     if (usedThemeFallback) {
       boardDebug.failureCode = 'analysis_fallback';
@@ -1228,102 +1262,67 @@ export async function POST(req: Request) {
     }
 
     try {
-      if (boardItems.length > 0) {
+      if (previewItems.length > 0) {
         boardDebug.generationAttempted = true;
-        const boardPrompt = buildItemsBoardPrompt(theme, boardItems);
-        const boardReferences = [beforeImage, afterImage].filter(Boolean);
-        const candidateUrl = await withTimeout(
-          generateGeminiImageFromReferences(
-            boardReferences.length > 0 ? boardReferences : [afterImage],
-            boardPrompt,
-        'room background, full room scene, interior scene, architecture, walls, floor, windows, clutter, watermark, logo, text, letters, numbers, labels, captions, arrows, guide lines, callouts, UI overlays, annotation text, index markers, borders, frames, boxes, cards, dividers, panel outlines, table lines, collage layout, poster layout, infographic layout, overlapping objects, cropped fragments, texture close-up, unchanged original furniture, original bed, original sofa, original desk'
-          ),
-          35000,
-          'items board timeout'
+        const previewPrompt = buildItemPreviewPrompt(theme, previewItems);
+        const previewReferences = [beforeImage, afterImage].filter(Boolean);
+        const seedreamResult = await withTimeout(
+          generateSeedreamImages({
+            prompt: previewPrompt,
+            images: previewReferences.length > 0 ? previewReferences : [afterImage],
+            maxImages: previewItems.length,
+            provider:
+              process.env.SEEDREAM_PROVIDER === 'ark' || process.env.SEEDREAM_PROVIDER === 'operator'
+                ? (process.env.SEEDREAM_PROVIDER as 'ark' | 'operator')
+                : undefined,
+          }),
+          85000,
+          'item preview timeout'
         );
-        const rawMeta = getImageDebugMeta(candidateUrl);
-        boardDebug.generationSucceeded = Boolean(candidateUrl);
+        const previewUrls = seedreamResult.imageUrls || [];
+        const rawMeta = getImageDebugMeta(previewUrls[0] || '');
+        boardDebug.generationSucceeded = previewUrls.length > 0;
         boardDebug.rawImageKind = rawMeta.kind;
         boardDebug.rawImageRef = rawMeta.ref;
         boardDebug.rawImageLength = rawMeta.length;
+        boardDebug.thumbnailSource = 'seedream_item_preview';
+        boardDebug.status = 'generated_valid';
+        boardDebug.failureCode = null;
+        boardDebug.failureReason = null;
+        boardDebug.validation = makeDefaultValidation();
+        itemsBoardImageUrl = previewUrls[0] || '';
 
-        if (!candidateUrl) {
-          boardDebug.status = 'generation_failed';
-          boardDebug.failureCode = 'missing_board_image';
-          boardDebug.failureReason = 'board generator returned empty image';
-          boardDebug.fallbackReason = 'missing_board_image';
-        } else if (!apiKey) {
-          itemsBoardImageUrl = candidateUrl;
-          boardDebug.status = 'generated_unchecked';
-          boardDebug.thumbnailSource = 'extracted_board';
-          boardDebug.failureCode = 'validation_unavailable';
-          boardDebug.failureReason = 'missing GEMINI_API_KEY (or GOOGLE_API_KEY) for validation';
-        } else {
-          let rawValidation: ExtractedBoardValidation;
-          try {
-            rawValidation = await withTimeout(
-              validateExtractedBoardImage(candidateUrl, theme, apiKey),
-              6000,
-              'board validation timeout'
-            );
-          } catch (validationError) {
-            itemsBoardImageUrl = candidateUrl;
-            boardDebug.status = 'generated_unchecked';
-            boardDebug.thumbnailSource = 'extracted_board';
-            boardDebug.failureCode = 'validation_unavailable';
-            boardDebug.failureReason =
-              validationError instanceof Error ? validationError.message : 'board validation failed';
-            boardDebug.fallbackReason = null;
-            rawValidation = {
-              ...makeDefaultValidation(),
-              checked: false,
-              failureCode: 'validation_unavailable',
-              reasons: [boardDebug.failureReason],
-            };
-          }
-          boardDebug.validation = rawValidation;
-
-          if (rawValidation.valid) {
-            itemsBoardImageUrl = candidateUrl;
-            boardDebug.status = 'generated_valid';
-            boardDebug.thumbnailSource = 'extracted_board';
-          } else if (boardDebug.status !== 'generated_unchecked') {
-            boardDebug.status = 'generated_invalid';
-            boardDebug.failureCode = rawValidation.failureCode || 'extracted_board_invalid';
-            boardDebug.failureReason = rawValidation.reasons.join(' | ') || rawValidation.failureCode || 'validation failed';
-            boardDebug.cleanupAttempted = false;
-            boardDebug.cleanupSucceeded = false;
-            boardDebug.thumbnailSource = 'extracted_board';
-            boardDebug.fallbackReason = boardDebug.failureCode;
-            itemsBoardImageUrl = candidateUrl;
-          }
-        }
+        finalItems = previewItems.map((item, index) => ({
+          ...item,
+          previewImage: previewUrls[index] || previewUrls[0] || '',
+        }));
       }
     } catch (error) {
-      console.error('items board generation failed:', error);
+      console.error('item preview generation failed:', error);
       itemsBoardImageUrl = '';
       boardDebug.status = 'generation_failed';
       boardDebug.generationAttempted = true;
       boardDebug.generationSucceeded = false;
-      boardDebug.failureCode = 'board_generation_failed';
-      boardDebug.failureReason = error instanceof Error ? error.message : 'board generation failed';
-      boardDebug.fallbackReason = 'board_generation_failed';
+      boardDebug.failureCode = 'item_preview_generation_failed';
+      boardDebug.failureReason = error instanceof Error ? error.message : 'item preview generation failed';
+      boardDebug.fallbackReason = 'item_preview_generation_failed';
+      boardDebug.thumbnailSource = 'main_image_fallback';
     }
 
-      if (!itemsBoardImageUrl) {
-        boardDebug.thumbnailSource = 'main_image_fallback';
-        if (!boardDebug.fallbackReason) {
-          boardDebug.fallbackReason = boardDebug.failureCode || 'board_missing';
-        }
+    if (!itemsBoardImageUrl && boardDebug.thumbnailSource !== 'seedream_item_preview') {
+      boardDebug.thumbnailSource = 'main_image_fallback';
+      if (!boardDebug.fallbackReason) {
+        boardDebug.fallbackReason = boardDebug.failureCode || 'board_missing';
       }
+    }
 
     return NextResponse.json({
       summary:
         analyzed.summary ||
         '已从当前效果图识别关键可购买物件，可按优先级逐步添置。',
-      items: boardItems,
+      items: finalItems,
       itemsBoardImageUrl,
-      explainerImageUrl: itemsBoardImageUrl,
+      explainerImageUrl: afterImage || itemsBoardImageUrl,
       extractedBoardStatus: itemsBoardImageUrl
         ? boardDebug.status
         : boardDebug.status === 'not_attempted'

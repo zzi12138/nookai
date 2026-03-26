@@ -157,6 +157,7 @@ function normalizeItems(raw: PlanItem[] | undefined, theme: string) {
 function inferProvider(imageUrl: string) {
   if (!imageUrl) return undefined;
   if (imageUrl.startsWith('data:image/')) return 'gemini' as const;
+  if (/volces\.com|volcengine/i.test(imageUrl)) return 'seedream' as const;
   if (/^https?:\/\//i.test(imageUrl)) return 'nanobanana' as const;
   return undefined;
 }
@@ -167,7 +168,7 @@ export default function PlanPage() {
   const [theme, setTheme] = useState('日式原木风');
   const [originalUrl, setOriginalUrl] = useState('');
   const [generatedUrl, setGeneratedUrl] = useState('');
-  const [provider, setProvider] = useState<'nanobanana' | 'gemini' | undefined>(undefined);
+  const [provider, setProvider] = useState<'nanobanana' | 'gemini' | 'seedream' | undefined>(undefined);
   const [explainerImageUrl, setExplainerImageUrl] = useState('');
   const [summary, setSummary] = useState('');
   const [items, setItems] = useState<PlanItem[]>([]);

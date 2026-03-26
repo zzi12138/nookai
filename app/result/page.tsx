@@ -42,6 +42,7 @@ type GuideItem = {
   placement: string;
   necessity: Necessity;
   reason: string;
+  previewImage?: string;
   boardCell?: BoardCell;
   imageTarget?: {
     x?: number;
@@ -70,7 +71,7 @@ type GuideResponse = {
     failureCode?: string | null;
     failureReason?: string | null;
     fallbackReason?: string | null;
-    thumbnailSource?: 'extracted_board' | 'main_image_fallback';
+    thumbnailSource?: 'seedream_item_preview' | 'main_image_fallback';
     validation?: {
       checked?: boolean;
       valid?: boolean;
@@ -246,11 +247,12 @@ function normalizeItems(raw: GuideItem[] | undefined): GuideItem[] {
       priceRange: `¥${priceMin}-${priceMax}`,
       placement: item.placement || '放在不影响动线的位置',
       necessity: normalizeNecessity(item.necessity),
-      reason: item.reason || '提升空间完成度',
-      boardCell: item.boardCell,
-      imageTarget: item.imageTarget,
-    };
-  });
+    reason: item.reason || '提升空间完成度',
+    previewImage: item.previewImage || '',
+    boardCell: item.boardCell,
+    imageTarget: item.imageTarget,
+  };
+});
 }
 
 function itemMatchesFilter(item: GuideItem, filter: FilterKey) {
@@ -784,7 +786,12 @@ function ResultPageContent() {
                 // Only after image is required for the shopping-guide extraction step.
                 afterImage: afterForGuide,
                 theme: current.theme || '日式原木风',
-                provider: current.provider === 'nanobanana' || current.provider === 'gemini' ? current.provider : undefined,
+                provider:
+                  current.provider === 'nanobanana' ||
+                  current.provider === 'gemini' ||
+                  current.provider === 'seedream'
+                    ? current.provider
+                    : undefined,
               }),
               signal: controller.signal,
             });
@@ -834,7 +841,7 @@ function ResultPageContent() {
             status: 'request_failed',
             thumbnailSource: 'main_image_fallback',
             failureCode: 'request_failed',
-            failureReason: 'explainer request failed before extracted board became available',
+            failureReason: 'explainer request failed before item previews became available',
             fallbackReason: 'request_failed',
           });
           setError('');
@@ -899,8 +906,10 @@ function ResultPageContent() {
   const beforeImage = stored?.original || '';
   const afterImage = stored?.generated || '';
   const thumbnailSource =
-    (boardDebug?.thumbnailSource as 'extracted_board' | 'main_image_fallback' | undefined) ||
-    (itemsBoardImageUrl ? 'extracted_board' : 'main_image_fallback');
+    (boardDebug?.thumbnailSource as 'seedream_item_preview' | 'main_image_fallback' | undefined) ||
+    (items.some((item) => Boolean(item.previewImage))
+      ? 'seedream_item_preview'
+      : 'main_image_fallback');
 
   const activePreviewItem = useMemo(() => items.find((item) => item.id === previewItemId) || null, [items, previewItemId]);
 
@@ -1030,9 +1039,9 @@ function ResultPageContent() {
         {showDebug ? (
           <div className="mb-6 rounded-2xl border border-[#d4c3be]/60 bg-white/70 p-4 text-xs text-[#504440]">
             <div className="grid gap-2 md:grid-cols-2">
-              <p>当前缩略图来源：<span className="font-semibold text-[#52372d]">{thumbnailSource}</span></p>
-              <p>extracted board 状态：<span className="font-semibold text-[#52372d]">{extractedBoardStatus || boardDebug?.status || 'unknown'}</span></p>
-              <p>extracted board 是否存在：<span className="font-semibold text-[#52372d]">{itemsBoardImageUrl ? '是' : '否'}</span></p>
+              <p>当前商品预览来源：<span className="font-semibold text-[#52372d]">{thumbnailSource}</span></p>
+              <p>商品预览状态：<span className="font-semibold text-[#52372d]">{extractedBoardStatus || boardDebug?.status || 'unknown'}</span></p>
+              <p>商品预览是否存在：<span className="font-semibold text-[#52372d]">{items.some((item) => Boolean(item.previewImage)) ? '是' : '否'}</span></p>
               <p>fallback 原因：<span className="font-semibold text-[#52372d]">{fallbackReason || boardDebug?.fallbackReason || 'none'}</span></p>
               <p>原始图片类型/长度：<span className="font-semibold text-[#52372d]">{boardDebug?.rawImageKind || 'none'} / {boardDebug?.rawImageLength || 0}</span></p>
               <p>清洗后图片类型/长度：<span className="font-semibold text-[#52372d]">{boardDebug?.cleanedImageKind || 'none'} / {boardDebug?.cleanedImageLength || 0}</span></p>
@@ -1129,7 +1138,6 @@ function ResultPageContent() {
                           {categoryItems.map((item, indexInCategory) => {
                             const expandedItem = expandedItemId === item.id;
                             const added = addedIds.has(item.id);
-                            const cell = getItemBoardCell(item, indexInCategory);
 
                             return (
                               <motion.div
@@ -1145,21 +1153,11 @@ function ResultPageContent() {
                                     className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl bg-white ring-1 ring-[#d4c3be]/30"
                                     aria-label={`预览 ${item.name}`}
                                   >
-                                    {itemsBoardImageUrl ? (
-                                      <BoardCellPreview
-                                        boardUrl={itemsBoardImageUrl}
-                                        cell={cell}
-                                        className="h-full w-full"
-                                        cropInsetRatio={0.12}
-                                      />
-                                    ) : (
-                                      <img
-                                        src={afterImage}
-                                        alt={item.name}
-                                        className="h-full w-full object-cover"
-                                        style={{ objectPosition: `${item.imageTarget?.x || 50}% ${item.imageTarget?.y || 50}%` }}
-                                      />
-                                    )}
+                                    <img
+                                      src={item.previewImage || afterImage}
+                                      alt={item.name}
+                                      className="h-full w-full object-cover"
+                                    />
                                   </button>
 
                                   <div className="min-w-0 flex-1">
@@ -1286,7 +1284,7 @@ function ResultPageContent() {
         })}
       </nav>
 
-      {activePreviewItem && itemsBoardImageUrl ? (
+      {activePreviewItem ? (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-[#1f1b13]/75 px-6 backdrop-blur-sm" onClick={() => setPreviewItemId(null)}>
           <div className="w-full max-w-xl rounded-3xl bg-white p-4" onClick={(event) => event.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between px-2">
@@ -1301,11 +1299,10 @@ function ResultPageContent() {
             </div>
 
             <div className="overflow-hidden rounded-2xl border border-[#ebe1d3] bg-[#f7edde]">
-              <BoardCellPreview
-                boardUrl={itemsBoardImageUrl}
-                cell={getItemBoardCell(activePreviewItem, items.findIndex((item) => item.id === activePreviewItem.id))}
-                className="h-[420px] w-full"
-                cropInsetRatio={0.08}
+              <img
+                src={activePreviewItem.previewImage || afterImage}
+                alt={activePreviewItem.name}
+                className="h-[420px] w-full object-contain bg-white"
               />
             </div>
           </div>
