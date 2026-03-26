@@ -257,6 +257,31 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string) {
   });
 }
 
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  mapper: (item: T, index: number) => Promise<R>
+) {
+  const results: Array<R | null> = new Array(items.length);
+  let nextIndex = 0;
+
+  const workers = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, async () => {
+    while (true) {
+      const current = nextIndex++;
+      if (current >= items.length) break;
+      try {
+        results[current] = await mapper(items[current], current);
+      } catch (error) {
+        console.error('preview item generation failed:', error);
+        results[current] = null;
+      }
+    }
+  });
+
+  await Promise.all(workers);
+  return results;
+}
+
 function safeParseJson<T>(text: string): T | null {
   try {
     return JSON.parse(text) as T;
@@ -1249,7 +1274,7 @@ export async function POST(req: Request) {
       reduced = [...reduced, ...topUp];
     }
 
-    const previewItems = assignItemsToBoardCells(reduced.slice(0, 8));
+    const previewItems = assignItemsToBoardCells(reduced.slice(0, 5));
     let itemsBoardImageUrl = '';
     let finalItems = previewItems;
     const boardDebug = makeDefaultBoardDebug();
@@ -1262,29 +1287,29 @@ export async function POST(req: Request) {
     try {
       if (previewItems.length > 0) {
         boardDebug.generationAttempted = true;
-        const previewUrls: string[] = [];
-        for (const item of previewItems) {
+        const previewResults = await mapWithConcurrency(previewItems, 3, async (item) => {
           const previewPrompt = buildItemPreviewPrompt(theme, [item]);
-          const previewUrl = await withTimeout(
+          return withTimeout(
             generateGeminiImageFromReference(
               afterImage,
               previewPrompt,
               'text, letters, numbers, labels, captions, arrows, guide lines, borders, frames, boxes, cards, tiles, dividers, room scene, furniture scene, floor, walls, windows, architecture, collage, multi-item layout, watermark, logo, ui overlay'
             ),
-            45000,
+            35000,
             'item preview timeout'
           );
-          previewUrls.push(previewUrl);
-        }
+        });
+
+        const previewUrls = previewResults.filter((value): value is string => Boolean(value));
         const rawMeta = getImageDebugMeta(previewUrls[0] || '');
         boardDebug.generationSucceeded = previewUrls.length > 0;
         boardDebug.rawImageKind = rawMeta.kind;
         boardDebug.rawImageRef = rawMeta.ref;
         boardDebug.rawImageLength = rawMeta.length;
-        boardDebug.thumbnailSource = 'gemini_item_preview';
-        boardDebug.status = 'generated_valid';
+        boardDebug.thumbnailSource = previewUrls.length > 0 ? 'gemini_item_preview' : 'main_image_fallback';
+        boardDebug.status = previewUrls.length === previewItems.length ? 'generated_valid' : 'generated_unchecked';
         boardDebug.failureCode = null;
-        boardDebug.failureReason = null;
+        boardDebug.failureReason = previewUrls.length > 0 ? null : 'no item previews returned';
         boardDebug.validation = makeDefaultValidation();
         itemsBoardImageUrl = previewUrls[0] || '';
 
