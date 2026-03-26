@@ -47,6 +47,11 @@ type GuideItem = {
   imageTarget?: {
     x?: number;
     y?: number;
+    left?: number;
+    top?: number;
+    width?: number;
+    height?: number;
+    confidence?: number;
   };
 };
 
@@ -299,6 +304,119 @@ async function shrinkGuideImageDataUrl(dataUrl: string, maxEdge = 1280, quality 
     return canvas.toDataURL('image/jpeg', quality);
   } catch {
     return dataUrl;
+  }
+}
+
+async function loadImageElement(src: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.crossOrigin = 'anonymous';
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('image-load-failed'));
+    image.src = src;
+  });
+}
+
+function getCropPercentBox(item: GuideItem) {
+  const target = item.imageTarget || {};
+  const x = Number(target.x);
+  const y = Number(target.y);
+  const left = Number(target.left);
+  const top = Number(target.top);
+  const width = Number(target.width);
+  const height = Number(target.height);
+
+  const hasBox = Number.isFinite(left) && Number.isFinite(top) && Number.isFinite(width) && Number.isFinite(height);
+  if (hasBox) {
+    return { left, top, width, height };
+  }
+
+  const fallbackWidth = Number.isFinite(width) ? width : 18;
+  const fallbackHeight = Number.isFinite(height) ? height : 18;
+  const centerX = Number.isFinite(x) ? x : 50;
+  const centerY = Number.isFinite(y) ? y : 50;
+  return {
+    left: centerX - fallbackWidth / 2,
+    top: centerY - fallbackHeight / 2,
+    width: fallbackWidth,
+    height: fallbackHeight,
+  };
+}
+
+async function createCroppedPreview(sourceUrl: string, item: GuideItem) {
+  if (!sourceUrl) return '';
+
+  try {
+    const image = await loadImageElement(sourceUrl);
+    return await createCroppedPreviewFromLoadedImage(image, item);
+  } catch {
+    return '';
+  }
+}
+
+async function createCroppedPreviewFromLoadedImage(image: HTMLImageElement, item: GuideItem) {
+  try {
+    const width = image.naturalWidth || image.width;
+    const height = image.naturalHeight || image.height;
+    if (!width || !height) return '';
+
+    const percentBox = getCropPercentBox(item);
+    const leftPx = clampNumber((percentBox.left / 100) * width, 0, width);
+    const topPx = clampNumber((percentBox.top / 100) * height, 0, height);
+    const boxWidthPx = Math.max(8, (percentBox.width / 100) * width);
+    const boxHeightPx = Math.max(8, (percentBox.height / 100) * height);
+
+    const itemCenterX = leftPx + boxWidthPx / 2;
+    const itemCenterY = topPx + boxHeightPx / 2;
+    const expandFactor =
+      item.category === 'Floor soft furnishings'
+        ? 2.1
+        : item.category === 'Bedding & soft textiles'
+          ? 2.0
+          : item.category === 'Ambient lighting'
+            ? 2.2
+            : item.category === 'Wall decor'
+              ? 2.6
+              : item.category === 'Plants'
+                ? 2.3
+                : 2.2;
+
+    const squareSide = clampNumber(
+      Math.max(boxWidthPx, boxHeightPx) * expandFactor,
+      180,
+      Math.min(width, height) * 0.92
+    );
+
+    const cropLeft = clampNumber(itemCenterX - squareSide / 2, 0, Math.max(0, width - squareSide));
+    const cropTop = clampNumber(itemCenterY - squareSide / 2, 0, Math.max(0, height - squareSide));
+    const canvasSize = 512;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvasSize;
+    canvas.height = canvasSize;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return '';
+
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvasSize, canvasSize);
+
+    const drawSize = canvasSize * 0.84;
+    const offset = (canvasSize - drawSize) / 2;
+    ctx.drawImage(
+      image,
+      cropLeft,
+      cropTop,
+      squareSide,
+      squareSide,
+      offset,
+      offset,
+      drawSize,
+      drawSize
+    );
+
+    return canvas.toDataURL('image/jpeg', 0.94);
+  } catch {
+    return '';
   }
 }
 
@@ -692,6 +810,7 @@ function ResultPageContent() {
   const [stored, setStored] = useState<StoredResult | null>(null);
   const [summary, setSummary] = useState(defaultSummary);
   const [items, setItems] = useState<GuideItem[]>([]);
+  const [localPreviewImages, setLocalPreviewImages] = useState<Record<number, string>>({});
   const [itemsBoardImageUrl, setItemsBoardImageUrl] = useState('');
   const [extractedBoardStatus, setExtractedBoardStatus] = useState('');
   const [fallbackReason, setFallbackReason] = useState('');
@@ -858,6 +977,44 @@ function ResultPageContent() {
   }, [stored]);
 
   useEffect(() => {
+    const sourceAfterImage = stored?.generated || '';
+    if (!sourceAfterImage || items.length === 0) {
+      setLocalPreviewImages({});
+      return;
+    }
+
+    let cancelled = false;
+
+    async function buildLocalPreviews() {
+      try {
+        const image = await loadImageElement(sourceAfterImage);
+        const next: Record<number, string> = {};
+
+        for (const item of items) {
+          const preview = await createCroppedPreviewFromLoadedImage(image, item);
+          if (preview) {
+            next[item.id] = preview;
+          }
+        }
+
+        if (!cancelled) {
+          setLocalPreviewImages(next);
+        }
+      } catch {
+        if (!cancelled) {
+          setLocalPreviewImages({});
+        }
+      }
+    }
+
+    buildLocalPreviews();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [stored?.generated, items]);
+
+  useEffect(() => {
     if (!guideLoading) return;
 
     const timer = window.setInterval(() => {
@@ -903,11 +1060,14 @@ function ResultPageContent() {
 
   const beforeImage = stored?.original || '';
   const afterImage = stored?.generated || '';
+  const hasLocalCropPreviews = Object.keys(localPreviewImages).length > 0;
   const thumbnailSource =
-    (boardDebug?.thumbnailSource as 'gemini_item_preview' | 'main_image_fallback' | undefined) ||
-    (items.some((item) => Boolean(item.previewImage))
-      ? 'gemini_item_preview'
-      : 'main_image_fallback');
+    hasLocalCropPreviews
+      ? 'local_room_crop'
+      : (boardDebug?.thumbnailSource as 'gemini_item_preview' | 'main_image_fallback' | undefined) ||
+        (items.some((item) => Boolean(item.previewImage))
+          ? 'gemini_item_preview'
+          : 'main_image_fallback');
 
   const activePreviewItem = useMemo(() => items.find((item) => item.id === previewItemId) || null, [items, previewItemId]);
 
@@ -1039,7 +1199,7 @@ function ResultPageContent() {
             <div className="grid gap-2 md:grid-cols-2">
               <p>当前商品预览来源：<span className="font-semibold text-[#52372d]">{thumbnailSource}</span></p>
               <p>商品预览状态：<span className="font-semibold text-[#52372d]">{extractedBoardStatus || boardDebug?.status || 'unknown'}</span></p>
-              <p>商品预览是否存在：<span className="font-semibold text-[#52372d]">{items.some((item) => Boolean(item.previewImage)) ? '是' : '否'}</span></p>
+              <p>商品预览是否存在：<span className="font-semibold text-[#52372d]">{hasLocalCropPreviews || items.some((item) => Boolean(item.previewImage)) ? '是' : '否'}</span></p>
               <p>fallback 原因：<span className="font-semibold text-[#52372d]">{fallbackReason || boardDebug?.fallbackReason || 'none'}</span></p>
               <p>原始图片类型/长度：<span className="font-semibold text-[#52372d]">{boardDebug?.rawImageKind || 'none'} / {boardDebug?.rawImageLength || 0}</span></p>
               <p>清洗后图片类型/长度：<span className="font-semibold text-[#52372d]">{boardDebug?.cleanedImageKind || 'none'} / {boardDebug?.cleanedImageLength || 0}</span></p>
@@ -1152,7 +1312,7 @@ function ResultPageContent() {
                                     aria-label={`预览 ${item.name}`}
                                   >
                                     <img
-                                      src={item.previewImage || afterImage}
+                                      src={localPreviewImages[item.id] || item.previewImage || afterImage}
                                       alt={item.name}
                                       className="h-full w-full object-cover"
                                     />
@@ -1298,7 +1458,7 @@ function ResultPageContent() {
 
             <div className="overflow-hidden rounded-2xl border border-[#ebe1d3] bg-[#f7edde]">
               <img
-                src={activePreviewItem.previewImage || afterImage}
+                src={localPreviewImages[activePreviewItem.id] || activePreviewItem.previewImage || afterImage}
                 alt={activePreviewItem.name}
                 className="h-[420px] w-full object-contain bg-white"
               />

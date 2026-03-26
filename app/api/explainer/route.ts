@@ -257,31 +257,6 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string) {
   });
 }
 
-async function mapWithConcurrency<T, R>(
-  items: T[],
-  limit: number,
-  mapper: (item: T, index: number) => Promise<R>
-) {
-  const results: Array<R | null> = new Array(items.length);
-  let nextIndex = 0;
-
-  const workers = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, async () => {
-    while (true) {
-      const current = nextIndex++;
-      if (current >= items.length) break;
-      try {
-        results[current] = await mapper(items[current], current);
-      } catch (error) {
-        console.error('preview item generation failed:', error);
-        results[current] = null;
-      }
-    }
-  });
-
-  await Promise.all(workers);
-  return results;
-}
-
 function safeParseJson<T>(text: string): T | null {
   try {
     return JSON.parse(text) as T;
@@ -1276,9 +1251,9 @@ export async function POST(req: Request) {
       reduced = [...reduced, ...topUp];
     }
 
-    const previewItems = assignItemsToBoardCells(reduced.slice(0, 8));
-    let itemsBoardImageUrl = '';
-    let finalItems = previewItems;
+    const previewItems = assignItemsToBoardCells(reduced);
+    const itemsBoardImageUrl = '';
+    const finalItems = previewItems;
     const boardDebug = makeDefaultBoardDebug();
     if (usedThemeFallback) {
       boardDebug.failureCode = 'analysis_fallback';
@@ -1286,58 +1261,14 @@ export async function POST(req: Request) {
       boardDebug.fallbackReason = 'analysis_fallback';
     }
 
-    try {
-      if (previewItems.length > 0) {
-        boardDebug.generationAttempted = true;
-        const previewResults = await mapWithConcurrency(previewItems, 4, async (item) => {
-          const previewPrompt = buildItemPreviewPrompt(theme, [item]);
-          return withTimeout(
-            generateGeminiImageFromReferences(
-              beforeImage ? [beforeImage, afterImage] : [afterImage],
-              previewPrompt,
-              'text, letters, numbers, labels, captions, arrows, guide lines, borders, frames, boxes, cards, tiles, dividers, room scene, furniture scene, floor, walls, windows, architecture, collage, multi-item layout, watermark, logo, ui overlay'
-            ),
-            40000,
-            'item preview timeout'
-          );
-        });
-
-        const previewUrls = previewResults.map((value) => (typeof value === 'string' ? value : ''));
-        const previewCount = previewUrls.filter(Boolean).length;
-        const rawMeta = getImageDebugMeta(previewUrls.find(Boolean) || '');
-        boardDebug.generationSucceeded = previewCount > 0;
-        boardDebug.rawImageKind = rawMeta.kind;
-        boardDebug.rawImageRef = rawMeta.ref;
-        boardDebug.rawImageLength = rawMeta.length;
-        boardDebug.thumbnailSource = previewCount > 0 ? 'gemini_item_preview' : 'main_image_fallback';
-        boardDebug.status = previewCount === previewItems.length ? 'generated_valid' : 'generated_unchecked';
-        boardDebug.failureCode = null;
-        boardDebug.failureReason = previewCount > 0 ? null : 'no item previews returned';
-        boardDebug.validation = makeDefaultValidation();
-        itemsBoardImageUrl = previewUrls.find(Boolean) || '';
-
-        finalItems = previewItems.map((item, index) => ({
-          ...item,
-          previewImage: previewUrls[index] || '',
-        }));
-      }
-    } catch (error) {
-      console.error('item preview generation failed:', error);
-      itemsBoardImageUrl = '';
-      boardDebug.status = 'generation_failed';
+    if (previewItems.length > 0) {
       boardDebug.generationAttempted = true;
-      boardDebug.generationSucceeded = false;
-      boardDebug.failureCode = 'item_preview_generation_failed';
-      boardDebug.failureReason = error instanceof Error ? error.message : 'item preview generation failed';
-      boardDebug.fallbackReason = 'item_preview_generation_failed';
+      boardDebug.generationSucceeded = true;
       boardDebug.thumbnailSource = 'main_image_fallback';
-    }
-
-    if (!itemsBoardImageUrl && boardDebug.thumbnailSource !== 'gemini_item_preview') {
-      boardDebug.thumbnailSource = 'main_image_fallback';
-      if (!boardDebug.fallbackReason) {
-        boardDebug.fallbackReason = boardDebug.failureCode || 'board_missing';
-      }
+      boardDebug.status = 'generated_unchecked';
+      boardDebug.failureCode = null;
+      boardDebug.failureReason = null;
+      boardDebug.validation = makeDefaultValidation();
     }
 
     return NextResponse.json({
@@ -1347,11 +1278,7 @@ export async function POST(req: Request) {
       items: finalItems,
       itemsBoardImageUrl,
       explainerImageUrl: afterImage || itemsBoardImageUrl,
-      extractedBoardStatus: itemsBoardImageUrl
-        ? boardDebug.status
-        : boardDebug.status === 'not_attempted'
-          ? 'extracted_board_invalid'
-          : boardDebug.status,
+      extractedBoardStatus: boardDebug.status,
       extractedBoardDebug: boardDebug,
       fallbackReason: boardDebug.fallbackReason,
     });
