@@ -908,6 +908,8 @@ function buildItemPreviewPrompt(theme: string, items: NormalizedItem[]) {
 Use the provided room image as the visual reference.
 Generate one separate product preview image for the single item listed below.
 The output image must show only one item, isolated like a clean product shot.
+The object must match the exact item visible in the room image, not a similar substitute.
+Preserve the same silhouette, proportions, color palette, and material cues from the room.
 
 Rules:
 1) Keep the item color, material, and overall style consistent with the room.
@@ -1274,7 +1276,7 @@ export async function POST(req: Request) {
       reduced = [...reduced, ...topUp];
     }
 
-    const previewItems = assignItemsToBoardCells(reduced.slice(0, 5));
+    const previewItems = assignItemsToBoardCells(reduced.slice(0, 8));
     let itemsBoardImageUrl = '';
     let finalItems = previewItems;
     const boardDebug = makeDefaultBoardDebug();
@@ -1287,35 +1289,36 @@ export async function POST(req: Request) {
     try {
       if (previewItems.length > 0) {
         boardDebug.generationAttempted = true;
-        const previewResults = await mapWithConcurrency(previewItems, 3, async (item) => {
+        const previewResults = await mapWithConcurrency(previewItems, 4, async (item) => {
           const previewPrompt = buildItemPreviewPrompt(theme, [item]);
           return withTimeout(
-            generateGeminiImageFromReference(
-              afterImage,
+            generateGeminiImageFromReferences(
+              beforeImage ? [beforeImage, afterImage] : [afterImage],
               previewPrompt,
               'text, letters, numbers, labels, captions, arrows, guide lines, borders, frames, boxes, cards, tiles, dividers, room scene, furniture scene, floor, walls, windows, architecture, collage, multi-item layout, watermark, logo, ui overlay'
             ),
-            35000,
+            40000,
             'item preview timeout'
           );
         });
 
-        const previewUrls = previewResults.filter((value): value is string => Boolean(value));
-        const rawMeta = getImageDebugMeta(previewUrls[0] || '');
-        boardDebug.generationSucceeded = previewUrls.length > 0;
+        const previewUrls = previewResults.map((value) => (typeof value === 'string' ? value : ''));
+        const previewCount = previewUrls.filter(Boolean).length;
+        const rawMeta = getImageDebugMeta(previewUrls.find(Boolean) || '');
+        boardDebug.generationSucceeded = previewCount > 0;
         boardDebug.rawImageKind = rawMeta.kind;
         boardDebug.rawImageRef = rawMeta.ref;
         boardDebug.rawImageLength = rawMeta.length;
-        boardDebug.thumbnailSource = previewUrls.length > 0 ? 'gemini_item_preview' : 'main_image_fallback';
-        boardDebug.status = previewUrls.length === previewItems.length ? 'generated_valid' : 'generated_unchecked';
+        boardDebug.thumbnailSource = previewCount > 0 ? 'gemini_item_preview' : 'main_image_fallback';
+        boardDebug.status = previewCount === previewItems.length ? 'generated_valid' : 'generated_unchecked';
         boardDebug.failureCode = null;
-        boardDebug.failureReason = previewUrls.length > 0 ? null : 'no item previews returned';
+        boardDebug.failureReason = previewCount > 0 ? null : 'no item previews returned';
         boardDebug.validation = makeDefaultValidation();
-        itemsBoardImageUrl = previewUrls[0] || '';
+        itemsBoardImageUrl = previewUrls.find(Boolean) || '';
 
         finalItems = previewItems.map((item, index) => ({
           ...item,
-          previewImage: previewUrls[index] || previewUrls[0] || '',
+          previewImage: previewUrls[index] || '',
         }));
       }
     } catch (error) {
