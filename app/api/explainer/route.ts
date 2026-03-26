@@ -1289,26 +1289,8 @@ export async function POST(req: Request) {
     }
 
     const previewItems = assignItemsToBoardCells(reduced);
-    const previewItemsWithImages =
-      previewItems.length > 0
-        ? await mapWithConcurrency(previewItems, 3, async (item) => {
-            try {
-              const previewImage = await generateItemPreviewImage(beforeImage, afterImage, theme, item);
-              return {
-                ...item,
-                previewImage,
-              };
-            } catch (error) {
-              console.error('item preview generation failed:', item.name, error);
-              return {
-                ...item,
-              };
-            }
-          })
-        : previewItems;
-
     const itemsBoardImageUrl = '';
-    const finalItems = previewItemsWithImages;
+    const finalItems = previewItems;
     const boardDebug = makeDefaultBoardDebug();
     if (usedThemeFallback) {
       boardDebug.failureCode = 'analysis_fallback';
@@ -1316,17 +1298,13 @@ export async function POST(req: Request) {
       boardDebug.fallbackReason = 'analysis_fallback';
     }
 
-    if (previewItemsWithImages.length > 0) {
+    if (previewItems.length > 0) {
       boardDebug.generationAttempted = true;
-      const generatedCount = previewItemsWithImages.filter((item) => Boolean(item.previewImage)).length;
-      boardDebug.generationSucceeded = generatedCount > 0;
-      boardDebug.thumbnailSource = generatedCount > 0 ? 'gemini_item_preview' : 'main_image_fallback';
-      boardDebug.status = generatedCount === previewItemsWithImages.length ? 'generated_valid' : 'generated_unchecked';
-      boardDebug.failureCode = generatedCount === 0 ? 'item_preview_generation_failed' : null;
-      boardDebug.failureReason =
-        generatedCount === previewItemsWithImages.length
-          ? null
-          : `generated ${generatedCount}/${previewItemsWithImages.length} item previews`;
+      boardDebug.generationSucceeded = true;
+      boardDebug.thumbnailSource = 'main_image_fallback';
+      boardDebug.status = 'generated_unchecked';
+      boardDebug.failureCode = null;
+      boardDebug.failureReason = null;
       boardDebug.validation = makeDefaultValidation();
     }
 

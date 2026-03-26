@@ -273,6 +273,25 @@ function clampNumber(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
+async function mapWithConcurrency<T, R>(
+  values: T[],
+  limit: number,
+  mapper: (value: T, index: number) => Promise<R>
+) {
+  const results = new Array<R>(values.length);
+  let cursor = 0;
+
+  const workers = Array.from({ length: Math.min(limit, values.length) }, async () => {
+    while (cursor < values.length) {
+      const current = cursor++;
+      results[current] = await mapper(values[current], current);
+    }
+  });
+
+  await Promise.all(workers);
+  return results;
+}
+
 async function shrinkGuideImageDataUrl(dataUrl: string, maxEdge = 1280, quality = 0.82) {
   if (!dataUrl || !dataUrl.startsWith('data:image/')) return dataUrl;
 
@@ -341,83 +360,6 @@ function getCropPercentBox(item: GuideItem) {
     width: fallbackWidth,
     height: fallbackHeight,
   };
-}
-
-async function createCroppedPreview(sourceUrl: string, item: GuideItem) {
-  if (!sourceUrl) return '';
-
-  try {
-    const image = await loadImageElement(sourceUrl);
-    return await createCroppedPreviewFromLoadedImage(image, item);
-  } catch {
-    return '';
-  }
-}
-
-async function createCroppedPreviewFromLoadedImage(image: HTMLImageElement, item: GuideItem) {
-  try {
-    const width = image.naturalWidth || image.width;
-    const height = image.naturalHeight || image.height;
-    if (!width || !height) return '';
-
-    const percentBox = getCropPercentBox(item);
-    const leftPx = clampNumber((percentBox.left / 100) * width, 0, width);
-    const topPx = clampNumber((percentBox.top / 100) * height, 0, height);
-    const boxWidthPx = Math.max(8, (percentBox.width / 100) * width);
-    const boxHeightPx = Math.max(8, (percentBox.height / 100) * height);
-
-    const itemCenterX = leftPx + boxWidthPx / 2;
-    const itemCenterY = topPx + boxHeightPx / 2;
-    const expandFactor =
-      item.category === 'Floor soft furnishings'
-        ? 2.1
-        : item.category === 'Bedding & soft textiles'
-          ? 2.0
-          : item.category === 'Ambient lighting'
-            ? 2.2
-            : item.category === 'Wall decor'
-              ? 2.6
-              : item.category === 'Plants'
-                ? 2.3
-                : 2.2;
-
-    const squareSide = clampNumber(
-      Math.max(boxWidthPx, boxHeightPx) * expandFactor,
-      180,
-      Math.min(width, height) * 0.92
-    );
-
-    const cropLeft = clampNumber(itemCenterX - squareSide / 2, 0, Math.max(0, width - squareSide));
-    const cropTop = clampNumber(itemCenterY - squareSide / 2, 0, Math.max(0, height - squareSide));
-    const canvasSize = 512;
-    const canvas = document.createElement('canvas');
-    canvas.width = canvasSize;
-    canvas.height = canvasSize;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return '';
-
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvasSize, canvasSize);
-
-    const drawSize = canvasSize * 0.84;
-    const offset = (canvasSize - drawSize) / 2;
-    ctx.drawImage(
-      image,
-      cropLeft,
-      cropTop,
-      squareSide,
-      squareSide,
-      offset,
-      offset,
-      drawSize,
-      drawSize
-    );
-
-    return canvas.toDataURL('image/jpeg', 0.94);
-  } catch {
-    return '';
-  }
 }
 
 function getItemBoardCell(item: GuideItem, index: number) {
@@ -985,17 +927,52 @@ function ResultPageContent() {
 
     let cancelled = false;
 
-    async function buildLocalPreviews() {
+    async function buildItemPreviews() {
       try {
-        const image = await loadImageElement(sourceAfterImage);
+        const beforeGuide = stored?.original ? await shrinkGuideImageDataUrl(stored.original, 1280, 0.84) : '';
+        const afterGuide = await shrinkGuideImageDataUrl(sourceAfterImage, 1280, 0.84);
         const next: Record<number, string> = {};
 
-        for (const item of items) {
-          const preview = await createCroppedPreviewFromLoadedImage(image, item);
-          if (preview) {
-            next[item.id] = preview;
+        const results = await mapWithConcurrency(items, 3, async (item) => {
+          const controller = new AbortController();
+          const timer = window.setTimeout(() => controller.abort(), 65000);
+
+          try {
+            const response = await fetch('/api/item-preview', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                beforeImage: beforeGuide,
+                afterImage: afterGuide,
+                theme: stored?.theme || '日式原木风',
+                item: {
+                  name: item.name,
+                  category: item.category,
+                  placement: item.placement,
+                  reason: item.reason,
+                },
+              }),
+              signal: controller.signal,
+            });
+
+            const data = (await response.json().catch(() => ({}))) as { previewImage?: string };
+            if (response.ok && data.previewImage) {
+              return data.previewImage;
+            }
+          } catch {
+            // ignore per-item preview failures; keep building the rest
+          } finally {
+            window.clearTimeout(timer);
           }
-        }
+
+          return '';
+        });
+
+        results.forEach((preview, index) => {
+          if (preview) {
+            next[items[index].id] = preview;
+          }
+        });
 
         if (!cancelled) {
           setLocalPreviewImages(next);
@@ -1007,12 +984,12 @@ function ResultPageContent() {
       }
     }
 
-    buildLocalPreviews();
+    buildItemPreviews();
 
     return () => {
       cancelled = true;
     };
-  }, [stored?.generated, items]);
+  }, [stored?.generated, stored?.original, stored?.theme, items]);
 
   useEffect(() => {
     if (!guideLoading) return;
@@ -1060,13 +1037,10 @@ function ResultPageContent() {
 
   const beforeImage = stored?.original || '';
   const afterImage = stored?.generated || '';
-  const hasGeneratedItemPreviews = items.some((item) => Boolean(item.previewImage));
-  const hasLocalCropPreviews = Object.keys(localPreviewImages).length > 0;
+  const hasGeneratedItemPreviews = Object.keys(localPreviewImages).length > 0 || items.some((item) => Boolean(item.previewImage));
   const thumbnailSource =
     hasGeneratedItemPreviews
       ? 'gemini_item_preview'
-      : hasLocalCropPreviews
-        ? 'local_room_crop'
       : (boardDebug?.thumbnailSource as 'gemini_item_preview' | 'main_image_fallback' | undefined) ||
         (items.some((item) => Boolean(item.previewImage))
           ? 'gemini_item_preview'
@@ -1202,7 +1176,7 @@ function ResultPageContent() {
             <div className="grid gap-2 md:grid-cols-2">
               <p>当前商品预览来源：<span className="font-semibold text-[#52372d]">{thumbnailSource}</span></p>
               <p>商品预览状态：<span className="font-semibold text-[#52372d]">{extractedBoardStatus || boardDebug?.status || 'unknown'}</span></p>
-              <p>商品预览是否存在：<span className="font-semibold text-[#52372d]">{hasGeneratedItemPreviews || hasLocalCropPreviews ? '是' : '否'}</span></p>
+              <p>商品预览是否存在：<span className="font-semibold text-[#52372d]">{hasGeneratedItemPreviews ? '是' : '否'}</span></p>
               <p>fallback 原因：<span className="font-semibold text-[#52372d]">{fallbackReason || boardDebug?.fallbackReason || 'none'}</span></p>
               <p>原始图片类型/长度：<span className="font-semibold text-[#52372d]">{boardDebug?.rawImageKind || 'none'} / {boardDebug?.rawImageLength || 0}</span></p>
               <p>清洗后图片类型/长度：<span className="font-semibold text-[#52372d]">{boardDebug?.cleanedImageKind || 'none'} / {boardDebug?.cleanedImageLength || 0}</span></p>
@@ -1314,11 +1288,17 @@ function ResultPageContent() {
                                     className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl bg-white ring-1 ring-[#d4c3be]/30"
                                     aria-label={`预览 ${item.name}`}
                                   >
-                                    <img
-                                      src={item.previewImage || localPreviewImages[item.id] || afterImage}
-                                      alt={item.name}
-                                      className="h-full w-full object-cover"
-                                    />
+                                    {item.previewImage || localPreviewImages[item.id] ? (
+                                      <img
+                                        src={item.previewImage || localPreviewImages[item.id]}
+                                        alt={item.name}
+                                        className="h-full w-full object-cover"
+                                      />
+                                    ) : (
+                                      <div className="flex h-full w-full items-center justify-center bg-[#faf6ef] text-[11px] text-[#8f4d2c]">
+                                        预览生成中
+                                      </div>
+                                    )}
                                   </button>
 
                                   <div className="min-w-0 flex-1">
@@ -1460,11 +1440,17 @@ function ResultPageContent() {
             </div>
 
             <div className="overflow-hidden rounded-2xl border border-[#ebe1d3] bg-[#f7edde]">
-              <img
-                src={activePreviewItem.previewImage || localPreviewImages[activePreviewItem.id] || afterImage}
-                alt={activePreviewItem.name}
-                className="h-[420px] w-full object-contain bg-white"
-              />
+              {activePreviewItem.previewImage || localPreviewImages[activePreviewItem.id] ? (
+                <img
+                  src={activePreviewItem.previewImage || localPreviewImages[activePreviewItem.id]}
+                  alt={activePreviewItem.name}
+                  className="h-[420px] w-full object-contain bg-white"
+                />
+              ) : (
+                <div className="flex h-[420px] w-full items-center justify-center bg-[#faf6ef] text-sm text-[#8f4d2c]">
+                  正在生成商品预览...
+                </div>
+              )}
             </div>
           </div>
         </div>
