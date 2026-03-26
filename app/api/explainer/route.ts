@@ -4,7 +4,6 @@ import {
   ITEMS_BOARD_CONFIG,
   type BoardCell,
 } from '../../lib/itemsBoard';
-import { generateSeedreamImages } from '../../lib/server/seedream';
 
 export const runtime = 'nodejs';
 export const maxDuration = 90;
@@ -14,7 +13,7 @@ type Payload = {
   beforeImage?: string;
   afterImage?: string;
   theme?: string;
-  provider?: 'nanobanana' | 'gemini' | 'seedream';
+  provider?: 'nanobanana' | 'gemini';
 };
 
 type Category =
@@ -125,7 +124,7 @@ type ExtractedBoardDebug = {
   failureCode: string | null;
   failureReason: string | null;
   fallbackReason: string | null;
-  thumbnailSource: 'seedream_item_preview' | 'main_image_fallback';
+  thumbnailSource: 'gemini_item_preview' | 'main_image_fallback';
 };
 
 function stripDataUrl(value: string) {
@@ -431,10 +430,9 @@ function normalizePrice(name: string, minRaw?: number, maxRaw?: number) {
   return { min, max };
 }
 
-function inferProviderFromImage(image: string): 'nanobanana' | 'gemini' | 'seedream' | undefined {
+function inferProviderFromImage(image: string): 'nanobanana' | 'gemini' | undefined {
   if (!image) return undefined;
   if (image.startsWith('data:image/')) return 'gemini';
-  if (/volces\.com|volcengine/i.test(image)) return 'seedream' as const;
   if (/^https?:\/\//i.test(image)) return 'nanobanana';
   return undefined;
 }
@@ -882,9 +880,9 @@ function buildItemPreviewPrompt(theme: string, items: NormalizedItem[]) {
     .join('\n');
 
   return `
-Use the provided room images as the visual reference.
-Generate ${items.length} separate product preview images in the exact order listed below.
-Each output image must show only one item, isolated like a clean product shot.
+Use the provided room image as the visual reference.
+Generate one separate product preview image for the single item listed below.
+The output image must show only one item, isolated like a clean product shot.
 
 Rules:
 1) Keep the item color, material, and overall style consistent with the room.
@@ -894,7 +892,7 @@ Rules:
 5) No collage and no mixed items in one image.
 6) Make each object large, clear, centered, and easy to recognize.
 7) Preserve the same decorative tone seen in the generated room, but isolate the product.
-8) Output images in the exact same order as the list.
+8) Output one image only for the item below.
 
 Theme context: ${theme || '日式原木风'}
 
@@ -1264,28 +1262,26 @@ export async function POST(req: Request) {
     try {
       if (previewItems.length > 0) {
         boardDebug.generationAttempted = true;
-        const previewPrompt = buildItemPreviewPrompt(theme, previewItems);
-        const previewReferences = [beforeImage, afterImage].filter(Boolean);
-        const seedreamResult = await withTimeout(
-          generateSeedreamImages({
-            prompt: previewPrompt,
-            images: previewReferences.length > 0 ? previewReferences : [afterImage],
-            maxImages: previewItems.length,
-            provider:
-              process.env.SEEDREAM_PROVIDER === 'ark' || process.env.SEEDREAM_PROVIDER === 'operator'
-                ? (process.env.SEEDREAM_PROVIDER as 'ark' | 'operator')
-                : undefined,
-          }),
-          85000,
-          'item preview timeout'
-        );
-        const previewUrls = seedreamResult.imageUrls || [];
+        const previewUrls: string[] = [];
+        for (const item of previewItems) {
+          const previewPrompt = buildItemPreviewPrompt(theme, [item]);
+          const previewUrl = await withTimeout(
+            generateGeminiImageFromReference(
+              afterImage,
+              previewPrompt,
+              'text, letters, numbers, labels, captions, arrows, guide lines, borders, frames, boxes, cards, tiles, dividers, room scene, furniture scene, floor, walls, windows, architecture, collage, multi-item layout, watermark, logo, ui overlay'
+            ),
+            45000,
+            'item preview timeout'
+          );
+          previewUrls.push(previewUrl);
+        }
         const rawMeta = getImageDebugMeta(previewUrls[0] || '');
         boardDebug.generationSucceeded = previewUrls.length > 0;
         boardDebug.rawImageKind = rawMeta.kind;
         boardDebug.rawImageRef = rawMeta.ref;
         boardDebug.rawImageLength = rawMeta.length;
-        boardDebug.thumbnailSource = 'seedream_item_preview';
+        boardDebug.thumbnailSource = 'gemini_item_preview';
         boardDebug.status = 'generated_valid';
         boardDebug.failureCode = null;
         boardDebug.failureReason = null;
@@ -1309,7 +1305,7 @@ export async function POST(req: Request) {
       boardDebug.thumbnailSource = 'main_image_fallback';
     }
 
-    if (!itemsBoardImageUrl && boardDebug.thumbnailSource !== 'seedream_item_preview') {
+    if (!itemsBoardImageUrl && boardDebug.thumbnailSource !== 'gemini_item_preview') {
       boardDebug.thumbnailSource = 'main_image_fallback';
       if (!boardDebug.fallbackReason) {
         boardDebug.fallbackReason = boardDebug.failureCode || 'board_missing';

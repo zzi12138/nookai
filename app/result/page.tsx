@@ -71,7 +71,7 @@ type GuideResponse = {
     failureCode?: string | null;
     failureReason?: string | null;
     fallbackReason?: string | null;
-    thumbnailSource?: 'seedream_item_preview' | 'main_image_fallback';
+    thumbnailSource?: 'gemini_item_preview' | 'main_image_fallback';
     validation?: {
       checked?: boolean;
       valid?: boolean;
@@ -787,9 +787,7 @@ function ResultPageContent() {
                 afterImage: afterForGuide,
                 theme: current.theme || '日式原木风',
                 provider:
-                  current.provider === 'nanobanana' ||
-                  current.provider === 'gemini' ||
-                  current.provider === 'seedream'
+                  current.provider === 'nanobanana' || current.provider === 'gemini'
                     ? current.provider
                     : undefined,
               }),
@@ -906,9 +904,9 @@ function ResultPageContent() {
   const beforeImage = stored?.original || '';
   const afterImage = stored?.generated || '';
   const thumbnailSource =
-    (boardDebug?.thumbnailSource as 'seedream_item_preview' | 'main_image_fallback' | undefined) ||
+    (boardDebug?.thumbnailSource as 'gemini_item_preview' | 'main_image_fallback' | undefined) ||
     (items.some((item) => Boolean(item.previewImage))
-      ? 'seedream_item_preview'
+      ? 'gemini_item_preview'
       : 'main_image_fallback');
 
   const activePreviewItem = useMemo(() => items.find((item) => item.id === previewItemId) || null, [items, previewItemId]);
