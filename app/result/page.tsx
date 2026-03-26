@@ -1060,10 +1060,13 @@ function ResultPageContent() {
 
   const beforeImage = stored?.original || '';
   const afterImage = stored?.generated || '';
+  const hasGeneratedItemPreviews = items.some((item) => Boolean(item.previewImage));
   const hasLocalCropPreviews = Object.keys(localPreviewImages).length > 0;
   const thumbnailSource =
-    hasLocalCropPreviews
-      ? 'local_room_crop'
+    hasGeneratedItemPreviews
+      ? 'gemini_item_preview'
+      : hasLocalCropPreviews
+        ? 'local_room_crop'
       : (boardDebug?.thumbnailSource as 'gemini_item_preview' | 'main_image_fallback' | undefined) ||
         (items.some((item) => Boolean(item.previewImage))
           ? 'gemini_item_preview'
@@ -1199,7 +1202,7 @@ function ResultPageContent() {
             <div className="grid gap-2 md:grid-cols-2">
               <p>当前商品预览来源：<span className="font-semibold text-[#52372d]">{thumbnailSource}</span></p>
               <p>商品预览状态：<span className="font-semibold text-[#52372d]">{extractedBoardStatus || boardDebug?.status || 'unknown'}</span></p>
-              <p>商品预览是否存在：<span className="font-semibold text-[#52372d]">{hasLocalCropPreviews || items.some((item) => Boolean(item.previewImage)) ? '是' : '否'}</span></p>
+              <p>商品预览是否存在：<span className="font-semibold text-[#52372d]">{hasGeneratedItemPreviews || hasLocalCropPreviews ? '是' : '否'}</span></p>
               <p>fallback 原因：<span className="font-semibold text-[#52372d]">{fallbackReason || boardDebug?.fallbackReason || 'none'}</span></p>
               <p>原始图片类型/长度：<span className="font-semibold text-[#52372d]">{boardDebug?.rawImageKind || 'none'} / {boardDebug?.rawImageLength || 0}</span></p>
               <p>清洗后图片类型/长度：<span className="font-semibold text-[#52372d]">{boardDebug?.cleanedImageKind || 'none'} / {boardDebug?.cleanedImageLength || 0}</span></p>
@@ -1312,7 +1315,7 @@ function ResultPageContent() {
                                     aria-label={`预览 ${item.name}`}
                                   >
                                     <img
-                                      src={localPreviewImages[item.id] || item.previewImage || afterImage}
+                                      src={item.previewImage || localPreviewImages[item.id] || afterImage}
                                       alt={item.name}
                                       className="h-full w-full object-cover"
                                     />
@@ -1458,7 +1461,7 @@ function ResultPageContent() {
 
             <div className="overflow-hidden rounded-2xl border border-[#ebe1d3] bg-[#f7edde]">
               <img
-                src={localPreviewImages[activePreviewItem.id] || activePreviewItem.previewImage || afterImage}
+                src={activePreviewItem.previewImage || localPreviewImages[activePreviewItem.id] || afterImage}
                 alt={activePreviewItem.name}
                 className="h-[420px] w-full object-contain bg-white"
               />

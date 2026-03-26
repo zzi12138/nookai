@@ -871,36 +871,73 @@ ${assignedOrder || 'Use visible purchasable objects from the generated room and 
 `.trim();
 }
 
-function buildItemPreviewPrompt(theme: string, items: NormalizedItem[]) {
-  const orderedItems = items
-    .map(
-      (item, index) =>
-        `${index + 1}. ${item.name}｜分类：${item.category}｜摆放：${item.placement}｜重点：${item.reason}`
-    )
-    .join('\n');
-
+function buildItemPreviewPrompt(theme: string, item: NormalizedItem) {
   return `
 Use the provided room image as the visual reference.
-Generate one separate product preview image for the single item listed below.
-The output image must show only one item, isolated like a clean product shot.
-The object must match the exact item visible in the room image, not a similar substitute.
-Preserve the same silhouette, proportions, color palette, and material cues from the room.
+Generate ONE isolated product preview image for the single shopping item below.
 
-Rules:
-1) Keep the item color, material, and overall style consistent with the room.
-2) Use a pure white or very light warm neutral background.
-3) No room scene, no furniture scene, no floor, no walls, no windows, no architecture.
-4) No text, no labels, no numbers, no arrows, no borders, no boxes, no frames.
-5) No collage and no mixed items in one image.
-6) Make each object large, clear, centered, and easy to recognize.
-7) Preserve the same decorative tone seen in the generated room, but isolate the product.
-8) Output one image only for the item below.
+CRITICAL GOAL:
+The output must be a real product-style image of the exact object from the room.
+Do not create a similar substitute.
+Do not create a room scene.
+Do not create a collage.
+Do not add unrelated accessories.
+
+VISUAL RULES:
+1) Preserve the object's silhouette, proportions, material cues, surface texture, and color palette from the room.
+2) Keep the object centered, large, and fully visible.
+3) Use a clean pure white or very light warm-neutral studio background.
+4) Soft studio lighting only.
+5) No text, no labels, no numbers, no arrows, no borders, no boxes, no frames.
+6) No walls, no floor, no windows, no furniture, no architecture.
+7) No multiple items in one image.
+8) Make it look like a product photo that could appear in a shopping guide.
 
 Theme context: ${theme || '日式原木风'}
 
-Items:
-${orderedItems}
+Shopping item:
+- name: ${item?.name || '商品'}
+- category: ${item?.category || 'Functional accessories'}
+- placement: ${item?.placement || '放在合适位置'}
+- reason: ${item?.reason || '提升空间完成度'}
 `.trim();
+}
+
+async function mapWithConcurrency<T, R>(
+  values: T[],
+  limit: number,
+  mapper: (value: T, index: number) => Promise<R>
+) {
+  const results = new Array<R>(values.length);
+  let cursor = 0;
+
+  const workers = Array.from({ length: Math.min(limit, values.length) }, async () => {
+    while (cursor < values.length) {
+      const current = cursor++;
+      results[current] = await mapper(values[current], current);
+    }
+  });
+
+  await Promise.all(workers);
+  return results;
+}
+
+async function generateItemPreviewImage(
+  beforeImage: string,
+  afterImage: string,
+  theme: string,
+  item: NormalizedItem
+) {
+  const references = beforeImage ? [beforeImage, afterImage] : [afterImage];
+  const prompt = buildItemPreviewPrompt(theme, item);
+  const negativePrompt =
+    'room scene, wall, floor, window, furniture, architecture, text, letters, numbers, labels, arrows, borders, boxes, frames, collage, multiple items, extra props, watermark, logo, ui overlay, poster layout, infographic layout';
+
+  return withTimeout(
+    generateGeminiImageFromReferences(references, prompt, negativePrompt),
+    45000,
+    `item preview timeout: ${item.name}`
+  );
 }
 
 function getBoardValidationPrompt(theme: string) {
@@ -1252,8 +1289,26 @@ export async function POST(req: Request) {
     }
 
     const previewItems = assignItemsToBoardCells(reduced);
+    const previewItemsWithImages =
+      previewItems.length > 0
+        ? await mapWithConcurrency(previewItems, 3, async (item) => {
+            try {
+              const previewImage = await generateItemPreviewImage(beforeImage, afterImage, theme, item);
+              return {
+                ...item,
+                previewImage,
+              };
+            } catch (error) {
+              console.error('item preview generation failed:', item.name, error);
+              return {
+                ...item,
+              };
+            }
+          })
+        : previewItems;
+
     const itemsBoardImageUrl = '';
-    const finalItems = previewItems;
+    const finalItems = previewItemsWithImages;
     const boardDebug = makeDefaultBoardDebug();
     if (usedThemeFallback) {
       boardDebug.failureCode = 'analysis_fallback';
@@ -1261,13 +1316,17 @@ export async function POST(req: Request) {
       boardDebug.fallbackReason = 'analysis_fallback';
     }
 
-    if (previewItems.length > 0) {
+    if (previewItemsWithImages.length > 0) {
       boardDebug.generationAttempted = true;
-      boardDebug.generationSucceeded = true;
-      boardDebug.thumbnailSource = 'main_image_fallback';
-      boardDebug.status = 'generated_unchecked';
-      boardDebug.failureCode = null;
-      boardDebug.failureReason = null;
+      const generatedCount = previewItemsWithImages.filter((item) => Boolean(item.previewImage)).length;
+      boardDebug.generationSucceeded = generatedCount > 0;
+      boardDebug.thumbnailSource = generatedCount > 0 ? 'gemini_item_preview' : 'main_image_fallback';
+      boardDebug.status = generatedCount === previewItemsWithImages.length ? 'generated_valid' : 'generated_unchecked';
+      boardDebug.failureCode = generatedCount === 0 ? 'item_preview_generation_failed' : null;
+      boardDebug.failureReason =
+        generatedCount === previewItemsWithImages.length
+          ? null
+          : `generated ${generatedCount}/${previewItemsWithImages.length} item previews`;
       boardDebug.validation = makeDefaultValidation();
     }
 
