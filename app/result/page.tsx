@@ -2,7 +2,6 @@
 
 import { motion } from 'framer-motion';
 import {
-  Bug,
   Check,
   Copy,
   Download,
@@ -17,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ExportCard, type ExportItem } from './ExportCard';
 import { getBoardCellBySlot, getDefaultBoardCellForIndex, type BoardCell } from '../lib/itemsBoard';
 import { loadResult, type StoredResult } from '../lib/imageStore';
 
@@ -799,22 +799,43 @@ function ResultPageContent() {
     }
   };
 
-  const handleExport = () => {
-    const target = selectedItems.length > 0 ? selectedItems : allVisibleItems;
-    if (target.length === 0) return;
+  const [isExporting, setIsExporting] = useState(false);
 
-    const rows = [
-      '分类,名称,数量,价格区间,摆放位置,必要程度',
-      ...target.map((item) => `${CATEGORY_LABEL[item.category]},${item.name},${item.quantity},${item.priceRange},${item.placement},${NECESSITY_LABEL[item.necessity]}`),
-    ];
+  const handleExport = async () => {
+    if (isExporting) return;
+    setIsExporting(true);
+    try {
+      const html2canvas = (await import('html2canvas')).default;
+      const el = document.getElementById('nookai-export-root');
+      if (!el) return;
 
-    const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'nookai-shopping-list.csv';
-    a.click();
-    URL.revokeObjectURL(url);
+      // Make visible temporarily for capture
+      el.style.left = '0';
+      el.style.top = '0';
+      el.style.zIndex = '9999';
+      await new Promise((r) => setTimeout(r, 120));
+
+      const canvas = await html2canvas(el, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: false,
+        backgroundColor: '#fff8f2',
+        logging: false,
+      });
+
+      el.style.left = '-9999px';
+      el.style.top = '-9999px';
+      el.style.zIndex = '-1';
+
+      const link = document.createElement('a');
+      link.download = `nookai-改造方案-${stored?.theme || '方案'}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    } catch (err) {
+      console.error('[export]', err);
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   if (loading) {
@@ -1076,11 +1097,11 @@ function ResultPageContent() {
                   <button
                     type="button"
                     onClick={handleExport}
-                    disabled={guideLoading}
+                    disabled={guideLoading || isExporting}
                     className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-white py-3 text-sm font-bold text-[#52372d] transition-colors hover:bg-[#fff8f2] disabled:cursor-not-allowed disabled:text-[#b8a8a2]"
                   >
                     <Download size={16} />
-                    导出清单
+                    {isExporting ? '生成中...' : '导出图片'}
                   </button>
                 </div>
 
@@ -1148,6 +1169,44 @@ function ResultPageContent() {
           </div>
         </div>
       ) : null}
+
+      {/* ── Hidden export card (captured by html2canvas on demand) ── */}
+      {stored && beforeImage && afterImage && (
+        <div
+          id="nookai-export-root"
+          style={{
+            position: 'fixed',
+            left: '-9999px',
+            top: '-9999px',
+            zIndex: -1,
+            pointerEvents: 'none',
+          }}
+        >
+          <ExportCard
+            theme={stored.theme || '日式原木风'}
+            before={beforeImage}
+            after={afterImage}
+            summary={summary || ''}
+            items={allVisibleItems.map((item): ExportItem => ({
+              id: item.id,
+              name: item.name,
+              priceRange: item.priceRange,
+              priceMin: item.priceMin,
+              priceMax: item.priceMax,
+              category: item.category,
+              categoryLabel: CATEGORY_LABEL[item.category] || item.category,
+              necessity: item.necessity,
+              necessityLabel: NECESSITY_LABEL[item.necessity] || item.necessity,
+              placement: item.placement || '',
+              quantity: item.quantity,
+              previewImage: item.previewImage,
+            }))}
+            previewImages={localPreviewImages}
+            budgetMin={budget.min}
+            budgetMax={budget.max}
+          />
+        </div>
+      )}
     </div>
   );
 }
