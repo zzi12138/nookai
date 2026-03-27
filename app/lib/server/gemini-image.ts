@@ -91,7 +91,7 @@ export async function generateGeminiImageFromReferences(
     throw new Error('Unsupported image format');
   }
 
-  const model = process.env.GEMINI_IMAGE_MODEL || 'gemini-2.5-flash-image';
+  const model = process.env.GEMINI_IMAGE_MODEL || 'gemini-3.1-flash-image-preview';
   const finalPrompt = negativePrompt
     ? `${prompt}\n\nNegative prompt (must avoid):\n${negativePrompt}`
     : prompt;
