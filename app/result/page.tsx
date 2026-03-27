@@ -896,6 +896,12 @@ function ResultPageContent() {
                   category: item.category,
                   placement: item.placement,
                   reason: item.reason,
+                  anchor: item.imageTarget ? {
+                    centerX: item.imageTarget.x,
+                    centerY: item.imageTarget.y,
+                    width: item.imageTarget.width,
+                    height: item.imageTarget.height,
+                  } : undefined,
                 },
               }),
               signal: controller.signal,

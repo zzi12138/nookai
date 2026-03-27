@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { generateGeminiImageFromReferences } from '../../lib/server/gemini-image';
 
 export const runtime = 'nodejs';
 export const maxDuration = 45;
@@ -12,79 +13,26 @@ type Payload = {
     category?: string;
     placement?: string;
     reason?: string;
+    anchor?: {
+      centerX?: number;
+      centerY?: number;
+      width?: number;
+      height?: number;
+    };
   };
 };
 
-function stripDataUrl(value: string) {
-  return value.includes(',') ? value.split(',')[1] : value;
-}
-
-function extractMimeType(dataUrl: string) {
-  const m = dataUrl.match(/^data:([^;]+);base64,/i);
-  return m?.[1] || 'image/jpeg';
-}
-
-function isHttpUrl(value: string) {
-  return /^https?:\/\//i.test(value);
-}
-
-function isDataUrl(value: string) {
-  return /^data:[^;]+;base64,/i.test(value);
-}
-
-function isProbablyBase64(value: string) {
-  if (!value) return false;
-  return /^[A-Za-z0-9+/=\r\n]+$/.test(value) && value.length > 64;
-}
-
-function resolveInlineImagePart(image: string) {
-  if (isDataUrl(image)) {
-    return {
-      mimeType: extractMimeType(image),
-      data: stripDataUrl(image),
-    };
-  }
-
-  if (isProbablyBase64(image)) {
-    return {
-      mimeType: 'image/jpeg',
-      data: stripDataUrl(image),
-    };
-  }
-
-  return null;
-}
-
-async function fetchRemoteImageAsInlinePart(url: string) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 30000);
-  try {
-    const response = await fetch(url, { method: 'GET', signal: controller.signal });
-    if (!response.ok) {
-      throw new Error(`Failed to fetch source image: ${response.status}`);
-    }
-    const mimeType = response.headers.get('content-type') || 'image/jpeg';
-    const buffer = Buffer.from(await response.arrayBuffer());
-    return {
-      mimeType,
-      data: buffer.toString('base64'),
-    };
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-type InlineImagePart = { mimeType: string; data: string };
-
-async function toInlineImagePart(image?: string): Promise<InlineImagePart | null> {
-  if (!image) return null;
-  const inline = resolveInlineImagePart(image);
-  if (inline) return inline;
-  if (isHttpUrl(image)) return fetchRemoteImageAsInlinePart(image);
-  return null;
+function describeLocation(anchor?: { centerX?: number; centerY?: number; width?: number; height?: number }) {
+  if (!anchor?.centerX || !anchor?.centerY) return '';
+  const cx = anchor.centerX;
+  const cy = anchor.centerY;
+  const horizontal = cx < 33 ? '左侧' : cx > 66 ? '右侧' : '中间';
+  const vertical = cy < 33 ? '上方' : cy > 66 ? '下方' : '中部';
+  return `\n- location in image: approximately at the ${vertical}${horizontal} of the room (${Math.round(cx)}%, ${Math.round(cy)}% from top-left)`;
 }
 
 function buildItemPrompt(theme: string, item: Payload['item']) {
+  const locationHint = describeLocation(item?.anchor);
   return `
 Use the provided room image as the ONLY visual reference.
 Generate ONE isolated product photo for the exact object below.
@@ -108,70 +56,10 @@ Shopping item:
 - name: ${item?.name || '商品'}
 - category: ${item?.category || 'Functional accessories'}
 - placement: ${item?.placement || '放在合适位置'}
-- reason: ${item?.reason || '提升空间完成度'}
+- reason: ${item?.reason || '提升空间完成度'}${locationHint}
 `.trim();
 }
 
-async function generatePreviewImage(images: string[], prompt: string) {
-  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-  if (!apiKey) {
-    throw new Error('Missing GEMINI_API_KEY (or GOOGLE_API_KEY)');
-  }
-
-  const imageParts = await Promise.all(images.map((image) => toInlineImagePart(image)));
-  const validImageParts = imageParts.filter(Boolean) as NonNullable<Awaited<ReturnType<typeof toInlineImagePart>>>[];
-  if (validImageParts.length === 0) {
-    throw new Error('Unsupported image format');
-  }
-
-  const model = process.env.GEMINI_IMAGE_MODEL || 'gemini-3.1-flash-image-preview';
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey,
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              { text: prompt },
-              ...validImageParts.map((imagePart) => ({
-                inline_data: {
-                  mime_type: imagePart.mimeType,
-                  data: imagePart.data,
-                },
-              })),
-            ],
-          },
-        ],
-        generationConfig: {
-          responseModalities: ['IMAGE'],
-        },
-      }),
-    }
-  );
-
-  const result = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(result?.error?.message || result?.error || `Gemini ${response.status}`);
-  }
-
-  const parts = result?.candidates?.[0]?.content?.parts ?? [];
-  const imageResultPart = parts.find((part: any) => part?.inline_data || part?.inlineData);
-  const inline = imageResultPart?.inline_data || imageResultPart?.inlineData;
-  const mimeType = inline?.mime_type || inline?.mimeType || 'image/png';
-  const data = inline?.data;
-
-  if (!data) {
-    throw new Error('No image data returned from Gemini');
-  }
-
-  return `data:${mimeType};base64,${data}`;
-}
 
 export async function POST(req: Request) {
   try {
@@ -186,7 +74,7 @@ export async function POST(req: Request) {
     }
 
     const references = beforeImage ? [beforeImage, afterImage] : [afterImage];
-    const previewImage = await generatePreviewImage(references, buildItemPrompt(theme, item));
+    const previewImage = await generateGeminiImageFromReferences(references, buildItemPrompt(theme, item));
 
     return NextResponse.json({ previewImage });
   } catch (error) {
