@@ -62,10 +62,10 @@ function resolveThemeStyle(theme: string) {
       'Japanese natural wood style',
       'Style description: A calm Japanese-inspired interior with natural wood tones, minimal decoration, and a peaceful atmosphere.',
       'Color palette: light wood, beige, cream, warm neutrals.',
-      'Decor elements: linen curtains, beige cushions, wooden trays, ceramic vases, simple wooden decor, paper lampshades.',
+      'Decor elements: linen curtains, beige cushions, wooden trays, ceramic vases, simple wooden decor, washi paper lampshades.',
       'Plants: monstera, ficus, olive tree.',
-      'Lighting: soft warm lighting with a relaxing and natural feeling.',
-      'Mood: calm, minimal, natural, warm, peaceful.',
+      'Lighting design: Create a 3-layer lighting scheme — (1) a warm-toned paper or linen pendant/floor lamp as ambient base (~2700K golden glow), (2) a sculptural table lamp or wooden desk lamp as task accent, (3) LED candles, fairy string lights, or a backlit shelf as mood layer. Light should cast soft, warm pools with gentle shadows on wood surfaces, creating depth and tranquility. Golden hour warmth throughout.',
+      'Mood: calm, minimal, natural, warm, peaceful, meditative.',
     ].join(' '),
     奶油温柔风: [
       'soft creamy minimal style',
@@ -73,26 +73,25 @@ function resolveThemeStyle(theme: string) {
       'Color palette: cream, soft beige, warm white, light neutral tones.',
       'Decor elements: boucle cushions, fluffy pillows, soft blankets, round mirrors, neutral art prints.',
       'Plants: pampas grass, small decorative plants.',
-      'Lighting: warm ambient lighting from table lamps and soft lampshades.',
-      'Mood: soft, cozy, warm, elegant, gentle.',
+      'Lighting design: Create a dreamy, enveloping glow — (1) a fabric-shade floor lamp or arc lamp casting diffused warm light as the main ambient source, (2) a bedside or side-table lamp with a frosted/cream shade for soft accent pools, (3) warm fairy lights draped behind sheer curtains or along a shelf, or a small cluster of LED candles for intimate sparkle. Light should feel like a soft golden haze wrapping the room, with gentle luminous highlights on boucle and cream textures.',
+      'Mood: soft, cozy, warm, elegant, gentle, dreamy.',
     ].join(' '),
     奶油治愈风: [
-      'soft creamy minimal style',
-      'Style description: A soft creamy interior with warm neutral tones and cozy textures. The atmosphere should feel comfortable, gentle, and slightly elegant.',
+      'soft creamy healing style',
+      'Style description: A soft creamy interior with warm neutral tones and cozy textures. The atmosphere should feel healing, comforting, and gently uplifting.',
       'Color palette: cream, soft beige, warm white, light neutral tones.',
       'Decor elements: boucle cushions, fluffy pillows, soft blankets, round mirrors, neutral art prints.',
-      'Plants: pampas grass, small decorative plants.',
-      'Lighting: warm ambient lighting from table lamps and soft lampshades.',
-      'Mood: soft, cozy, warm, elegant, gentle.',
+      'Plants: pampas grass, small decorative plants, dried flower arrangements.',
+      'Lighting design: Design lighting that feels like a warm embrace — (1) a soft globe or mushroom lamp as the main warm ambient source (~2700K), (2) a small ceramic or glass table lamp with warm glow as accent, (3) a string of micro fairy lights or a Himalayan salt lamp for healing ambiance. The overall effect should be a gentle, golden cocoon of light with no harsh shadows — every surface softly illuminated.',
+      'Mood: healing, soft, cozy, warm, comforting, sanctuary-like.',
     ].join(' '),
     现代极简风: [
       'modern minimalist style',
       'Style description: A clean modern minimalist interior with simple lines, neutral colors, and uncluttered surfaces.',
       'Color palette: black, white, gray, neutral tones.',
       'Decor elements: minimal wall art, monochrome cushions, geometric rugs, simple desk accessories.',
-      'Lighting: modern floor lamps or minimal table lamps.',
-      'Decor should remain minimal and organized.',
-      'Mood: clean, modern, structured, balanced, minimal.',
+      'Lighting design: Design precise, architectural lighting — (1) a sleek linear or geometric floor lamp with warm-white output as the statement ambient piece, (2) a minimal task lamp (e.g., Anglepoise-style or thin LED bar) for focused accent, (3) subtle indirect LED strip along a shelf edge or behind furniture for depth and drama. Light and shadow should create clean graphic contrasts — sharp but not harsh. The lighting itself should feel like a design object.',
+      'Mood: clean, modern, structured, balanced, minimal, gallery-like.',
     ].join(' '),
     文艺复古风: [
       'vintage artistic style',
@@ -100,8 +99,8 @@ function resolveThemeStyle(theme: string) {
       'Color palette: warm browns, muted colors, soft vintage tones.',
       'Decor elements: vintage posters, stacked books, retro table lamps, textured blankets, artistic objects.',
       'Optional decor props: film camera, record player, classic books.',
-      'Lighting: warm yellow lighting creating a cozy artistic mood.',
-      'Mood: artistic, nostalgic, warm, creative, cozy.',
+      'Lighting design: Create cinematic, nostalgic lighting — (1) a vintage brass or Edison-bulb floor/table lamp casting warm amber pools as the anchor, (2) a retro desk lamp or banker\'s lamp for dramatic directional accent, (3) string lights with exposed warm bulbs, candles in vintage holders, or a neon sign for artistic mood. The room should feel like a cozy late-night bookshop or artist\'s studio — warm amber tones, dramatic light-and-shadow interplay, rich depth in every corner.',
+      'Mood: artistic, nostalgic, warm, creative, cozy, cinematic.',
     ].join(' '),
     绿植自然风: [
       'urban nature style',
@@ -109,8 +108,8 @@ function resolveThemeStyle(theme: string) {
       'Color palette: natural greens, beige, light wood, neutral colors.',
       'Decor elements: woven baskets, cotton textiles, natural fiber rugs, botanical prints.',
       'Plants: multiple indoor plants such as monstera, snake plant, ficus, and pothos.',
-      'Lighting: bright natural light with a fresh atmosphere.',
-      'Mood: fresh, natural, airy, relaxing, organic.',
+      'Lighting design: Create light that mimics golden-hour sunlight filtering through foliage — (1) a rattan or woven pendant/floor lamp casting intricate shadow patterns as ambient base, (2) a ceramic or wood-base table lamp near plants to create backlit leaf silhouettes, (3) warm micro fairy lights woven through trailing plants or in glass terrariums for magical sparkle. Dappled light and botanical shadows should dance across walls and surfaces.',
+      'Mood: fresh, natural, airy, relaxing, organic, botanical-garden.',
     ].join(' '),
   };
 
@@ -150,11 +149,27 @@ Apply a cohesive interior styling makeover in: ${themeStyle}.
 
 Design goals (aim for all):
 - Create a space that feels intentionally designed — not just "decorated" but truly styled.
-- Build layered atmosphere: lighting warmth, textile textures, organic accents, and visual rhythm.
+- Build layered atmosphere: textile textures, organic accents, and visual rhythm.
 - The result should evoke an aspirational lifestyle — the kind of room people save on Pinterest or Xiaohongshu.
 - Every added element must serve the overall composition; avoid cluttering with too many small objects.
-- Prioritize: warm lighting layers, quality textiles (throws, cushions, rugs), greenery, and one or two statement pieces.
+- Prioritize: quality textiles (throws, cushions, rugs), greenery, and one or two statement pieces.
 - Make the room feel cozy, lived-in, and inviting — not sterile or showroom-like.
+
+=== STEP 3 — LIGHTING DESIGN (highest priority, must be stunning) ===
+Lighting is the SINGLE MOST IMPORTANT element. The lighting design alone should make people stop scrolling.
+
+Lighting architecture — build ALL THREE layers:
+1. AMBIENT LAYER: One primary warm light source (floor lamp, pendant, or large table lamp) that fills the room with a soft golden base glow (~2700K warm white). This sets the overall mood.
+2. ACCENT LAYER: One or two secondary lights (table lamp, reading lamp, or directional light) that create focal points, highlight textures, and add depth through light pools and gentle shadows.
+3. MOOD LAYER: Atmospheric detail lights (fairy string lights, LED candles, backlit shelves, light strips behind furniture, or a decorative lantern) that add sparkle, intimacy, and visual magic.
+
+Lighting rendering rules:
+- Every light source must cast REALISTIC light behavior: visible warm glow, soft falloff gradients, natural shadow direction, and light interaction with nearby surfaces.
+- Warm surfaces (wood, fabric, skin tones) should pick up golden reflections from light sources.
+- Create deliberate contrast between illuminated areas and softer shadow zones — this depth is what makes lighting feel cinematic.
+- Light should feel like "golden hour indoors" — warm, inviting, and emotionally comforting.
+- Avoid flat, even illumination. The room should have a clear light hierarchy: bright focal areas, mid-tone transitions, and soft shadowed corners.
+- NO harsh overhead fluorescent look. NO flat daylight-only rendering. NO dark, underlit room.
 
 === USER CONSTRAINTS (follow strictly) ===
 ${dynamicRulesBlock}
@@ -162,7 +177,7 @@ ${dynamicRulesBlock}
 === FIXED RULES (always apply) ===
 - DO NOT change the room's architectural structure (walls, floor plan, ceiling shape).
 - The final image MUST keep the exact same camera angle, perspective, lens, composition, and geometry as the original photo.
-- Lighting must look natural and physically realistic — no glowing halos or flat studio lighting.
+- Lighting must look natural and physically realistic — visible warm glow, correct shadow casting, realistic light falloff. No glowing halos or flat studio lighting.
 - All added soft furnishings must be realistic, purchasable items — no fantasy or AI-artifact objects.
 - The result must look like the same room, only decluttered and beautifully styled.
 
@@ -174,7 +189,7 @@ camera moved, perspective shift, different camera angle, different lens, focal l
 zoomed in, zoomed out, cropped, rotated, tilted,
 clutter, trash, plastic bags, cardboard boxes, messy cables, piled belongings,
 ugly, blurry, deformed, distorted, low resolution, watermark, bad proportions,
-dull lighting, flat lighting, overexposed, underexposed, unnatural lighting,
+dull lighting, flat lighting, overexposed, underexposed, unnatural lighting, fluorescent lighting, harsh overhead light, no light sources visible, dark room, single flat light, evenly lit with no depth, shadowless,
 chaotic layout, mutated, extra limbs, text overlay${dynamicNegatives ? `, ${dynamicNegatives}` : ''}
 `.trim();
 }
