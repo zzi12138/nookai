@@ -306,7 +306,7 @@ export default function Page() {
       <main
         className={`mx-auto w-full max-w-5xl px-6 ${
           step === 1
-            ? 'pb-24 pt-24 md:h-[calc(100vh-132px)] md:overflow-hidden'
+            ? 'flex flex-col pb-28 pt-24'
             : 'min-h-screen pb-32 pt-28'
         }`}
       >
@@ -318,7 +318,7 @@ export default function Page() {
               animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
               exit={{ opacity: 0, y: -16, scale: 0.98, filter: 'blur(6px)' }}
               transition={spring}
-              className="relative flex h-full flex-col justify-center overflow-hidden rounded-3xl bg-white p-6 md:p-8"
+              className="relative flex flex-1 flex-col justify-center overflow-hidden rounded-3xl bg-white p-6 md:p-10"
             >
               <div className="absolute -left-20 -top-20 h-52 w-52 rounded-full bg-[#ffdbcc]/40 blur-3xl" />
               <div className="absolute -bottom-16 -right-16 h-44 w-44 rounded-full bg-[#ffb695]/25 blur-3xl" />
