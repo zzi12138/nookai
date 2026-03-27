@@ -48,25 +48,25 @@ Your job: Create a zoomed-in, enhanced view of THIS EXACT object as it appears i
 - Center the object with a small amount of breathing room.
 - Keep the object's EXACT appearance: same shape, color, material, texture, pattern, and proportions.
 - Keep the object's original perspective and viewing angle — do NOT straighten or re-angle it.
-- Slightly soften or simplify the surrounding area so the object stands out, but keep some natural context (the surface it sits on, nearby shadows).
-- Subtly improve lighting clarity for better visibility, but keep it realistic and consistent with the room's lighting.
+- Place the object on a CLEAN WHITE background. Remove all room context, walls, floors, and surrounding clutter.
+- Subtly improve lighting clarity for better visibility, using soft even lighting suitable for product display.
 - The ENTIRE object must be fully visible — no part may be cropped or cut off by the image edge.
 
 === WHAT NOT TO DO (CRITICAL) ===
 - Do NOT invent, redesign, or generate a new object. The object must be visually IDENTICAL to the one in the source image.
-- Do NOT create a studio product shot, catalog image, or clean white/gray background.
+- Do NOT keep room backgrounds, walls, floors, or environmental context — use a clean white background.
 - Do NOT replace the object with a different style, color, or design.
 - Do NOT change the viewing angle or perspective of the object.
 - Do NOT add any objects that are not in the original image.
 - Do NOT show the full room — this should be a tight close-up.
 - Do NOT add text, labels, watermarks, borders, or arrows.
-- Do NOT use pure white or solid-color studio backgrounds.
+- The background MUST be clean white — no other background colors or textures.
 
 === VISUAL IDENTITY CHECK ===
 The output object must be visually identical to the one in the original image.
 If someone compared the output side-by-side with the source image, they should immediately recognize it as the same object — same color, same form, same material, same details.
 
-The result should look like a zoomed-in, enhanced crop of the SAME object from the original room — not a new product.
+The result should look like the SAME object from the original room, isolated on a clean white background — like a product listing photo, but preserving the exact original appearance.
 `.trim();
 }
 
@@ -78,7 +78,7 @@ The previous output did NOT match the source object. Common mistakes to avoid:
 - Generated a NEW object instead of extracting the existing one.
 - Changed the object's color, shape, or material.
 - Showed a full room scene instead of a close-up.
-- Used a studio/white background instead of natural context.
+- Did NOT use a clean white background as required.
 
 You MUST preserve the exact visual identity of the object from the source image.
 Look carefully at the cropped reference — reproduce THAT object, not an idealized version.
