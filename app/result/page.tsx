@@ -19,6 +19,8 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { ExportCard, type ExportItem } from './ExportCard';
 import { getBoardCellBySlot, getDefaultBoardCellForIndex, type BoardCell } from '../lib/itemsBoard';
 import { loadResult, type StoredResult } from '../lib/imageStore';
+import { shrinkImageDataUrl } from '../lib/imageUtils';
+import { useItemPreviews, type PreviewBatchTrace } from './hooks/useItemPreviews';
 
 type Necessity = 'Must-have' | 'Recommended' | 'Optional';
 type FilterKey = 'all' | Category;
@@ -194,68 +196,7 @@ function clampNumber(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-async function mapWithConcurrency<T, R>(
-  values: T[],
-  limit: number,
-  mapper: (value: T, index: number) => Promise<R>
-) {
-  const results = new Array<R>(values.length);
-  let cursor = 0;
-
-  const workers = Array.from({ length: Math.min(limit, values.length) }, async () => {
-    while (cursor < values.length) {
-      const current = cursor++;
-      results[current] = await mapper(values[current], current);
-    }
-  });
-
-  await Promise.all(workers);
-  return results;
-}
-
-async function shrinkGuideImageDataUrl(dataUrl: string, maxEdge = 1280, quality = 0.82) {
-  if (!dataUrl || !dataUrl.startsWith('data:image/')) return dataUrl;
-
-  try {
-    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error('image-load-failed'));
-      img.src = dataUrl;
-    });
-
-    const width = image.naturalWidth || image.width;
-    const height = image.naturalHeight || image.height;
-    if (!width || !height) return dataUrl;
-
-    const scale = Math.min(1, maxEdge / Math.max(width, height));
-    if (scale >= 1 && dataUrl.length < 1_500_000) return dataUrl;
-
-    const targetW = Math.max(1, Math.round(width * scale));
-    const targetH = Math.max(1, Math.round(height * scale));
-
-    const canvas = document.createElement('canvas');
-    canvas.width = targetW;
-    canvas.height = targetH;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return dataUrl;
-    ctx.drawImage(image, 0, 0, targetW, targetH);
-
-    return canvas.toDataURL('image/jpeg', quality);
-  } catch {
-    return dataUrl;
-  }
-}
-
-async function loadImageElement(src: string) {
-  return new Promise<HTMLImageElement>((resolve, reject) => {
-    const image = new Image();
-    image.crossOrigin = 'anonymous';
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error('image-load-failed'));
-    image.src = src;
-  });
-}
+// shrinkImageDataUrl imported from ../lib/imageUtils
 
 function getCropPercentBox(item: GuideItem) {
   const target = item.imageTarget || {};
@@ -490,11 +431,12 @@ function ResultPageContent() {
   const [stored, setStored] = useState<StoredResult | null>(null);
   const [summary, setSummary] = useState(defaultSummary);
   const [items, setItems] = useState<GuideItem[]>([]);
-  const [localPreviewImages, setLocalPreviewImages] = useState<Record<number, string>>({});
+  // --- FROZEN: board pipeline state ---
   const [itemsBoardImageUrl, setItemsBoardImageUrl] = useState('');
   const [extractedBoardStatus, setExtractedBoardStatus] = useState('');
   const [fallbackReason, setFallbackReason] = useState('');
   const [boardDebug, setBoardDebug] = useState<GuideResponse['extractedBoardDebug'] | null>(null);
+  // --- end FROZEN ---
   const [loading, setLoading] = useState(true);
   const [guideStarted, setGuideStarted] = useState(false);
   const [guideLoading, setGuideLoading] = useState(false);
@@ -506,6 +448,14 @@ function ResultPageContent() {
   const [addedIds, setAddedIds] = useState<Set<number>>(new Set());
   const [previewItemId, setPreviewItemId] = useState<number | null>(null);
   const [showDebug, setShowDebug] = useState(debugParamEnabled || process.env.NODE_ENV !== 'production');
+
+  // Item preview hook — AI-only, quality-first, auto-retry
+  const { previews, trace: previewTrace } = useItemPreviews(
+    items,
+    stored?.generated || '',
+    stored?.original || '',
+    stored?.theme || '日式原木风',
+  );
 
   useEffect(() => {
     if (debugParamEnabled) {
@@ -569,9 +519,9 @@ function ResultPageContent() {
       setError('');
 
       try {
-        const afterForGuide = await shrinkGuideImageDataUrl(current.generated, 1280, 0.82);
+        const afterForGuide = await shrinkImageDataUrl(current.generated, 1280, 0.82);
         const beforeForGuide = current.original
-          ? await shrinkGuideImageDataUrl(current.original, 1280, 0.82)
+          ? await shrinkImageDataUrl(current.original, 1280, 0.82)
           : '';
         let response: Response | null = null;
         let data: GuideResponse = {};
@@ -659,84 +609,7 @@ function ResultPageContent() {
     };
   }, [stored, guideStarted]);
 
-  useEffect(() => {
-    const sourceAfterImage = stored?.generated || '';
-    if (!sourceAfterImage || items.length === 0) {
-      setLocalPreviewImages({});
-      return;
-    }
-
-    let cancelled = false;
-
-    async function buildItemPreviews() {
-      try {
-        const beforeGuide = stored?.original ? await shrinkGuideImageDataUrl(stored.original, 1280, 0.84) : '';
-        const afterGuide = await shrinkGuideImageDataUrl(sourceAfterImage, 1280, 0.84);
-        const next: Record<number, string> = {};
-
-        const results = await mapWithConcurrency(items, 3, async (item) => {
-          const controller = new AbortController();
-          const timer = window.setTimeout(() => controller.abort(), 65000);
-
-          try {
-            const response = await fetch('/api/item-preview', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                beforeImage: beforeGuide,
-                afterImage: afterGuide,
-                theme: stored?.theme || '日式原木风',
-                item: {
-                  name: item.name,
-                  category: item.category,
-                  placement: item.placement,
-                  reason: item.reason,
-                  anchor: item.imageTarget ? {
-                    centerX: item.imageTarget.x,
-                    centerY: item.imageTarget.y,
-                    width: item.imageTarget.width,
-                    height: item.imageTarget.height,
-                  } : undefined,
-                },
-              }),
-              signal: controller.signal,
-            });
-
-            const data = (await response.json().catch(() => ({}))) as { previewImage?: string };
-            if (response.ok && data.previewImage) {
-              return data.previewImage;
-            }
-          } catch {
-            // ignore per-item preview failures; keep building the rest
-          } finally {
-            window.clearTimeout(timer);
-          }
-
-          return '';
-        });
-
-        results.forEach((preview, index) => {
-          if (preview) {
-            next[items[index].id] = preview;
-          }
-        });
-
-        if (!cancelled) {
-          setLocalPreviewImages(next);
-        }
-      } catch {
-        if (!cancelled) {
-          setLocalPreviewImages({});
-        }
-      }
-    }
-
-    buildItemPreviews();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [stored?.generated, stored?.original, stored?.theme, items]);
+  // Item previews now handled by useItemPreviews hook above
 
   useEffect(() => {
     if (!guideLoading) return;
@@ -793,14 +666,10 @@ function ResultPageContent() {
 
   const beforeImage = stored?.original || '';
   const afterImage = stored?.generated || '';
-  const hasGeneratedItemPreviews = Object.keys(localPreviewImages).length > 0 || items.some((item) => Boolean(item.previewImage));
-  const thumbnailSource =
-    hasGeneratedItemPreviews
-      ? 'gemini_item_preview'
-      : (boardDebug?.thumbnailSource as 'gemini_item_preview' | 'main_image_fallback' | undefined) ||
-        (items.some((item) => Boolean(item.previewImage))
-          ? 'gemini_item_preview'
-          : 'main_image_fallback');
+  const previewSuccessCount = Array.from(previews.values()).filter((p) => p.status === 'done').length;
+  const hasGeneratedItemPreviews = previewSuccessCount > 0;
+  // --- FROZEN: board pipeline thumbnailSource ---
+  const thumbnailSource = hasGeneratedItemPreviews ? 'gemini_item_preview' : 'main_image_fallback';
 
   const activePreviewItem = useMemo(() => items.find((item) => item.id === previewItemId) || null, [items, previewItemId]);
 
@@ -937,22 +806,39 @@ function ResultPageContent() {
         </div>
 
         {showDebug ? (
-          <div className="mb-6 rounded-2xl border border-[#d4c3be]/60 bg-white/70 p-4 text-xs text-[#504440]">
-            <div className="grid gap-2 md:grid-cols-2">
-              <p>当前商品预览来源：<span className="font-semibold text-[#52372d]">{thumbnailSource}</span></p>
-              <p>商品预览状态：<span className="font-semibold text-[#52372d]">{extractedBoardStatus || boardDebug?.status || 'unknown'}</span></p>
-              <p>商品预览是否存在：<span className="font-semibold text-[#52372d]">{hasGeneratedItemPreviews ? '是' : '否'}</span></p>
-              <p>fallback 原因：<span className="font-semibold text-[#52372d]">{fallbackReason || boardDebug?.fallbackReason || 'none'}</span></p>
-              <p>原始图片类型/长度：<span className="font-semibold text-[#52372d]">{boardDebug?.rawImageKind || 'none'} / {boardDebug?.rawImageLength || 0}</span></p>
-              <p>清洗后图片类型/长度：<span className="font-semibold text-[#52372d]">{boardDebug?.cleanedImageKind || 'none'} / {boardDebug?.cleanedImageLength || 0}</span></p>
-              <p>有效性检测：<span className="font-semibold text-[#52372d]">{boardDebug?.validation?.checked ? (boardDebug?.validation?.valid ? 'valid' : 'invalid') : 'unchecked'}</span></p>
-              <p>失败分类：<span className="font-semibold text-[#52372d]">{boardDebug?.validation?.failureCode || boardDebug?.failureCode || 'none'}</span></p>
-              <p>检测到文字：<span className="font-semibold text-[#52372d]">{boardDebug?.validation?.hasText ? '是' : '否'}</span></p>
-              <p>检测到框线/网格：<span className="font-semibold text-[#52372d]">{boardDebug?.validation?.hasGridOrFrames ? '是' : '否'}</span></p>
-              <p>白底评分：<span className="font-semibold text-[#52372d]">{typeof boardDebug?.validation?.whiteBackgroundScore === 'number' ? boardDebug.validation.whiteBackgroundScore.toFixed(2) : '0.00'}</span></p>
-              <p>原始图片地址：<span className="font-semibold break-all text-[#52372d]">{boardDebug?.rawImageRef || 'none'}</span></p>
-            </div>
-            <p className="mt-2 break-all">检测原因：<span className="font-semibold text-[#52372d]">{boardDebug?.validation?.reasons?.join(' | ') || boardDebug?.failureReason || 'none'}</span></p>
+          <div className="mb-6 space-y-3 rounded-2xl border border-[#d4c3be]/60 bg-white/70 p-4 text-xs text-[#504440]">
+            {/* Preview trace */}
+            {previewTrace ? (
+              <div>
+                <p className="mb-2 font-bold text-[#52372d]">
+                  Preview: {previewTrace.totalItems} items | AI 成功 {previewTrace.succeeded} | 失败 {previewTrace.failed} | 重试 {previewTrace.retried} | 耗时 {(previewTrace.totalDurationMs / 1000).toFixed(1)}s
+                </p>
+                <div className="space-y-0.5">
+                  {previewTrace.items.map((t) => (
+                    <p key={t.itemId} className="font-mono">
+                      {t.status === 'done' ? '✓' : '✗'}{' '}
+                      <span className="font-semibold">{t.itemName}</span>{' '}
+                      <span className="text-[#827470]">
+                        {t.status} | {t.attempts}次 | {(t.durationMs / 1000).toFixed(1)}s
+                        {t.error ? ` | ${t.error.slice(0, 60)}` : ''}
+                      </span>
+                    </p>
+                  ))}
+                </div>
+              </div>
+            ) : items.length > 0 ? (
+              <p>Preview: 等待识别完成...</p>
+            ) : null}
+
+            {/* Frozen board pipeline debug (kept for reference) */}
+            <details className="text-[#b8a8a2]">
+              <summary className="cursor-pointer">Board pipeline (frozen)</summary>
+              <div className="mt-2 grid gap-1 md:grid-cols-2">
+                <p>thumbnailSource: {thumbnailSource}</p>
+                <p>boardStatus: {extractedBoardStatus || boardDebug?.status || 'n/a'}</p>
+                <p>fallbackReason: {fallbackReason || boardDebug?.fallbackReason || 'n/a'}</p>
+              </div>
+            </details>
           </div>
         ) : null}
 
@@ -1062,9 +948,9 @@ function ResultPageContent() {
                                     className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl bg-white ring-1 ring-[#d4c3be]/30"
                                     aria-label={`预览 ${item.name}`}
                                   >
-                                    {item.previewImage || localPreviewImages[item.id] ? (
+                                    {previews.get(item.id)?.status === 'done' && previews.get(item.id)?.imageUrl ? (
                                       <img
-                                        src={item.previewImage || localPreviewImages[item.id]}
+                                        src={previews.get(item.id)!.imageUrl}
                                         alt={item.name}
                                         className="h-full w-full object-cover"
                                       />
@@ -1214,9 +1100,9 @@ function ResultPageContent() {
             </div>
 
             <div className="overflow-hidden rounded-2xl border border-[#ebe1d3] bg-[#f7edde]">
-              {activePreviewItem.previewImage || localPreviewImages[activePreviewItem.id] ? (
+              {previews.get(activePreviewItem.id)?.status === 'done' && previews.get(activePreviewItem.id)?.imageUrl ? (
                 <img
-                  src={activePreviewItem.previewImage || localPreviewImages[activePreviewItem.id]}
+                  src={previews.get(activePreviewItem.id)!.imageUrl}
                   alt={activePreviewItem.name}
                   className="h-[420px] w-full object-contain bg-white"
                 />
@@ -1259,9 +1145,9 @@ function ResultPageContent() {
               necessityLabel: NECESSITY_LABEL[item.necessity] || item.necessity,
               placement: item.placement || '',
               quantity: item.quantity,
-              previewImage: item.previewImage,
+              previewImage: previews.get(item.id)?.imageUrl || '',
             }))}
-            previewImages={localPreviewImages}
+            previewImages={{}}
             budgetMin={budget.min}
             budgetMax={budget.max}
           />
