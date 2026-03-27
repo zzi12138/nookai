@@ -91,15 +91,6 @@ type GuideResponse = {
   error?: string;
 };
 
-type MiniGameToken = {
-  id: number;
-  x: number;
-  y: number;
-  vx: number;
-  kind: 'lamp' | 'rug' | 'plant' | 'art' | 'pillow' | 'basket' | 'clutter';
-  rotate: number;
-};
-
 const spring = { type: 'spring', stiffness: 120, damping: 20 } as const;
 
 const CATEGORY_ORDER: Category[] = [
@@ -139,27 +130,6 @@ const NECESSITY_LABEL: Record<Necessity, string> = {
 const defaultSummary =
   '基于你的房间结构，我们优先推荐了更容易落地的灯光、布艺和装饰单品。整体目标是用低预算完成高体感升级。';
 
-const TOKEN_META: Record<
-  MiniGameToken['kind'],
-  { label: string; score: number; className: string }
-> = {
-  lamp: { label: '灯', score: 12, className: 'bg-amber-100 text-amber-700' },
-  rug: { label: '毯', score: 10, className: 'bg-stone-100 text-stone-700' },
-  plant: { label: '植', score: 14, className: 'bg-emerald-100 text-emerald-700' },
-  art: { label: '画', score: 11, className: 'bg-orange-100 text-orange-700' },
-  pillow: { label: '枕', score: 9, className: 'bg-rose-100 text-rose-700' },
-  basket: { label: '筐', score: 13, className: 'bg-yellow-100 text-yellow-700' },
-  clutter: { label: '杂', score: -12, className: 'bg-zinc-200 text-zinc-700' },
-};
-
-const GOOD_TOKEN_KINDS: MiniGameToken['kind'][] = [
-  'lamp',
-  'rug',
-  'plant',
-  'art',
-  'pillow',
-  'basket',
-];
 
 function normalizeNecessity(value?: string): Necessity {
   const v = (value || '').toLowerCase();
@@ -455,235 +425,21 @@ function BeforeAfterSlider({ before, after }: { before: string; after: string })
   );
 }
 
-function LoadingMiniGame({
-  active,
-  progress,
-}: {
-  active: boolean;
-  progress: number;
-}) {
-  const gameRef = useRef<HTMLDivElement>(null);
-  const rafRef = useRef<number | null>(null);
-  const lastTimeRef = useRef(0);
-  const spawnAccumulatorRef = useRef(0);
-  const idRef = useRef(1);
-  const userControlUntilRef = useRef(0);
-  const scoreRef = useRef(0);
-  const comboRef = useRef(0);
-  const playerYRef = useRef(50);
-  const tokensRef = useRef<MiniGameToken[]>([]);
-
-  const [timeLeft, setTimeLeft] = useState(60);
-  const [score, setScore] = useState(0);
-  const [combo, setCombo] = useState(0);
-  const [playerY, setPlayerY] = useState(50);
-  const [tokens, setTokens] = useState<MiniGameToken[]>([]);
-
-  useEffect(() => {
-    playerYRef.current = playerY;
-  }, [playerY]);
-
-  useEffect(() => {
-    tokensRef.current = tokens;
-  }, [tokens]);
-
-  useEffect(() => {
-    if (!active) return;
-
-    setTimeLeft(60);
-    setScore(0);
-    setCombo(0);
-    setPlayerY(50);
-    setTokens([]);
-    scoreRef.current = 0;
-    comboRef.current = 0;
-    playerYRef.current = 50;
-    tokensRef.current = [];
-    idRef.current = 1;
-    spawnAccumulatorRef.current = 0;
-    userControlUntilRef.current = 0;
-
-    const timer = window.setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          setScore(0);
-          setCombo(0);
-          scoreRef.current = 0;
-          comboRef.current = 0;
-          return 60;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, [active]);
-
-  useEffect(() => {
-    if (!active) return;
-
-    lastTimeRef.current = performance.now();
-
-    const loop = (now: number) => {
-      const deltaMs = now - lastTimeRef.current;
-      lastTimeRef.current = now;
-      const delta = Math.min(0.05, deltaMs / 1000);
-      spawnAccumulatorRef.current += delta;
-
-      setTokens((prev) => {
-        let next = prev;
-
-        if (spawnAccumulatorRef.current >= 0.55) {
-          spawnAccumulatorRef.current = 0;
-          const isBad = Math.random() < 0.22;
-          const kind = isBad
-            ? 'clutter'
-            : GOOD_TOKEN_KINDS[Math.floor(Math.random() * GOOD_TOKEN_KINDS.length)];
-          const fresh: MiniGameToken = {
-            id: idRef.current++,
-            x: 108,
-            y: 12 + Math.random() * 76,
-            vx: 20 + Math.random() * 16,
-            rotate: (Math.random() - 0.5) * 18,
-            kind,
-          };
-          next = [...next, fresh];
-        }
-
-        const moved = next
-          .map((item) => ({ ...item, x: item.x - item.vx * delta, rotate: item.rotate + delta * 18 }))
-          .filter((item) => item.x >= -10);
-
-        const survived: MiniGameToken[] = [];
-        let scoreDelta = 0;
-        let comboDelta = comboRef.current;
-
-        for (const item of moved) {
-          const hitX = Math.abs(item.x - 14) <= 6.4;
-          const hitY = Math.abs(item.y - playerYRef.current) <= 11;
-          if (hitX && hitY) {
-            const deltaScore = TOKEN_META[item.kind].score;
-            scoreDelta += deltaScore;
-            if (deltaScore > 0) {
-              comboDelta += 1;
-            } else {
-              comboDelta = 0;
-            }
-          } else {
-            survived.push(item);
-          }
-        }
-
-        if (scoreDelta !== 0) {
-          scoreRef.current = Math.max(0, scoreRef.current + scoreDelta + Math.max(0, comboDelta - 1) * 2);
-          setScore(scoreRef.current);
-        }
-
-        if (comboDelta !== comboRef.current) {
-          comboRef.current = comboDelta;
-          setCombo(comboDelta);
-        }
-
-        tokensRef.current = survived;
-        return survived;
-      });
-
-      setPlayerY((prev) => {
-        if (performance.now() < userControlUntilRef.current) return prev;
-
-        const targetToken = tokensRef.current
-          .filter((item) => item.kind !== 'clutter')
-          .sort((a, b) => a.x - b.x)[0];
-        const targetY = targetToken ? targetToken.y : 50;
-        const next = prev + (targetY - prev) * 0.14;
-        playerYRef.current = next;
-        return next;
-      });
-
-      rafRef.current = window.requestAnimationFrame(loop);
-    };
-
-    rafRef.current = window.requestAnimationFrame(loop);
-
-    return () => {
-      if (rafRef.current !== null) {
-        window.cancelAnimationFrame(rafRef.current);
-      }
-    };
-  }, [active]);
-
-  const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    const rect = gameRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const y = ((event.clientY - rect.top) / rect.height) * 100;
-    const next = Math.max(8, Math.min(92, y));
-    setPlayerY(next);
-    playerYRef.current = next;
-    userControlUntilRef.current = performance.now() + 2400;
-  };
-
+function GuideLoadingBar({ progress }: { progress: number }) {
   return (
-    <div className="flex h-full w-full flex-col rounded-2xl border border-[#d4c3be]/60 bg-white/60 p-4">
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-bold text-[#52372d]">软装跑酷（自动进行）</p>
-          <p className="text-xs text-[#504440]">收集有用软装，避开杂物。你可移动鼠标接管角色。</p>
-        </div>
-        <div className="text-right text-xs text-[#504440]">
-          <p>剩余 {timeLeft}s</p>
-          <p>得分 {score}</p>
-          <p>连击 x{combo}</p>
-        </div>
-      </div>
-
-      <div className="mb-3">
-        <div className="mb-1 flex items-center justify-between text-xs text-[#504440]">
-          <span>购物指南生成进度</span>
+    <div className="flex min-h-[360px] flex-col items-center justify-center gap-5 px-8">
+      <p className="text-sm font-medium text-[#52372d]">正在识别可购买物件...</p>
+      <div className="w-full max-w-[260px]">
+        <div className="mb-2 flex items-center justify-between text-xs text-[#827470]">
+          <span>分析效果图中</span>
           <span>{Math.round(progress)}%</span>
         </div>
         <div className="h-2 overflow-hidden rounded-full bg-[#ebe1d3]">
           <motion.div
             className="h-full rounded-full bg-[#8f4d2c]"
-            animate={{ width: `${Math.max(6, Math.min(100, progress))}%` }}
+            animate={{ width: `${Math.max(4, Math.min(100, progress))}%` }}
             transition={{ type: 'spring', stiffness: 90, damping: 16 }}
           />
-        </div>
-      </div>
-
-      <div
-        ref={gameRef}
-        onPointerMove={handlePointerMove}
-        className="relative flex-1 overflow-hidden rounded-2xl border border-[#d4c3be]/45 bg-gradient-to-b from-[#fff8f2] via-[#fcf2e4] to-[#f1e7d9]"
-      >
-        <div className="pointer-events-none absolute -left-14 top-6 h-24 w-24 rounded-full bg-[#ffdbcc]/50 blur-2xl" />
-        <div className="pointer-events-none absolute right-2 top-16 h-20 w-20 rounded-full bg-[#e8c1b3]/45 blur-2xl" />
-
-        {tokens.map((token) => {
-          const meta = TOKEN_META[token.kind];
-          return (
-            <div
-              key={token.id}
-              className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full px-2.5 py-1 text-xs font-semibold shadow-sm ${meta.className}`}
-              style={{
-                left: `${token.x}%`,
-                top: `${token.y}%`,
-                transform: `translate(-50%, -50%) rotate(${token.rotate}deg)`,
-              }}
-            >
-              {meta.label}
-            </div>
-          );
-        })}
-
-        <div
-          className="absolute left-[14%] h-12 w-12 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#8f4d2c]/35 bg-[#8f4d2c]/15"
-          style={{ top: `${playerY}%` }}
-        >
-          <div className="flex h-full items-center justify-center text-sm font-bold text-[#52372d]">
-            住
-          </div>
         </div>
       </div>
     </div>
@@ -1194,7 +950,7 @@ function ResultPageContent() {
                 }
               >
                 {guideLoading ? (
-                  <LoadingMiniGame active={guideLoading} progress={guideProgress} />
+                  <GuideLoadingBar progress={guideProgress} />
                 ) : allVisibleItems.length === 0 ? (
                   <div className="flex min-h-[360px] flex-col items-center justify-center rounded-2xl border border-dashed border-[#d4c3be]/60 bg-white/40 px-6 text-center text-sm text-[#504440]">
                     <p className="text-sm text-[#827470]">暂未识别到可购买物件，可重新生成试试</p>

@@ -16,7 +16,7 @@ const NEGATIVE_MAP: Record<string, string> = {
   不改动布局: 'do not alter room layout',
   不改门窗: 'do not change doors or windows',
   不改吊顶: 'do not change ceiling',
-  自然光优先: 'avoid unnatural lighting',
+  不增加人工光源: 'do not add artificial light sources, keep existing natural lighting',
 };
 
 function stripDataUrl(value: string) {
@@ -182,7 +182,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const model = process.env.GEMINI_IMAGE_MODEL || 'gemini-3.1-flash-image-preview';
+    const model = process.env.GEMINI_IMAGE_MODEL || 'gemini-2.0-flash-preview-image-generation';
     const prompt = buildPrompt(theme, constraints, requirements);
     const base64Image = stripDataUrl(image);
 
