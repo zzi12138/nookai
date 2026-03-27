@@ -6,6 +6,7 @@ export type Necessity = 'Must-have' | 'Recommended' | 'Optional';
 
 export type RawItem = {
   name?: string;
+  category?: string;
   quantity?: number;
   priceMin?: number;
   priceMax?: number;
@@ -227,22 +228,51 @@ function normalizeNecessity(raw?: string): Necessity {
   return 'Optional';
 }
 
-function inferCategory(name: string): Category {
+function inferCategory(name: string, aiCategory?: string): Category {
+  // Primary: use AI-returned category enum
+  if (aiCategory) {
+    const c = aiCategory.trim();
+    if (c === '灯具' || /light/i.test(c)) return 'Ambient lighting';
+    if (c === '地毯' || /rug|floor soft/i.test(c)) return 'Floor soft furnishings';
+    if (c === '墙面装饰' || /wall/i.test(c)) return 'Wall decor';
+    if (c === '绿植' || /plant/i.test(c)) return 'Plants';
+    if (c === '布艺' || /bedding|textile/i.test(c)) return 'Bedding & soft textiles';
+    if (c === '摆件' || /accessory|functional/i.test(c)) return 'Functional accessories';
+  }
+
+  // Fallback: keyword match on Chinese item name
   const n = name.toLowerCase();
+
+  // Lighting
   if (n.includes('灯') || n.includes('lamp') || n.includes('light')) return 'Ambient lighting';
+
+  // Rugs
+  if (n.includes('地毯') || n.includes('rug') || n.includes('编织垫') || n.includes('脚垫')) return 'Floor soft furnishings';
+
+  // Wall decor
   if (
-    n.includes('床品') ||
-    n.includes('抱枕') ||
-    n.includes('毯') ||
-    n.includes('bedding') ||
-    n.includes('pillow') ||
-    n.includes('throw') ||
-    n.includes('textile')
-  )
-    return 'Bedding & soft textiles';
-  if (n.includes('地毯') || n.includes('rug') || n.includes('mat')) return 'Floor soft furnishings';
-  if (n.includes('画') || n.includes('art') || n.includes('挂') || n.includes('poster')) return 'Wall decor';
-  if (n.includes('绿植') || n.includes('plant') || n.includes('树') || n.includes('leaf')) return 'Plants';
+    n.includes('挂画') || n.includes('装饰画') || n.includes('海报') || n.includes('镜') ||
+    n.includes('art') || n.includes('poster') || n.includes('frame') || n.includes('wall decor')
+  ) return 'Wall decor';
+
+  // Plants — broad match: 植物/盆栽/多肉/干花/花束/绿植/各种植物名
+  if (
+    n.includes('绿植') || n.includes('植物') || n.includes('盆栽') || n.includes('多肉') ||
+    n.includes('干花') || n.includes('花束') || n.includes('龟背竹') || n.includes('虎皮兰') ||
+    n.includes('橡皮树') || n.includes('尤加利') || n.includes('芦荟') || n.includes('仙人') ||
+    n.includes('plant') || n.includes('ficus') || n.includes('monstera') || n.includes('succulent')
+  ) return 'Plants';
+
+  // Soft textiles — bedding, pillows, throws, curtains
+  if (
+    n.includes('床品') || n.includes('床单') || n.includes('被套') || n.includes('枕套') ||
+    n.includes('抱枕') || n.includes('靠枕') || n.includes('毯') || n.includes('窗帘') ||
+    n.includes('帘') || n.includes('布艺') || n.includes('pillow') || n.includes('cushion') ||
+    n.includes('bedding') || n.includes('throw') || n.includes('blanket') || n.includes('curtain') ||
+    n.includes('textile') || n.includes('linen')
+  ) return 'Bedding & soft textiles';
+
+  // Decorative objects — candles, vases, trays, baskets, scent, etc.
   return 'Functional accessories';
 }
 
@@ -431,7 +461,7 @@ export function normalizeGuideRawItems(rawItems: RawItem[], options?: { allowSyn
       const name = toChineseName(item.name || '');
       if (!name || shouldExcludeItem(name)) return null;
 
-      const category = inferCategory(name);
+      const category = inferCategory(name, item.category);
       const necessity = normalizeNecessity(item.necessity);
       const quantity = Math.round(clamp(Number(item.quantity || 1), 1, 3));
       const price = normalizePrice(name, item.priceMin, item.priceMax);

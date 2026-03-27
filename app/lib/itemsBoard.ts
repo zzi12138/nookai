@@ -32,12 +32,12 @@ export const ITEMS_BOARD_CONFIG = {
 } as const;
 
 export const CATEGORY_SLOT_RANGES: Record<BoardCategory, number[]> = {
-  'Ambient lighting': [1, 2, 3],
-  'Bedding & soft textiles': [4, 5],
-  'Floor soft furnishings': [6],
-  'Wall decor': [7, 8, 9],
-  Plants: [10, 11],
-  'Functional accessories': [12],
+  'Ambient lighting': [1, 2],
+  'Bedding & soft textiles': [3, 4],
+  'Floor soft furnishings': [5],
+  'Wall decor': [6, 7],
+  Plants: [8, 9],
+  'Functional accessories': [10, 11, 12],
 };
 
 let boardCellsCache: BoardCell[] | null = null;

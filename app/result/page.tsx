@@ -104,21 +104,21 @@ const CATEGORY_ORDER: Category[] = [
 
 const CATEGORY_LABEL: Record<Category, string> = {
   'Ambient lighting': '灯具',
-  'Bedding & soft textiles': '床品布艺',
+  'Bedding & soft textiles': '布艺',
   'Floor soft furnishings': '地毯',
   'Wall decor': '墙面装饰',
   Plants: '绿植',
-  'Functional accessories': '功能小物',
+  'Functional accessories': '摆件装饰',
 };
 
 const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'all', label: '全部' },
   { key: 'Ambient lighting', label: '灯具' },
-  { key: 'Bedding & soft textiles', label: '床品布艺' },
+  { key: 'Bedding & soft textiles', label: '布艺' },
   { key: 'Floor soft furnishings', label: '地毯' },
   { key: 'Wall decor', label: '墙面装饰' },
   { key: 'Plants', label: '绿植' },
-  { key: 'Functional accessories', label: '功能小物' },
+  { key: 'Functional accessories', label: '摆件装饰' },
 ];
 
 const NECESSITY_LABEL: Record<Necessity, string> = {
@@ -140,13 +140,17 @@ function normalizeNecessity(value?: string): Necessity {
 
 function normalizeCategory(value?: string): Category {
   const input = (value || '').toLowerCase();
-  if (input.includes('light') || input.includes('灯')) return 'Ambient lighting';
-  if (input.includes('bedding') || input.includes('textile') || input.includes('床品') || input.includes('抱枕') || input.includes('毯')) {
-    return 'Bedding & soft textiles';
-  }
-  if (input.includes('floor') || input.includes('rug') || input.includes('地毯')) return 'Floor soft furnishings';
-  if (input.includes('wall') || input.includes('画') || input.includes('poster')) return 'Wall decor';
-  if (input.includes('plant') || input.includes('绿植')) return 'Plants';
+  if (input.includes('ambient lighting') || input === '灯具' || input.includes('light') || input.includes('灯')) return 'Ambient lighting';
+  if (input === '地毯' || input.includes('floor soft') || input.includes('rug') || input.includes('地毯')) return 'Floor soft furnishings';
+  if (input === '墙面装饰' || input.includes('wall decor') || input.includes('墙') || input.includes('画') || input.includes('poster') || input.includes('镜')) return 'Wall decor';
+  if (input === '绿植' || input.includes('plant') || input.includes('绿植') || input.includes('植物') || input.includes('盆栽')) return 'Plants';
+  if (
+    input === '布艺' || input.includes('bedding') || input.includes('textile') ||
+    input.includes('床品') || input.includes('布艺') || input.includes('抱枕') ||
+    input.includes('毯') || input.includes('窗帘') || input.includes('pillow') ||
+    input.includes('curtain') || input.includes('throw')
+  ) return 'Bedding & soft textiles';
+  if (input === '摆件' || input.includes('functional') || input.includes('accessory') || input.includes('摆件')) return 'Functional accessories';
   return 'Functional accessories';
 }
 
