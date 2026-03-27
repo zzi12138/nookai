@@ -182,7 +182,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const model = process.env.GEMINI_IMAGE_MODEL || 'gemini-3.1-flash-image-preview';
+    const model = process.env.GEMINI_IMAGE_MODEL || 'gemini-2.5-flash-image';
     const prompt = buildPrompt(theme, constraints, requirements);
     const base64Image = stripDataUrl(image);
 
