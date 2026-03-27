@@ -102,7 +102,7 @@ async function analyzeItems(beforeImage: string | undefined, afterImage: string,
     throw new Error('Unsupported image format');
   }
 
-  const model = process.env.GEMINI_VISION_MODEL || 'gemini-2.0-flash';
+  const model = process.env.GEMINI_VISION_MODEL || 'gemini-2.5-flash';
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 55000);
 
