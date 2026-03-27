@@ -777,6 +777,9 @@ function ResultPageContent() {
 
       try {
         const afterForGuide = await shrinkGuideImageDataUrl(current.generated, 1280, 0.82);
+        const beforeForGuide = current.original
+          ? await shrinkGuideImageDataUrl(current.original, 1280, 0.82)
+          : '';
         let response: Response | null = null;
         let data: GuideResponse = {};
         let lastError = '购物指南生成失败';
@@ -790,8 +793,7 @@ function ResultPageContent() {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                // Keep payload lean to avoid browser/network "Failed to fetch" on large bodies.
-                // Only after image is required for the shopping-guide extraction step.
+                beforeImage: beforeForGuide,
                 afterImage: afterForGuide,
                 theme: current.theme || '日式原木风',
                 provider:

@@ -3,7 +3,6 @@ import { assignItemsToBoardCells } from '../../lib/itemsBoard';
 import {
   type Necessity,
   type RawItem,
-  getFallbackRawItems,
   normalizeGuideRawItems,
   dedupeByObject,
   makeDefaultValidation,
@@ -101,9 +100,9 @@ async function analyzeItems(beforeImage: string | undefined, afterImage: string,
     throw new Error('Unsupported image format');
   }
 
-  const model = process.env.GEMINI_VISION_MODEL || 'gemini-2.5-flash';
+  const model = process.env.GEMINI_VISION_MODEL || 'gemini-2.0-flash';
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 30000);
+  const timer = setTimeout(() => controller.abort(), 55000);
 
   try {
     const response = await fetch(
@@ -152,12 +151,17 @@ async function analyzeItems(beforeImage: string | undefined, afterImage: string,
 
     const result = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(result?.error?.message || result?.error || `Analysis failed (${response.status})`);
+      const apiErr = result?.error?.message || result?.error || `Analysis failed (${response.status})`;
+      console.error('[explainer] Gemini API error:', apiErr, '| model:', model);
+      throw new Error(apiErr);
     }
 
     const parts = result?.candidates?.[0]?.content?.parts ?? [];
     const text = parts.map((p: any) => p?.text || '').join('\n').trim();
+    console.log('[explainer] raw Gemini text (first 500):', text.slice(0, 500));
+
     const parsed = safeParseJson<{ summary?: string; items?: RawItem[] }>(text);
+    console.log('[explainer] parsed items count:', parsed?.items?.length ?? 0);
 
     if (!parsed?.items || !Array.isArray(parsed.items) || parsed.items.length === 0) {
       throw new Error('No items detected from image');
@@ -184,22 +188,24 @@ export async function POST(req: Request) {
     }
 
     const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-    let analyzed: { summary: string; items: RawItem[] } = {
-      summary:
-        '已根据效果图生成基础购物建议。你可以先从灯光、床品和地毯三项开始落地，最快看到空间变化。',
-      items: getFallbackRawItems(theme),
-    };
+    let analyzed: { summary: string; items: RawItem[] } = { summary: '', items: [] };
+    let analysisError: string | null = null;
 
     if (apiKey) {
       try {
         analyzed = await withTimeout(
           analyzeItems(beforeImage || undefined, afterImage, theme, apiKey),
-          25000,
+          60000,
           'analysis timeout'
         );
+        console.log('[explainer] analysis succeeded, items:', analyzed.items.length);
       } catch (error) {
-        console.error('guide analysis fallback:', error);
+        analysisError = error instanceof Error ? error.message : String(error);
+        console.error('[explainer] analysis failed:', analysisError);
       }
+    } else {
+      analysisError = 'Missing GEMINI_API_KEY';
+      console.error('[explainer]', analysisError);
     }
 
     const normalizedAll = normalizeGuideRawItems(analyzed.items);
@@ -258,6 +264,7 @@ export async function POST(req: Request) {
       extractedBoardStatus: boardDebug.status,
       extractedBoardDebug: boardDebug,
       fallbackReason: boardDebug.fallbackReason,
+      analysisError,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Server error';
