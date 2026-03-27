@@ -35,48 +35,48 @@ function describeLocation(anchor?: { centerX?: number; centerY?: number; width?:
 function buildItemPrompt(theme: string, item: Payload['item'], hasAfterCrop: boolean) {
   const location = describeLocation(item?.anchor);
   return `
-你的任务：从提供的房间效果图（AFTER）中，提取并单独展示下方指定的那一件软装物件。
-${hasAfterCrop ? '同时提供了一张局部裁切参考图，标示了该物件在房间中的大致位置，请据此精确定位目标。' : ''}
+Your task: Extract and display ONE specific soft furnishing item from the provided AFTER room image.
+${hasAfterCrop ? 'A cropped reference image is also provided showing the approximate location of this item in the room. Use it to precisely locate the target.' : ''}
 
-═══ 目标物件 ═══
-名称：${item?.name || '商品'}
-分类：${item?.category || '摆件'}
-摆放：${item?.placement || '效果图中可见位置'}
-${location ? `定位：${location}` : ''}
-风格：${theme || '日式原木风'}
+=== TARGET ITEM ===
+Name: ${item?.name || 'item'}
+Category: ${item?.category || 'accessory'}
+Placement: ${item?.placement || 'visible in the room'}
+${location ? `Location: ${location}` : ''}
+Style: ${theme || 'Japandi'}
 
-═══ 硬性约束（必须全部遵守）═══
+=== HARD CONSTRAINTS (must follow ALL) ===
 
-【主体聚焦】
-- 画面中只能出现这一件物件，禁止出现其他家具、灯具、植物等无关物品
-- 禁止生成整间房间或大范围场景——只展示物件本身
-- 如果目标是灯具，只画灯；如果是抱枕，只画抱枕
+[SUBJECT FOCUS]
+- Show ONLY this one item. No other furniture, lamps, plants, or unrelated objects.
+- Do NOT generate an entire room or wide scene — show the item alone.
+- If the target is a lamp, show only the lamp. If a pillow, show only the pillow.
 
-【主体占比】
-- 目标物件必须占据画面面积的 60%–80%
-- 物件居中放置，四周留少量呼吸空间即可
-- 禁止大面积空白或留白——物件必须撑满画面
+[SUBJECT PROPORTION]
+- The target item must fill 60%–80% of the image area.
+- Center the item with only a small amount of breathing room around it.
+- Do NOT leave large empty areas — the item must dominate the frame.
 
-【一致性】
-- 颜色、材质、纹理、形态必须与 AFTER 效果图中完全一致
-- 禁止重新设计、替换、美化或简化物件外观
-- 这是"提取"不是"重新创作"
+[CONSISTENCY]
+- Color, material, texture, and form must EXACTLY match the AFTER image.
+- Do NOT redesign, substitute, beautify, or simplify the item's appearance.
+- This is "extraction", NOT "re-creation".
 
-【结构完整性】
-- 保持物件原始透视角度，禁止改变视角
-- 禁止拉伸、压缩、倾斜、扭曲
-- 物件必须完整呈现，不能裁切掉任何部分
+[STRUCTURAL INTEGRITY]
+- Maintain the item's original perspective angle. Do NOT change the viewpoint.
+- Do NOT stretch, compress, tilt, skew, or distort the item.
+- The ENTIRE item must be fully visible within the frame — no part may be cropped or cut off by the image edge.
 
-【背景】
-- 使用柔和、自然的浅暖色背景（米色/奶白/浅木色）
-- 背景可以轻微虚化，但必须自然过渡
-- 禁止纯白色棚拍背景
-- 禁止出现墙壁、地板、窗户等建筑元素
+[BACKGROUND]
+- Use a soft, natural warm-neutral background (beige / cream / light wood tone).
+- Background may be slightly blurred but must transition naturally.
+- Do NOT use pure white studio background.
+- Do NOT include walls, floors, windows, or any architectural elements.
 
-【绝对禁止】
-- 禁止出现文字、标签、水印、边框、箭头
-- 禁止多物件构图
-- 禁止拼贴或分格排版
+[ABSOLUTELY FORBIDDEN]
+- No text, labels, watermarks, borders, or arrows.
+- No multi-object compositions.
+- No collage or grid layouts.
 `.trim();
 }
 
@@ -84,12 +84,13 @@ function buildRetryPrompt(theme: string, item: Payload['item'], hasAfterCrop: bo
   const base = buildItemPrompt(theme, item, hasAfterCrop);
   return `${base}
 
-═══ 重要修正 ═══
-上一次生成的结果不合格。请特别注意：
-- 画面中必须只有这一件物件，不要包含房间场景
-- 物件必须占画面 60%–80%，不要留大面积空白
-- 保持与效果图中完全一致的外观，不要变形或改变透视
-请严格按照上述所有约束重新生成。
+=== CRITICAL CORRECTION ===
+The previous generation was rejected. Pay extra attention:
+- The image must show ONLY this one item — do NOT include room scenes or other furniture.
+- The item must fill 60%–80% of the frame — do NOT leave large blank areas.
+- The ENTIRE item must be visible — no cropping or cutting off at the edges.
+- Maintain exact appearance from the AFTER image — do NOT distort or change perspective.
+Regenerate strictly following ALL constraints above.
 `;
 }
 
