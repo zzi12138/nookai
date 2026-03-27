@@ -1095,18 +1095,6 @@ function ResultPageContent() {
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-4">
           <div className="text-2xl font-bold tracking-tight text-[#52372d]">NookAI</div>
           <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setShowDebug((prev) => !prev)}
-              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
-                showDebug
-                  ? 'border-[#8f4d2c] bg-[#8f4d2c] text-white'
-                  : 'border-[#d4c3be] bg-white/70 text-[#52372d] hover:border-[#8f4d2c]'
-              }`}
-            >
-              <Bug size={14} />
-              {showDebug ? '隐藏调试' : '调试信息'}
-            </button>
             <button className="text-[#52372d]/70 transition-opacity hover:opacity-80">
               <Share2 size={20} />
             </button>
@@ -1184,7 +1172,7 @@ function ResultPageContent() {
                       type="button"
                       onClick={() => setFilter(tab.key)}
                       disabled={guideLoading}
-                      className={`flex-1 rounded-lg py-2 text-sm transition ${
+                      className={`flex-1 rounded-lg py-2 text-xs transition ${
                         filter === tab.key
                           ? 'bg-[#52372d] font-semibold text-white'
                           : guideLoading
@@ -1209,10 +1197,7 @@ function ResultPageContent() {
                   <LoadingMiniGame active={guideLoading} progress={guideProgress} />
                 ) : allVisibleItems.length === 0 ? (
                   <div className="flex min-h-[360px] flex-col items-center justify-center rounded-2xl border border-dashed border-[#d4c3be]/60 bg-white/40 px-6 text-center text-sm text-[#504440]">
-                    <p className="text-base font-bold text-[#52372d]">本次没有稳定识别到可购买物件</p>
-                    <p className="mt-2 max-w-sm leading-relaxed">
-                      我们不会自动补默认物件。当前购物清单只展示识别结果；你可以重新生成，尝试让模型识别到更多真实物件。
-                    </p>
+                    <p className="text-sm text-[#827470]">暂未识别到可购买物件，可重新生成试试</p>
                   </div>
                 ) : (
                   CATEGORY_ORDER.map((category) => {
@@ -1221,15 +1206,6 @@ function ResultPageContent() {
 
                     return (
                       <div key={category} className="space-y-3">
-                        <div className="rounded-xl border border-[#d4c3be]/60 bg-white/50 px-4 py-3">
-                          <span className="text-sm font-bold text-[#52372d]">
-                            {CATEGORY_LABEL[category]}
-                            <span className="ml-2 rounded-full bg-[#ebe1d3] px-2 py-0.5 text-xs text-[#504440]">
-                              {categoryItems.length}
-                            </span>
-                          </span>
-                        </div>
-
                         <div className="space-y-3">
                           {categoryItems.map((item, indexInCategory) => {
                             const expandedItem = expandedItemId === item.id;

@@ -59,8 +59,17 @@ const styleOptions: StyleOption[] = [
 
 const stepTitles = ['欢迎', '选择风格', '改造边界', '偏好补充', '个性细节', '上传照片'];
 
-const constraintOptions = ['不动墙面', '不替换家具', '不改动布局', '不改门窗', '不改吊顶', '自然光优先'];
-const requirementOptions = ['增加氛围灯', '加入绿植', '投影放松角', '收纳优化', '社交友好', '暖色织物'];
+const constraintOptions = ['不动墙面', '不替换家具', '不改动布局', '不改门窗', '不改吊顶', '不增加人工光源'];
+
+type RequirementOption = { label: string; desc: string };
+const requirementOptions: RequirementOption[] = [
+  { label: '增加氛围灯', desc: '落地灯、灯串等暖光营造' },
+  { label: '加入绿植', desc: '低维护，提升空间生气' },
+  { label: '投影放松角', desc: '打造观影 / 休闲区' },
+  { label: '收纳优化', desc: '让台面和地面更整洁' },
+  { label: '社交友好', desc: '适合多人聚会的布局' },
+  { label: '宠物友好', desc: '耐抓、易清洁的软装选择' },
+];
 
 const loadingLines = ['正在理解你的风格偏好...', '正在生成改造效果图...', '正在整理购物指南...'];
 
@@ -109,7 +118,7 @@ export default function Page() {
   const [step, setStep] = useState(1);
   const [selectedStyle, setSelectedStyle] = useState(styleOptions[0].label);
   const [selectedConstraints, setSelectedConstraints] = useState<string[]>(['不动墙面', '不替换家具', '不改动布局']);
-  const [selectedRequirements, setSelectedRequirements] = useState<string[]>(['增加氛围灯', '暖色织物']);
+  const [selectedRequirements, setSelectedRequirements] = useState<string[]>(['增加氛围灯']);
   const [customRequirement, setCustomRequirement] = useState('');
 
   const [previewUrl, setPreviewUrl] = useState('');
@@ -464,20 +473,21 @@ export default function Page() {
               <h2 className="text-2xl font-bold text-[#52372d]">添加你的偏好</h2>
               <p className="mt-2 text-sm text-[#504440]">这些偏好会影响软装、灯光和可购买物件建议。</p>
               <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-3">
-                {requirementOptions.map((option) => {
-                  const selected = selectedRequirements.includes(option);
+                {requirementOptions.map(({ label, desc }) => {
+                  const selected = selectedRequirements.includes(label);
                   return (
                     <button
-                      key={option}
+                      key={label}
                       type="button"
-                      onClick={() => toggleValue(option, selectedRequirements, setSelectedRequirements)}
-                      className={`rounded-2xl border px-4 py-3 text-sm transition ${
+                      onClick={() => toggleValue(label, selectedRequirements, setSelectedRequirements)}
+                      className={`flex flex-col items-start rounded-2xl border px-4 py-3 text-left text-sm transition ${
                         selected
                           ? 'border-[#52372d] bg-[#f7edde] font-semibold text-[#52372d]'
                           : 'border-[#d4c3be] bg-[#fff8f2] text-[#504440]'
                       }`}
                     >
-                      {option}
+                      <span className={selected ? 'font-semibold' : 'font-medium'}>{label}</span>
+                      <span className="mt-0.5 text-xs font-normal text-[#827470]">{desc}</span>
                     </button>
                   );
                 })}
@@ -528,7 +538,7 @@ export default function Page() {
                     }}
                   >
                     {previewUrl ? (
-                      <img src={previewUrl} alt="上传预览" className="h-full w-full rounded-[22px] object-contain" />
+                      <img src={previewUrl} alt="上传预览" className="h-full w-full rounded-[22px] object-cover" />
                     ) : (
                       <>
                         <div className="mb-4 rounded-full bg-[#52372d]/5 p-6">
