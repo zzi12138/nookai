@@ -342,7 +342,11 @@ function toChineseName(raw: string) {
   if (n.includes('floor lamp')) return '暖光落地灯';
   if (n.includes('desk lamp') || n.includes('table lamp')) return '桌面台灯';
   if (n.includes('light strip') || n.includes('string light')) return '窗帘灯串';
-  if (n.includes('rug') || n.includes('carpet')) return '圆形地毯';
+  if (n.includes('rug') || n.includes('carpet')) {
+    if (n.includes('square') || n.includes('rectangular') || n.includes('rectangle')) return '方形地毯';
+    if (n.includes('round') || n.includes('circle') || n.includes('oval')) return '圆形地毯';
+    return '地毯';
+  }
   if (n.includes('bedding') || n.includes('duvet')) return '亚麻床品';
   if (n.includes('pillow')) return '装饰抱枕';
   if (n.includes('blanket') || n.includes('throw')) return '针织披毯';
@@ -503,15 +507,16 @@ function getFallbackRawItems(theme: string): RawItem[] {
 
   return [
     { name: '暖光落地灯', quantity: 1, necessity: 'Must-have', priceMin: 159, priceMax: 239, placement: '沙发右侧', reason: '最快提升氛围感' },
+    { name: '纸灯落地灯', quantity: 1, necessity: 'Must-have', priceMin: 179, priceMax: 259, placement: '沙发后方或床边', reason: '补充柔和侧光层次' },
     { name: '桌面台灯', quantity: 1, necessity: 'Recommended', priceMin: 69, priceMax: 119, placement: '书桌右上角', reason: '补充局部照明' },
-    { name: isMinimal ? '素色几何地毯' : '圆形地毯', quantity: 1, necessity: 'Must-have', priceMin: 199, priceMax: 299, placement: '床尾或床侧', reason: '统一地面视觉' },
+    { name: isMinimal ? '素色几何地毯' : '方形地毯', quantity: 1, necessity: 'Must-have', priceMin: 199, priceMax: 299, placement: '床尾或床侧', reason: '统一地面视觉' },
     { name: '亚麻床品', quantity: 1, necessity: 'Must-have', priceMin: 179, priceMax: 259, placement: '床面整体', reason: '降低杂乱感' },
     { name: isVintage ? '复古抱枕' : '装饰抱枕', quantity: 2, necessity: 'Recommended', priceMin: 49, priceMax: 99, placement: '床头或沙发', reason: '增加软装层次' },
     { name: '针织披毯', quantity: 1, necessity: 'Optional', priceMin: 79, priceMax: 149, placement: '床尾', reason: '提升舒适度' },
     { name: isVintage ? '复古装饰画' : '免打孔挂画', quantity: 1, necessity: 'Recommended', priceMin: 79, priceMax: 129, placement: '床头墙面', reason: '形成视觉焦点' },
     { name: isNature ? '中型绿植（龟背竹）' : '中型绿植', quantity: 1, necessity: 'Recommended', priceMin: 89, priceMax: 169, placement: '窗边或角落', reason: '增强空间生气' },
-    { name: '收纳篮', quantity: 1, necessity: 'Optional', priceMin: 39, priceMax: 89, placement: '床边地面', reason: '收纳杂物更整洁' },
-    { name: '木质托盘', quantity: 1, necessity: 'Optional', priceMin: 39, priceMax: 89, placement: '桌面或边几', reason: '让台面更有秩序' },
+    { name: '木质托盘', quantity: 1, necessity: 'Optional', priceMin: 39, priceMax: 89, placement: '桌面或茶几', reason: '让台面更有秩序' },
+    { name: '茶几摆件', quantity: 1, necessity: 'Optional', priceMin: 39, priceMax: 99, placement: '茶几中间', reason: '补足桌面装饰重点' },
   ];
 }
 
@@ -775,6 +780,8 @@ function getPrompt(theme: string, hasBefore: boolean) {
 8) 同类型可重复输出（例如两个灯），不要只保留一个。
 9) 价格区间要收窄，符合中国电商常见区间。
 10) 所有字段优先用中文，名称要简洁完整，禁止省略号。
+11) 不要输出未在图中明确出现的收纳篮、托盘、篮筐、盒子等功能收纳类物件，除非图中清晰可见。
+12) 如果地毯是方形/长方形，请明确写成“方形地毯”或“长方形地毯”，不要默认写成圆形。
 
 风格上下文：${theme || '日式原木风'}
 
