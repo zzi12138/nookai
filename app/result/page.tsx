@@ -427,14 +427,17 @@ function BeforeAfterSlider({ before, after }: { before: string; after: string })
 
 function GuideLoadingBar({ progress }: { progress: number }) {
   return (
-    <div className="flex min-h-[360px] flex-col items-center justify-center gap-5 px-8">
-      <p className="text-sm font-medium text-[#52372d]">正在识别可购买物件...</p>
-      <div className="w-full max-w-[260px]">
-        <div className="mb-2 flex items-center justify-between text-xs text-[#827470]">
-          <span>分析效果图中</span>
-          <span>{Math.round(progress)}%</span>
+    <div className="flex min-h-[360px] flex-col items-center justify-center gap-6 px-6">
+      <div className="flex flex-col items-center gap-2">
+        <p className="text-base font-semibold text-[#52372d]">正在识别可购买物件</p>
+        <p className="text-xs text-[#827470]">AI 分析效果图中，请稍候...</p>
+      </div>
+      <div className="w-full">
+        <div className="mb-3 flex items-center justify-between">
+          <span className="text-sm font-medium text-[#504440]">分析进度</span>
+          <span className="text-sm font-bold text-[#8f4d2c]">{Math.round(progress)}%</span>
         </div>
-        <div className="h-2 overflow-hidden rounded-full bg-[#ebe1d3]">
+        <div className="h-3 overflow-hidden rounded-full bg-[#ebe1d3]">
           <motion.div
             className="h-full rounded-full bg-[#8f4d2c]"
             animate={{ width: `${Math.max(4, Math.min(100, progress))}%` }}
@@ -737,6 +740,15 @@ function ResultPageContent() {
     return list;
   }, [grouped]);
 
+  // Auto-reset filter to 'all' when loading finishes and selected filter has no items
+  useEffect(() => {
+    if (guideLoading) return;
+    if (filter === 'all') return;
+    if (allVisibleItems.length === 0 && items.length > 0) {
+      setFilter('all');
+    }
+  }, [guideLoading, filter, allVisibleItems.length, items.length]);
+
   const selectedItems = useMemo(() => items.filter((item) => addedIds.has(item.id)), [items, addedIds]);
 
   const budget = useMemo(() => {
@@ -943,7 +955,11 @@ function ResultPageContent() {
                 </div>
 
                 <div className="flex gap-2 rounded-xl bg-[#f7edde] p-1">
-                  {FILTERS.map((tab) => (
+                  {FILTERS.map((tab) => {
+                    const count = tab.key === 'all'
+                      ? items.length
+                      : items.filter((i) => i.category === tab.key).length;
+                    return (
                     <button
                       key={tab.key}
                       type="button"
@@ -954,12 +970,20 @@ function ResultPageContent() {
                           ? 'bg-[#52372d] font-semibold text-white'
                           : guideLoading
                             ? 'cursor-not-allowed font-medium text-[#b8a8a2]'
-                            : 'font-medium text-[#504440] hover:bg-[#ebe1d3]/60'
+                            : count === 0
+                              ? 'font-medium text-[#c4b5ae]'
+                              : 'font-medium text-[#504440] hover:bg-[#ebe1d3]/60'
                       }`}
                     >
                       {tab.label}
+                      {!guideLoading && count > 0 && (
+                        <span className={`ml-1 text-[10px] ${filter === tab.key ? 'opacity-80' : 'text-[#8f4d2c]'}`}>
+                          {count}
+                        </span>
+                      )}
                     </button>
-                  ))}
+                  );
+                  })}
                 </div>
               </div>
 
