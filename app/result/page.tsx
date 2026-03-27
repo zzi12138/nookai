@@ -453,8 +453,6 @@ function ResultPageContent() {
   const { previews, trace: previewTrace } = useItemPreviews(
     items,
     stored?.generated || '',
-    stored?.original || '',
-    stored?.theme || '日式原木风',
   );
 
   useEffect(() => {

@@ -74,8 +74,6 @@ async function mapWithConcurrency<T, R>(
 async function callItemPreview(
   item: PreviewableItem,
   shrunkAfter: string,
-  shrunkBefore: string,
-  theme: string,
   afterCrop: string | undefined,
   signal: AbortSignal,
 ): Promise<{ previewImage?: string; error?: string }> {
@@ -91,10 +89,8 @@ async function callItemPreview(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      beforeImage: shrunkBefore,
       afterImage: shrunkAfter,
       afterCrop: afterCrop || undefined,
-      theme,
       item: {
         name: item.name,
         category: item.category,
@@ -120,8 +116,6 @@ async function callItemPreview(
 export function useItemPreviews(
   items: PreviewableItem[],
   afterImage: string,
-  beforeImage: string,
-  theme: string,
 ) {
   const [previews, setPreviews] = useState<Map<number, ItemPreviewState>>(new Map());
   const [trace, setTrace] = useState<PreviewBatchTrace | null>(null);
@@ -138,9 +132,6 @@ export function useItemPreviews(
 
     async function run() {
       const shrunkAfter = await shrinkImageDataUrl(afterImage, 1280, 0.84);
-      const shrunkBefore = beforeImage
-        ? await shrinkImageDataUrl(beforeImage, 1280, 0.84)
-        : '';
 
       const itemTraces: ItemPreviewTrace[] = [];
 
@@ -156,7 +147,7 @@ export function useItemPreviews(
           });
         }
 
-        // Prepare afterCrop as AI input helper (best-effort, never displayed)
+        // Prepare afterCrop — REQUIRED for quality, crop from AFTER image by anchor
         const anchor = item.imageTarget;
         const hasAnchor =
           anchor &&
@@ -175,7 +166,7 @@ export function useItemPreviews(
               height: anchor!.height!,
             });
           } catch {
-            // Best effort — crop failure doesn't block AI attempt
+            // Crop failure doesn't block — but quality will be lower without it
           }
         }
 
@@ -192,8 +183,6 @@ export function useItemPreviews(
             const result = await callItemPreview(
               item,
               shrunkAfter,
-              shrunkBefore,
-              theme,
               afterCrop,
               controller.signal,
             );
@@ -233,7 +222,7 @@ export function useItemPreviews(
           }
         }
 
-        // All attempts failed — stay in failed state (UI shows "生成中")
+        // All attempts failed
         const failedState: ItemPreviewState = {
           status: 'failed',
           imageUrl: '',
@@ -272,7 +261,7 @@ export function useItemPreviews(
     return () => {
       cancelled = true;
     };
-  }, [afterImage, beforeImage, theme, items]);
+  }, [afterImage, items]);
 
   return { previews, trace };
 }

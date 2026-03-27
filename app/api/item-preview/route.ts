@@ -5,10 +5,8 @@ export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 type Payload = {
-  beforeImage?: string;
   afterImage?: string;
   afterCrop?: string;
-  theme?: string;
   item?: {
     name?: string;
     category?: string;
@@ -23,74 +21,67 @@ type Payload = {
   };
 };
 
-function describeLocation(anchor?: { centerX?: number; centerY?: number; width?: number; height?: number }) {
+function describeAnchor(anchor?: { centerX?: number; centerY?: number; width?: number; height?: number }) {
   if (!anchor?.centerX || !anchor?.centerY) return '';
-  const cx = anchor.centerX;
-  const cy = anchor.centerY;
-  const horizontal = cx < 33 ? '左侧' : cx > 66 ? '右侧' : '中间';
-  const vertical = cy < 33 ? '上方' : cy > 66 ? '下方' : '中部';
-  return `位于房间${vertical}${horizontal}（约 ${Math.round(cx)}%, ${Math.round(cy)}%）`;
+  return `Position in AFTER image: approximately (${Math.round(anchor.centerX)}%, ${Math.round(anchor.centerY)}%), bounding box ~${Math.round(anchor.width || 0)}% x ${Math.round(anchor.height || 0)}% of image.`;
 }
 
-function buildItemPrompt(theme: string, item: Payload['item'], hasAfterCrop: boolean) {
-  const location = describeLocation(item?.anchor);
+function buildItemPrompt(item: Payload['item'], hasAfterCrop: boolean) {
+  const anchorDesc = describeAnchor(item?.anchor);
   return `
-Your task: Extract and display ONE specific soft furnishing item from the provided AFTER room image.
-${hasAfterCrop ? 'A cropped reference image is also provided showing the approximate location of this item in the room. Use it to precisely locate the target.' : ''}
+This is NOT a product generation task. This is a ZOOM-IN and ENHANCE task.
 
-=== TARGET ITEM ===
-Name: ${item?.name || 'item'}
-Category: ${item?.category || 'accessory'}
-Placement: ${item?.placement || 'visible in the room'}
-${location ? `Location: ${location}` : ''}
-Style: ${theme || 'Japandi'}
+=== TASK ===
+${hasAfterCrop
+    ? 'The FIRST image provided is a cropped region from the AFTER room photo, showing the target object and its immediate surroundings. The SECOND image is the full AFTER room photo for context.'
+    : 'The provided image is the full AFTER room photo.'}
 
-=== HARD CONSTRAINTS (must follow ALL) ===
+Focus on this specific object: "${item?.name || 'item'}" (${item?.category || 'accessory'}).
+${item?.placement ? `It is located: ${item.placement}.` : ''}
+${anchorDesc}
 
-[SUBJECT FOCUS]
-- Show ONLY this one item. No other furniture, lamps, plants, or unrelated objects.
-- Do NOT generate an entire room or wide scene — show the item alone.
-- If the target is a lamp, show only the lamp. If a pillow, show only the pillow.
+Your job: Create a zoomed-in, enhanced view of THIS EXACT object as it appears in the image.
 
-[SUBJECT PROPORTION]
-- The target item must fill 60%–80% of the image area.
-- Center the item with only a small amount of breathing room around it.
-- Do NOT leave large empty areas — the item must dominate the frame.
+=== WHAT TO DO ===
+- Identify the target object in the provided image(s).
+- Produce a close-up view where the object fills 60-80% of the frame.
+- Center the object with a small amount of breathing room.
+- Keep the object's EXACT appearance: same shape, color, material, texture, pattern, and proportions.
+- Keep the object's original perspective and viewing angle — do NOT straighten or re-angle it.
+- Slightly soften or simplify the surrounding area so the object stands out, but keep some natural context (the surface it sits on, nearby shadows).
+- Subtly improve lighting clarity for better visibility, but keep it realistic and consistent with the room's lighting.
+- The ENTIRE object must be fully visible — no part may be cropped or cut off by the image edge.
 
-[CONSISTENCY]
-- Color, material, texture, and form must EXACTLY match the AFTER image.
-- Do NOT redesign, substitute, beautify, or simplify the item's appearance.
-- This is "extraction", NOT "re-creation".
+=== WHAT NOT TO DO (CRITICAL) ===
+- Do NOT invent, redesign, or generate a new object. The object must be visually IDENTICAL to the one in the source image.
+- Do NOT create a studio product shot, catalog image, or clean white/gray background.
+- Do NOT replace the object with a different style, color, or design.
+- Do NOT change the viewing angle or perspective of the object.
+- Do NOT add any objects that are not in the original image.
+- Do NOT show the full room — this should be a tight close-up.
+- Do NOT add text, labels, watermarks, borders, or arrows.
+- Do NOT use pure white or solid-color studio backgrounds.
 
-[STRUCTURAL INTEGRITY]
-- Maintain the item's original perspective angle. Do NOT change the viewpoint.
-- Do NOT stretch, compress, tilt, skew, or distort the item.
-- The ENTIRE item must be fully visible within the frame — no part may be cropped or cut off by the image edge.
+=== VISUAL IDENTITY CHECK ===
+The output object must be visually identical to the one in the original image.
+If someone compared the output side-by-side with the source image, they should immediately recognize it as the same object — same color, same form, same material, same details.
 
-[BACKGROUND]
-- Use a soft, natural warm-neutral background (beige / cream / light wood tone).
-- Background may be slightly blurred but must transition naturally.
-- Do NOT use pure white studio background.
-- Do NOT include walls, floors, windows, or any architectural elements.
-
-[ABSOLUTELY FORBIDDEN]
-- No text, labels, watermarks, borders, or arrows.
-- No multi-object compositions.
-- No collage or grid layouts.
+The result should look like a zoomed-in, enhanced crop of the SAME object from the original room — not a new product.
 `.trim();
 }
 
-function buildRetryPrompt(theme: string, item: Payload['item'], hasAfterCrop: boolean) {
-  const base = buildItemPrompt(theme, item, hasAfterCrop);
-  return `${base}
+function buildRetryPrompt(item: Payload['item'], hasAfterCrop: boolean) {
+  return `${buildItemPrompt(item, hasAfterCrop)}
 
-=== CRITICAL CORRECTION ===
-The previous generation was rejected. Pay extra attention:
-- The image must show ONLY this one item — do NOT include room scenes or other furniture.
-- The item must fill 60%–80% of the frame — do NOT leave large blank areas.
-- The ENTIRE item must be visible — no cropping or cutting off at the edges.
-- Maintain exact appearance from the AFTER image — do NOT distort or change perspective.
-Regenerate strictly following ALL constraints above.
+=== RETRY — PREVIOUS ATTEMPT REJECTED ===
+The previous output did NOT match the source object. Common mistakes to avoid:
+- Generated a NEW object instead of extracting the existing one.
+- Changed the object's color, shape, or material.
+- Showed a full room scene instead of a close-up.
+- Used a studio/white background instead of natural context.
+
+You MUST preserve the exact visual identity of the object from the source image.
+Look carefully at the cropped reference — reproduce THAT object, not an idealized version.
 `;
 }
 
@@ -98,9 +89,7 @@ Regenerate strictly following ALL constraints above.
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as Payload;
-    const theme = body.theme || '日式原木风';
     const item = body.item;
-    const beforeImage = body.beforeImage || '';
     const afterImage = body.afterImage || '';
     const afterCrop = body.afterCrop || '';
 
@@ -108,16 +97,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing item or afterImage' }, { status: 400 });
     }
 
-    // Reference images: afterCrop first (primary locator), then after, then before
+    // Reference images: afterCrop is PRIMARY (closest to the object), afterImage for full context
     const references: string[] = [];
     if (afterCrop) references.push(afterCrop);
     references.push(afterImage);
-    if (beforeImage) references.push(beforeImage);
 
     const hasAfterCrop = Boolean(afterCrop);
 
     // First attempt
-    const prompt1 = buildItemPrompt(theme, item, hasAfterCrop);
+    const prompt1 = buildItemPrompt(item, hasAfterCrop);
     const result1 = await generateGeminiImageFromReferences(references, prompt1);
 
     if (result1) {
@@ -125,7 +113,7 @@ export async function POST(req: Request) {
     }
 
     // Retry with reinforced prompt
-    const prompt2 = buildRetryPrompt(theme, item, hasAfterCrop);
+    const prompt2 = buildRetryPrompt(item, hasAfterCrop);
     const result2 = await generateGeminiImageFromReferences(references, prompt2);
 
     return NextResponse.json({ previewImage: result2 });

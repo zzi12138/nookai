@@ -10,13 +10,36 @@ type Payload = {
   requirements?: string[];
 };
 
-const NEGATIVE_MAP: Record<string, string> = {
-  不替换家具: 'do not change furniture',
-  不动墙面: 'do not modify walls',
-  不改动布局: 'do not alter room layout',
-  不改门窗: 'do not change doors or windows',
-  不改吊顶: 'do not change ceiling',
-  不增加人工光源: 'do not add artificial light sources, keep existing natural lighting',
+// ─── Constraint → prompt rule mapping ────────────────────────────────────────
+// Each user-selected constraint generates a positive rule AND a negative-prompt fragment.
+
+type ConstraintRule = { rule: string; negative: string };
+
+const CONSTRAINT_RULES: Record<string, ConstraintRule> = {
+  不动墙面: {
+    rule: 'DO NOT repaint, retexture, or modify the walls in any way. Wall color, material, and finish must remain exactly as in the original photo.',
+    negative: 'changed wall color, repainted walls, new wallpaper, modified wall texture',
+  },
+  不替换家具: {
+    rule: 'DO NOT replace, remove, or swap any existing large furniture (beds, sofas, desks, wardrobes, shelving units). Their shape, color, and position must remain identical.',
+    negative: 'replaced furniture, new sofa, new bed frame, swapped desk, missing furniture',
+  },
+  不改动布局: {
+    rule: 'DO NOT move furniture or change the spatial layout. Every piece must stay in its original position.',
+    negative: 'moved furniture, altered layout, rearranged furniture, different room arrangement',
+  },
+  不改门窗: {
+    rule: 'DO NOT modify, add, or remove doors or windows. Frame style, color, and position must remain unchanged.',
+    negative: 'added windows, missing walls, new door, removed door, changed window frame',
+  },
+  不改吊顶: {
+    rule: 'DO NOT change the ceiling — no new moldings, panels, paint, or fixtures attached to the ceiling.',
+    negative: 'changed ceiling, new ceiling light fixture, ceiling panels, repainted ceiling',
+  },
+  不增加人工光源: {
+    rule: 'DO NOT add any new artificial light sources (floor lamps, table lamps, light strips, pendant lights). Rely only on existing lighting in the room.',
+    negative: 'new lamp, added light, light strips, pendant light, new floor lamp, new table lamp',
+  },
 };
 
 function stripDataUrl(value: string) {
@@ -96,57 +119,63 @@ function resolveThemeStyle(theme: string) {
 
 function buildPrompt(theme: string, constraints: string[], requirements: string[]) {
   const themeStyle = resolveThemeStyle(theme);
-  const negativeDynamic = constraints
-    .map((item) => NEGATIVE_MAP[item] || `avoid: ${item}`)
-    .join(', ');
 
-  const requirementSection =
+  // ── Dynamic constraint rules (only what the user selected) ──
+  const activeRules = constraints
+    .map((c) => CONSTRAINT_RULES[c])
+    .filter(Boolean);
+
+  const dynamicRulesBlock =
+    activeRules.length > 0
+      ? activeRules.map((r) => `- ${r.rule}`).join('\n')
+      : '- No specific hard-furnishing restrictions — feel free to make broader changes as long as the room structure stays the same.';
+
+  const dynamicNegatives = activeRules.map((r) => r.negative).join(', ');
+
+  // ── User requirements ──
+  const requirementBlock =
     requirements.length > 0
-      ? `User requirements:\n- ${requirements.join('\n- ')}`
-      : 'User requirements: keep the setup simple, cozy, renter-friendly.';
-
-  const constraintSection =
-    constraints.length > 0
-      ? `Constraints to follow:\n- ${constraints.join('\n- ')}`
-      : 'Constraints to follow: do not perform permanent renovation.';
+      ? `Additional user requests:\n- ${requirements.join('\n- ')}`
+      : 'Additional user requests: keep the setup simple, cozy, and renter-friendly.';
 
   return `
-Use the provided photo as the exact base image.
-Keep identical layout, geometry, camera angle, and composition.
+You are an expert interior stylist. Use the provided photo as the EXACT base image.
 
-Perform a realistic interior refresh of a rental apartment based on the provided photo.
-Step 1 — Declutter the room first:
-Remove all clutter, trash, messy belongings, and random small objects.
-The room should appear clean, tidy, and organized before adding any decorations.
+=== STEP 1 — DECLUTTER ===
+Remove all visible clutter, trash, plastic bags, messy belongings, piled-up random objects, and visual noise.
+The room should look clean, tidy, and move-in-ready before any decoration begins.
 
-Step 2 — Apply a soft furnishing makeover in ${themeStyle}.
+=== STEP 2 — SOFT FURNISHING MAKEOVER ===
+Apply a cohesive interior styling makeover in: ${themeStyle}.
 
-${constraintSection}
-${requirementSection}
+Design goals (aim for all):
+- Create a space that feels intentionally designed — not just "decorated" but truly styled.
+- Build layered atmosphere: lighting warmth, textile textures, organic accents, and visual rhythm.
+- The result should evoke an aspirational lifestyle — the kind of room people save on Pinterest or Xiaohongshu.
+- Every added element must serve the overall composition; avoid cluttering with too many small objects.
+- Prioritize: warm lighting layers, quality textiles (throws, cushions, rugs), greenery, and one or two statement pieces.
+- Make the room feel cozy, lived-in, and inviting — not sterile or showroom-like.
 
-Important constraints (must follow strictly):
-- DO NOT repaint or modify the walls. Wall color and material must remain exactly the same.
-- DO NOT replace or modify the floor.
-- DO NOT change the ceiling.
-- DO NOT modify doors or windows.
-- DO NOT change built-in fixtures or architectural structures.
-- DO NOT move large furniture or change the layout.
-- Only removable decorations and small movable objects are allowed.
-- Allowed elements include: textiles, lamps, plants, small decor objects, books, removable wall art, posters, rugs, blankets, pillows.
-- Lighting must look natural and physically realistic.
-- The final image must keep the same camera angle, perspective, composition, and geometry as the original photo.
-- The result should look like the same room after decluttering and soft decoration only.
-- same room, same architecture, same perspective, only decluttered and softly decorated.
+=== USER CONSTRAINTS (follow strictly) ===
+${dynamicRulesBlock}
 
-Negative prompt (must avoid):
-changed room structure, moved furniture, altered layout, rearranged furniture,
+=== FIXED RULES (always apply) ===
+- DO NOT change the room's architectural structure (walls, floor plan, ceiling shape).
+- The final image MUST keep the exact same camera angle, perspective, lens, composition, and geometry as the original photo.
+- Lighting must look natural and physically realistic — no glowing halos or flat studio lighting.
+- All added soft furnishings must be realistic, purchasable items — no fantasy or AI-artifact objects.
+- The result must look like the same room, only decluttered and beautifully styled.
+
+${requirementBlock}
+
+=== NEGATIVE PROMPT (must avoid) ===
+changed room structure, structural modifications, new room, different room,
 camera moved, perspective shift, different camera angle, different lens, focal length change,
 zoomed in, zoomed out, cropped, rotated, tilted,
-added windows, missing walls, new door, removed door, structural modifications, new room, different room,
-changed wall color, repainted walls, changed flooring, changed ceiling,
-ugly, blurry, deformed, distorted, low resolution, watermark, bad proportions, chaotic layout, messy, mutated, unnatural lighting${
-    negativeDynamic ? `, ${negativeDynamic}` : ''
-  }
+clutter, trash, plastic bags, cardboard boxes, messy cables, piled belongings,
+ugly, blurry, deformed, distorted, low resolution, watermark, bad proportions,
+dull lighting, flat lighting, overexposed, underexposed, unnatural lighting,
+chaotic layout, mutated, extra limbs, text overlay${dynamicNegatives ? `, ${dynamicNegatives}` : ''}
 `.trim();
 }
 
