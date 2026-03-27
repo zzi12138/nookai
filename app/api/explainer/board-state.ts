@@ -221,10 +221,12 @@ export function makeDefaultBoardDebug(): ExtractedBoardDebug {
   };
 }
 
-function normalizeNecessity(raw?: string): Necessity {
+function normalizeNecessity(raw?: string, name?: string): Necessity {
   const v = (raw || '').toLowerCase();
   if (v.includes('must') || v.includes('必买') || v.includes('high')) return 'Must-have';
   if (v.includes('recommended') || v.includes('建议')) return 'Recommended';
+  // Rugs default to Recommended even if AI marks Optional
+  if (name && (name.includes('地毯') || name.includes('rug'))) return 'Recommended';
   return 'Optional';
 }
 
@@ -462,7 +464,7 @@ export function normalizeGuideRawItems(rawItems: RawItem[], options?: { allowSyn
       if (!name || shouldExcludeItem(name)) return null;
 
       const category = inferCategory(name, item.category);
-      const necessity = normalizeNecessity(item.necessity);
+      const necessity = normalizeNecessity(item.necessity, name);
       const quantity = Math.round(clamp(Number(item.quantity || 1), 1, 3));
       const price = normalizePrice(name, item.priceMin, item.priceMax);
 
@@ -573,11 +575,27 @@ export function normalizeGuideRawItems(rawItems: RawItem[], options?: { allowSyn
     .filter((item) => item.imageTarget.confidence >= 0.1);
 }
 
+function isPillow(name: string) {
+  const n = (name || '').toLowerCase();
+  return n.includes('抱枕') || n.includes('靠枕') || n.includes('cushion') || n.includes('pillow');
+}
+
 export function dedupeByObject(items: RawItem[]) {
   const seen = new Set<string>();
   const out: RawItem[] = [];
+  let pillowEntry: RawItem | null = null;
+  let pillowCount = 0;
 
   for (const item of items) {
+    // Merge all pillow entries into one with summed quantity
+    if (isPillow(item.name || '')) {
+      pillowCount += Math.max(1, Number(item.quantity) || 1);
+      if (!pillowEntry) {
+        pillowEntry = { ...item, name: '装饰抱枕' };
+      }
+      continue;
+    }
+
     const baseName = compactName(item.name).toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]/g, '').slice(0, 28);
     if (!baseName) continue;
     const ax = Number(item.anchor?.x ?? item.anchor?.centerX ?? item.anchor?.left ?? 0);
@@ -589,6 +607,11 @@ export function dedupeByObject(items: RawItem[]) {
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(item);
+  }
+
+  // Insert merged pillow entry (capped at 4)
+  if (pillowEntry) {
+    out.push({ ...pillowEntry, quantity: Math.min(4, pillowCount) });
   }
 
   return out;

@@ -422,24 +422,61 @@ function BeforeAfterSlider({ before, after }: { before: string; after: string })
 
 function GuideLoadingBar({ progress }: { progress: number }) {
   return (
-    <div className="flex min-h-[360px] flex-col items-center justify-center gap-6 px-6">
-      <div className="flex flex-col items-center gap-2">
-        <p className="text-base font-semibold text-[#52372d]">正在识别可购买物件</p>
-        <p className="text-xs text-[#827470]">AI 分析效果图中，请稍候...</p>
-      </div>
-      <div className="w-full">
-        <div className="mb-3 flex items-center justify-between">
-          <span className="text-sm font-medium text-[#504440]">分析进度</span>
-          <span className="text-sm font-bold text-[#8f4d2c]">{Math.round(progress)}%</span>
+    <div className="flex flex-1 flex-col items-center justify-center gap-8 px-6 py-10">
+      <div className="flex flex-col items-center gap-4 text-center">
+        <motion.div
+          className="rounded-2xl bg-[#8f4d2c]/10 p-5"
+          animate={{ scale: [1, 1.06, 1] }}
+          transition={{ repeat: Infinity, duration: 2.2, ease: 'easeInOut' }}
+        >
+          <Sparkles className="h-10 w-10 text-[#8f4d2c]" />
+        </motion.div>
+        <div>
+          <p className="text-xl font-bold text-[#52372d]">正在识别可购买物件</p>
+          <p className="mt-1 text-sm text-[#827470]">AI 分析效果图中，请稍候…</p>
         </div>
-        <div className="h-3 overflow-hidden rounded-full bg-[#ebe1d3]">
+      </div>
+
+      <div className="w-full space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-semibold text-[#504440]">分析进度</span>
+          <span className="text-xl font-bold text-[#8f4d2c]">{Math.round(progress)}%</span>
+        </div>
+        <div className="h-5 overflow-hidden rounded-full bg-[#ebe1d3]">
           <motion.div
-            className="h-full rounded-full bg-[#8f4d2c]"
+            className="h-full rounded-full bg-gradient-to-r from-[#8f4d2c] to-[#c97a52]"
             animate={{ width: `${Math.max(4, Math.min(100, progress))}%` }}
             transition={{ type: 'spring', stiffness: 90, damping: 16 }}
           />
         </div>
+        <p className="text-center text-xs text-[#b8a8a2]">通常需要 15–30 秒</p>
       </div>
+    </div>
+  );
+}
+
+function GuideCTA({ onStart }: { onStart: () => void }) {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-8 px-6 py-10 text-center">
+      <div className="flex flex-col items-center gap-4">
+        <div className="rounded-2xl bg-[#8f4d2c]/10 p-5">
+          <ShoppingCart className="h-10 w-10 text-[#8f4d2c]" />
+        </div>
+        <div>
+          <p className="text-xl font-bold text-[#52372d]">AI 购物清单</p>
+          <p className="mt-2 text-sm leading-relaxed text-[#827470]">
+            自动识别效果图中的可购买软装物件<br />并生成带预算的改造清单
+          </p>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={onStart}
+        className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#52372d] py-5 text-base font-bold text-white shadow-xl shadow-[#52372d]/20 transition-all hover:bg-[#6b4e43] active:scale-[0.98]"
+      >
+        <Sparkles size={18} />
+        开始生成购买清单
+      </button>
     </div>
   );
 }
@@ -459,6 +496,7 @@ function ResultPageContent() {
   const [fallbackReason, setFallbackReason] = useState('');
   const [boardDebug, setBoardDebug] = useState<GuideResponse['extractedBoardDebug'] | null>(null);
   const [loading, setLoading] = useState(true);
+  const [guideStarted, setGuideStarted] = useState(false);
   const [guideLoading, setGuideLoading] = useState(false);
   const [guideProgress, setGuideProgress] = useState(0);
   const [error, setError] = useState('');
@@ -520,6 +558,7 @@ function ResultPageContent() {
 
   useEffect(() => {
     if (!stored?.generated) return;
+    if (!guideStarted) return;
     const current = stored;
 
     let cancelled = false;
@@ -618,7 +657,7 @@ function ResultPageContent() {
     return () => {
       cancelled = true;
     };
-  }, [stored]);
+  }, [stored, guideStarted]);
 
   useEffect(() => {
     const sourceAfterImage = stored?.generated || '';
@@ -984,12 +1023,14 @@ function ResultPageContent() {
 
               <div
                 className={
-                  guideLoading
+                  !guideStarted || guideLoading
                     ? 'flex min-h-0 flex-1 overflow-hidden px-6 pb-6'
                     : 'no-scrollbar flex-1 space-y-5 overflow-y-auto px-6 pb-6'
                 }
               >
-                {guideLoading ? (
+                {!guideStarted ? (
+                  <GuideCTA onStart={() => setGuideStarted(true)} />
+                ) : guideLoading ? (
                   <GuideLoadingBar progress={guideProgress} />
                 ) : allVisibleItems.length === 0 ? (
                   <div className="flex min-h-[360px] flex-col items-center justify-center rounded-2xl border border-dashed border-[#d4c3be]/60 bg-white/40 px-6 text-center text-sm text-[#504440]">
@@ -1107,7 +1148,7 @@ function ResultPageContent() {
                   <button
                     type="button"
                     onClick={handleCopy}
-                    disabled={guideLoading}
+                    disabled={!guideStarted || guideLoading}
                     className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-white py-3 text-sm font-bold text-[#52372d] transition-colors hover:bg-[#fff8f2] disabled:cursor-not-allowed disabled:text-[#b8a8a2]"
                   >
                     <Copy size={16} />
@@ -1116,7 +1157,7 @@ function ResultPageContent() {
                   <button
                     type="button"
                     onClick={handleExport}
-                    disabled={guideLoading || isExporting || selectedItems.length === 0}
+                    disabled={!guideStarted || guideLoading || isExporting || selectedItems.length === 0}
                     className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-white py-3 text-sm font-bold text-[#52372d] transition-colors hover:bg-[#fff8f2] disabled:cursor-not-allowed disabled:text-[#b8a8a2]"
                   >
                     <Download size={16} />
@@ -1127,7 +1168,7 @@ function ResultPageContent() {
                 <button
                   type="button"
                   onClick={addAllVisible}
-                  disabled={guideLoading}
+                  disabled={!guideStarted || guideLoading}
                   className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#52372d] py-4 text-sm font-bold text-white shadow-xl shadow-[#52372d]/10 transition-all hover:bg-[#6b4e43] active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-[#b8a8a2] disabled:shadow-none"
                 >
                   <ShoppingCart size={18} />
