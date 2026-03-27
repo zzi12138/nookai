@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 260" fill="none">
+  <!-- ── Armchair ── -->
+  <!-- Back cushion body -->
+  <path d="M38 108 C38 68 56 48 88 48 C120 48 138 68 138 108 L138 122 L38 122 Z" fill="#9B5533"/>
+  <!-- Back cushion white piping outline -->
+  <path d="M52 118 C52 82 63 66 88 66 C113 66 124 82 124 118"
+        fill="none" stroke="#F5E8D8" stroke-width="3.5" stroke-linecap="round"/>
+  <!-- Seat cushion inner lighter area -->
+  <ellipse cx="88" cy="118" rx="30" ry="9" fill="#B8683E" opacity="0.55"/>
+
+  <!-- Left arm -->
+  <rect x="28" y="96" width="20" height="30" rx="10" fill="#7A3E22"/>
+  <!-- Right arm -->
+  <rect x="128" y="96" width="20" height="30" rx="10" fill="#7A3E22"/>
+
+  <!-- Seat base -->
+  <ellipse cx="88" cy="122" rx="40" ry="11" fill="#7A3E22"/>
+
+  <!-- Legs -->
+  <rect x="52" y="130" width="11" height="16" rx="5.5" fill="#5C2E14"/>
+  <rect x="113" y="130" width="11" height="16" rx="5.5" fill="#5C2E14"/>
+
+  <!-- ── Floor Lamp ── -->
+  <!-- Pole -->
+  <line x1="165" y1="56" x2="165" y2="140" stroke="#5C2E14" stroke-width="5" stroke-linecap="round"/>
+  <!-- Base disc -->
+  <ellipse cx="165" cy="143" rx="13" ry="4.5" fill="#5C2E14"/>
+  <!-- Arc arm -->
+  <path d="M165 56 C165 42 154 36 145 39" stroke="#5C2E14" stroke-width="4.5" fill="none" stroke-linecap="round"/>
+
+  <!-- Glow dots (3 circles, diagonal, upper-left of arm tip) -->
+  <circle cx="138" cy="43" r="9"   fill="#C4813F"/>
+  <circle cx="127" cy="51" r="6.5" fill="#C6924F" opacity="0.78"/>
+  <circle cx="130" cy="34" r="4.5" fill="#D4A870" opacity="0.55"/>
+
+  <!-- ── "nook" wordmark ── -->
+  <!-- n -->
+  <path d="M44 208 L44 232 M44 215 C44 211 47 208 52 208 C57 208 60 211 60 216 L60 232"
+        stroke="#3D2318" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- o (first) -->
+  <circle cx="76" cy="220" r="12" stroke="#3D2318" stroke-width="7.5" fill="none"/>
+  <!-- o (second) -->
+  <circle cx="104" cy="220" r="12" stroke="#3D2318" stroke-width="7.5" fill="none"/>
+  <!-- k -->
+  <path d="M124 208 L124 232 M124 220 L136 208 M124 220 L137 232"
+        stroke="#3D2318" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>

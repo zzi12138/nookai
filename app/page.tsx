@@ -284,7 +284,7 @@ export default function Page() {
     <div className="min-h-screen bg-[#fff8f2] text-[#1f1b13]">
       <header className="fixed top-0 z-50 w-full bg-[#fff8f2]/80 backdrop-blur-xl transition-opacity duration-300">
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-4">
-          <div className="text-2xl font-bold tracking-tight text-[#52372d]">NookAI</div>
+          <img src="/logo.svg" alt="nook" className="h-10 w-auto" />
           <div className="flex items-center gap-6">
             <nav className="hidden items-center gap-8 md:flex">
               <span className="cursor-pointer font-semibold text-[#8f4d2c] transition-opacity">灵感</span>

@@ -2,48 +2,6 @@
 
 import React from 'react';
 
-// ─── Brand Logo SVG ────────────────────────────────────────────────────────────
-export function NookLogo({ size = 48 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 100 100"
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-    >
-      {/* Floor lamp — pole */}
-      <line x1="79" y1="22" x2="79" y2="62" stroke="#52372d" strokeWidth="3.5" strokeLinecap="round" />
-      {/* Floor lamp — base */}
-      <ellipse cx="79" cy="64" rx="8" ry="3" fill="#52372d" />
-      {/* Floor lamp — arc arm */}
-      <path d="M79 22 C79 11 70 8 63 11" stroke="#52372d" strokeWidth="3.5" fill="none" strokeLinecap="round" />
-      {/* Glow dots */}
-      <circle cx="59" cy="14" r="4" fill="#c97a52" opacity="0.9" />
-      <circle cx="53" cy="20" r="2.8" fill="#c97a52" opacity="0.65" />
-      <circle cx="55" cy="8"  r="2"   fill="#c97a52" opacity="0.45" />
-
-      {/* Armchair — back */}
-      <path
-        d="M14 42 C14 25 26 19 44 19 C62 19 72 25 72 42 L72 52 C72 56 68 58 64 58 L24 58 C20 58 14 56 14 52 Z"
-        fill="#8f4d2c"
-      />
-      {/* Armchair — left arm */}
-      <rect x="10" y="38" width="11" height="21" rx="5.5" fill="#72381f" />
-      {/* Armchair — right arm */}
-      <rect x="67" y="38" width="11" height="21" rx="5.5" fill="#72381f" />
-      {/* Armchair — seat */}
-      <ellipse cx="44" cy="58" rx="25" ry="8.5" fill="#72381f" />
-      {/* Armchair — seat highlight */}
-      <ellipse cx="44" cy="55" rx="17" ry="5.5" fill="#b86040" opacity="0.35" />
-      {/* Armchair — back cushion ring */}
-      <ellipse cx="44" cy="37" rx="15" ry="11" fill="none" stroke="#f0dece" strokeWidth="2" opacity="0.5" />
-      {/* Armchair — legs */}
-      <rect x="22" y="64" width="7" height="10" rx="3.5" fill="#52372d" />
-      <rect x="59" y="64" width="7" height="10" rx="3.5" fill="#52372d" />
-    </svg>
-  );
-}
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 export type ExportItem = {
@@ -111,13 +69,11 @@ function PageHeader({ theme, date }: { theme: string; date: string }) {
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-        <div style={{ background: '#fff8f2', borderRadius: 12, padding: 6 }}>
-          <NookLogo size={36} />
+        <div style={{ background: '#fff8f2', borderRadius: 12, padding: '6px 10px' }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.svg" alt="nook" style={{ height: 36, width: 'auto', display: 'block' }} />
         </div>
-        <div>
-          <div style={{ color: '#fff8f2', fontSize: 22, fontWeight: 800, letterSpacing: -0.5 }}>NookAI</div>
-          <div style={{ color: '#c9b8aa', fontSize: 12, marginTop: 1 }}>出租屋软装改造方案</div>
-        </div>
+        <div style={{ color: '#c9b8aa', fontSize: 12, marginTop: 1 }}>出租屋软装改造方案</div>
       </div>
       <div style={{ textAlign: 'right' as const }}>
         <div style={{ color: '#f1e7d9', fontSize: 14, fontWeight: 600 }}>{theme}</div>
@@ -143,8 +99,8 @@ function PageFooter({ budgetMin, budgetMax }: { budgetMin: number; budgetMax: nu
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <NookLogo size={28} />
-        <span style={{ color: '#52372d', fontWeight: 800, fontSize: 16, letterSpacing: -0.3 }}>nook</span>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo.svg" alt="nook" style={{ height: 28, width: 'auto', display: 'block' }} />
       </div>
       <div style={{ color: '#827470', fontSize: 12 }}>由 NookAI 智能生成 · nookai.app</div>
       {budgetMax > 0 ? (

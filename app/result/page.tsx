@@ -882,7 +882,7 @@ function ResultPageContent() {
     <div className="min-h-screen bg-[#fff8f2] pb-24 text-[#1f1b13]">
       <header className="fixed top-0 z-50 w-full bg-[#fff8f2]/80 backdrop-blur-xl">
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-4">
-          <div className="text-2xl font-bold tracking-tight text-[#52372d]">NookAI</div>
+          <img src="/logo.svg" alt="nook" className="h-10 w-auto" />
           <div className="flex items-center gap-3">
             <button className="text-[#52372d]/70 transition-opacity hover:opacity-80">
               <Share2 size={20} />
