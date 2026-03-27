@@ -2,7 +2,6 @@
 
 import React from 'react';
 
-
 // ─── Types ─────────────────────────────────────────────────────────────────────
 export type ExportItem = {
   id: number;
@@ -31,7 +30,8 @@ type Props = {
 };
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
-const COLS = 4;
+const W = 1080;
+const PAD = 52;
 
 function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
@@ -39,135 +39,58 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
-// Page dimensions (px, @1x — html2canvas will scale ×2)
-const W = 1080;
-
-// ─── Shared section title ──────────────────────────────────────────────────────
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-      <div style={{ width: 3, height: 16, borderRadius: 2, background: '#8f4d2c' }} />
-      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 3, color: '#8f4d2c', textTransform: 'uppercase' as const }}>
-        {children}
-      </span>
-    </div>
-  );
-}
-
-// ─── Page header (appears at top of every page) ────────────────────────────────
-function PageHeader({ theme, date }: { theme: string; date: string }) {
-  return (
-    <div
-      style={{
-        width: W,
-        background: '#52372d',
-        padding: '28px 52px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        boxSizing: 'border-box' as const,
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-        <div style={{ background: '#fff8f2', borderRadius: 12, padding: '6px 10px' }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.svg" alt="nook" style={{ height: 36, width: 'auto', display: 'block' }} />
-        </div>
-        <div style={{ color: '#c9b8aa', fontSize: 12, marginTop: 1 }}>出租屋软装改造方案</div>
-      </div>
-      <div style={{ textAlign: 'right' as const }}>
-        <div style={{ color: '#f1e7d9', fontSize: 14, fontWeight: 600 }}>{theme}</div>
-        <div style={{ color: '#c9b8aa', fontSize: 12, marginTop: 2 }}>{date}</div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Page footer (appears at bottom of every page) ────────────────────────────
-function PageFooter({ budgetMin, budgetMax }: { budgetMin: number; budgetMax: number }) {
-  return (
-    <div
-      style={{
-        width: W,
-        background: '#f1e7d9',
-        padding: '20px 52px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        boxSizing: 'border-box' as const,
-        borderTop: '1px solid #e0d0c0',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo.svg" alt="nook" style={{ height: 28, width: 'auto', display: 'block' }} />
-      </div>
-      <div style={{ color: '#827470', fontSize: 12 }}>由 NookAI 智能生成 · nookai.app</div>
-      {budgetMax > 0 ? (
-        <div style={{ textAlign: 'right' as const }}>
-          <div style={{ color: '#827470', fontSize: 11 }}>预计总预算</div>
-          <div style={{ color: '#52372d', fontSize: 18, fontWeight: 800 }}>¥{budgetMin}–{budgetMax}</div>
-        </div>
-      ) : (
-        <div />
-      )}
-    </div>
-  );
-}
-
 // ─── Item card ─────────────────────────────────────────────────────────────────
 function ItemCard({ item, previewImages }: { item: ExportItem; previewImages: Record<number, string> }) {
   const imgSrc = item.previewImage || previewImages[item.id] || '';
+
   const necessityColor: Record<string, string> = {
-    'Must-have': '#7a3f25',
-    Recommended: '#8f4d2c',
-    Optional: '#b8a8a2',
+    'Must-have': '#ad3b2f',
+    Recommended: '#9a6b16',
+    Optional: '#827470',
+  };
+  const necessityBg: Record<string, string> = {
+    'Must-have': '#ffe2de',
+    Recommended: '#fff0d8',
+    Optional: '#f5ede5',
   };
 
   return (
-    <div
-      style={{
-        background: 'white',
-        borderRadius: 14,
-        overflow: 'hidden',
-        border: '1px solid #e8ddd4',
-        display: 'flex',
-        flexDirection: 'column' as const,
-      }}
-    >
+    <div style={{
+      background: 'white',
+      borderRadius: 12,
+      overflow: 'hidden',
+      border: '1px solid #e8ddd4',
+      display: 'flex',
+      flexDirection: 'column' as const,
+    }}>
       {/* Preview */}
-      <div style={{ height: 130, background: '#fcf2e4', overflow: 'hidden', position: 'relative' as const }}>
+      <div style={{ height: 120, background: '#fcf2e4', overflow: 'hidden', position: 'relative' as const }}>
         {imgSrc ? (
+          // eslint-disable-next-line @next/next/no-img-element
           <img src={imgSrc} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' as const, display: 'block' }} />
         ) : (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#c9b8aa', fontSize: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#c9b8aa', fontSize: 11 }}>
             软装预览
           </div>
         )}
-        {/* Necessity badge */}
-        <div
-          style={{
-            position: 'absolute' as const,
-            top: 8,
-            right: 8,
-            background: necessityColor[item.necessity] || '#8f4d2c',
-            color: 'white',
-            fontSize: 10,
-            fontWeight: 700,
-            padding: '2px 8px',
-            borderRadius: 20,
-          }}
-        >
+        <div style={{
+          position: 'absolute' as const,
+          top: 7, right: 7,
+          background: necessityBg[item.necessity] || '#f5ede5',
+          color: necessityColor[item.necessity] || '#827470',
+          fontSize: 10, fontWeight: 700,
+          padding: '2px 7px', borderRadius: 20,
+        }}>
           {item.necessityLabel}
         </div>
       </div>
 
       {/* Info */}
-      <div style={{ padding: '10px 13px 12px', flex: 1, display: 'flex', flexDirection: 'column' as const, gap: 4 }}>
+      <div style={{ padding: '9px 12px 11px', display: 'flex', flexDirection: 'column' as const, gap: 3 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: '#1f1b13', lineHeight: 1.3 }}>{item.name}</div>
         <div style={{ fontSize: 13, color: '#8f4d2c', fontWeight: 700 }}>{item.priceRange}</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-          <span style={{ fontSize: 10, background: '#f1e7d9', color: '#52372d', padding: '2px 7px', borderRadius: 10, fontWeight: 600 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2 }}>
+          <span style={{ fontSize: 10, background: '#f1e7d9', color: '#52372d', padding: '2px 6px', borderRadius: 8, fontWeight: 600 }}>
             {item.categoryLabel}
           </span>
           {item.quantity > 1 && (
@@ -175,148 +98,162 @@ function ItemCard({ item, previewImages }: { item: ExportItem; previewImages: Re
           )}
         </div>
         {item.placement && (
-          <div style={{ fontSize: 11, color: '#827470', marginTop: 2 }}>{item.placement}</div>
+          <div style={{ fontSize: 10, color: '#9e8f8b', marginTop: 1 }}>{item.placement}</div>
         )}
       </div>
     </div>
   );
 }
 
-// ─── Page 1: Cover (header + before/after + summary) ──────────────────────────
-function CoverPage({ theme, date, before, after, summary }: {
-  theme: string; date: string; before: string; after: string; summary: string;
-}) {
-  return (
-    <div style={{ width: W, background: '#fff8f2', boxSizing: 'border-box' as const }}>
-      <PageHeader theme={theme} date={date} />
-
-      {/* Before / After */}
-      <div style={{ padding: '40px 52px 32px', boxSizing: 'border-box' as const }}>
-        <SectionTitle>改造对比 / Before &amp; After</SectionTitle>
-        <div style={{ display: 'flex', gap: 14, borderRadius: 16, overflow: 'hidden' }}>
-          {/* Before */}
-          <div style={{ flex: 1, position: 'relative' as const, borderRadius: 14, overflow: 'hidden' }}>
-            <img src={before} alt="改造前" style={{ width: '100%', height: 310, objectFit: 'cover' as const, display: 'block' }} />
-            <div style={{
-              position: 'absolute' as const, bottom: 12, left: 12,
-              background: 'rgba(30,20,10,0.55)', color: 'white',
-              padding: '4px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700, letterSpacing: 1,
-            }}>
-              BEFORE
-            </div>
-          </div>
-          {/* After */}
-          <div style={{ flex: 1, position: 'relative' as const, borderRadius: 14, overflow: 'hidden' }}>
-            <img src={after} alt="改造后" style={{ width: '100%', height: 310, objectFit: 'cover' as const, display: 'block' }} />
-            <div style={{
-              position: 'absolute' as const, bottom: 12, left: 12,
-              background: 'rgba(82,55,45,0.75)', color: 'white',
-              padding: '4px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700, letterSpacing: 1,
-            }}>
-              AFTER
-            </div>
-          </div>
-        </div>
-
-        {/* Summary */}
-        {summary && (
-          <div style={{
-            marginTop: 20, padding: '16px 20px', background: '#f7edde',
-            borderRadius: 12, borderLeft: '3px solid #8f4d2c',
-            fontSize: 13, color: '#504440', lineHeight: 1.7,
-          }}>
-            {summary}
-          </div>
-        )}
-      </div>
-
-      <PageFooter budgetMin={0} budgetMax={0} />
-    </div>
-  );
-}
-
-// ─── Page N: Items page ────────────────────────────────────────────────────────
-function ItemsPage({
-  theme, date, pageIndex, totalPages, rows, previewImages, budgetMin, budgetMax,
-}: {
-  theme: string;
-  date: string;
-  pageIndex: number;
-  totalPages: number;
-  rows: ExportItem[][];
-  previewImages: Record<number, string>;
-  budgetMin: number;
-  budgetMax: number;
-}) {
-  const colWidth = Math.floor((W - 104 - (COLS - 1) * 14) / COLS); // 52px padding × 2, 14px gap
-
-  return (
-    <div style={{ width: W, background: '#fff8f2', boxSizing: 'border-box' as const }}>
-      <PageHeader theme={theme} date={date} />
-
-      <div style={{ padding: '36px 52px 32px', boxSizing: 'border-box' as const }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-          <SectionTitle>改造购物清单 / Shopping Guide</SectionTitle>
-          <span style={{ fontSize: 11, color: '#827470' }}>第 {pageIndex} / {totalPages} 页</span>
-        </div>
-
-        {/* Item grid */}
-        <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 14 }}>
-          {rows.map((row, ri) => (
-            <div key={ri} style={{ display: 'flex', gap: 14 }}>
-              {row.map((item) => (
-                <div key={item.id} style={{ width: colWidth, flexShrink: 0 }}>
-                  <ItemCard item={item} previewImages={previewImages} />
-                </div>
-              ))}
-              {/* Fill empty cells */}
-              {Array.from({ length: COLS - row.length }).map((_, i) => (
-                <div key={`empty-${i}`} style={{ width: colWidth, flexShrink: 0 }} />
-              ))}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <PageFooter budgetMin={budgetMin} budgetMax={budgetMax} />
-    </div>
-  );
-}
-
-// ─── Main export card ──────────────────────────────────────────────────────────
+// ─── Single-page export card ───────────────────────────────────────────────────
 export function ExportCard({ theme, before, after, summary, items, previewImages, budgetMin, budgetMax }: Props) {
   const date = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
-  const itemRows = chunk(items, COLS);
-
-  // Split items into pages of 8 (2 rows × 4 cols)
-  const ROWS_PER_PAGE = 2;
-  const rowPages = chunk(itemRows, ROWS_PER_PAGE);
-  const totalItemPages = rowPages.length;
+  const COLS = Math.min(4, Math.max(1, items.length <= 3 ? items.length : 4));
+  const colWidth = Math.floor((W - PAD * 2 - (COLS - 1) * 12) / COLS);
+  const rows = chunk(items, COLS);
 
   return (
-    <div style={{ width: W, display: 'inline-flex', flexDirection: 'column' as const, gap: 0 }}>
-      {/* Cover page */}
-      <CoverPage theme={theme} date={date} before={before} after={after} summary={summary} />
+    <div style={{
+      width: W,
+      background: '#fff8f2',
+      display: 'inline-flex',
+      flexDirection: 'column' as const,
+      fontFamily: '-apple-system, "PingFang SC", "Hiragino Sans GB", sans-serif',
+    }}>
 
-      {/* Divider between pages */}
-      {items.length > 0 && <div style={{ height: 8, background: '#e8ddd4' }} />}
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div style={{
+        background: '#52372d',
+        padding: '22px 52px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        boxSizing: 'border-box' as const,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ background: '#fff8f2', borderRadius: 10, padding: '5px 10px' }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.svg" alt="nook" style={{ height: 30, width: 'auto', display: 'block' }} />
+          </div>
+          <span style={{ color: '#c9b8aa', fontSize: 12 }}>出租屋软装改造方案</span>
+        </div>
+        <div style={{ textAlign: 'right' as const }}>
+          <div style={{ color: '#f1e7d9', fontSize: 14, fontWeight: 600 }}>{theme}</div>
+          <div style={{ color: '#c9b8aa', fontSize: 12, marginTop: 2 }}>{date}</div>
+        </div>
+      </div>
 
-      {/* Item pages */}
-      {rowPages.map((rows, pi) => (
-        <React.Fragment key={pi}>
-          <ItemsPage
-            theme={theme}
-            date={date}
-            pageIndex={pi + 1}
-            totalPages={totalItemPages}
-            rows={rows}
-            previewImages={previewImages}
-            budgetMin={budgetMin}
-            budgetMax={budgetMax}
-          />
-          {pi < rowPages.length - 1 && <div style={{ height: 8, background: '#e8ddd4' }} />}
-        </React.Fragment>
-      ))}
+      {/* ── Before / After ─────────────────────────────────────────────────── */}
+      <div style={{ padding: '36px 52px 0', boxSizing: 'border-box' as const }}>
+        {/* Section label */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+          <div style={{ width: 3, height: 14, borderRadius: 2, background: '#8f4d2c' }} />
+          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 3, color: '#8f4d2c', textTransform: 'uppercase' as const }}>
+            改造对比 / Before &amp; After
+          </span>
+        </div>
+
+        {/* Images row */}
+        <div style={{ display: 'flex', gap: 14 }}>
+          <div style={{ flex: 1, position: 'relative' as const, borderRadius: 12, overflow: 'hidden' }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={before} alt="改造前" style={{ width: '100%', height: 260, objectFit: 'cover' as const, display: 'block' }} />
+            <div style={{
+              position: 'absolute' as const, bottom: 10, left: 10,
+              background: 'rgba(30,20,10,0.55)', color: 'white',
+              padding: '3px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700, letterSpacing: 1,
+            }}>BEFORE</div>
+          </div>
+          <div style={{ flex: 1, position: 'relative' as const, borderRadius: 12, overflow: 'hidden' }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={after} alt="改造后" style={{ width: '100%', height: 260, objectFit: 'cover' as const, display: 'block' }} />
+            <div style={{
+              position: 'absolute' as const, bottom: 10, left: 10,
+              background: 'rgba(82,55,45,0.75)', color: 'white',
+              padding: '3px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700, letterSpacing: 1,
+            }}>AFTER</div>
+          </div>
+        </div>
+
+        {/* Summary + budget bar */}
+        {(summary || budgetMax > 0) && (
+          <div style={{
+            marginTop: 14,
+            padding: '14px 20px',
+            background: '#f7edde',
+            borderRadius: 10,
+            borderLeft: '3px solid #8f4d2c',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 20,
+          }}>
+            {summary && (
+              <div style={{ fontSize: 13, color: '#504440', lineHeight: 1.7, flex: 1 }}>{summary}</div>
+            )}
+            {budgetMax > 0 && (
+              <div style={{ flexShrink: 0, textAlign: 'right' as const }}>
+                <div style={{ color: '#827470', fontSize: 11 }}>购物车预算</div>
+                <div style={{ color: '#52372d', fontSize: 22, fontWeight: 800, lineHeight: 1.2 }}>
+                  ¥{budgetMin}–{budgetMax}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Shopping list ───────────────────────────────────────────────────── */}
+      {items.length > 0 && (
+        <div style={{ padding: '0 52px 44px', boxSizing: 'border-box' as const }}>
+          {/* Section label */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            borderTop: '1px solid #e0d0c0',
+            marginTop: 28, paddingTop: 24, marginBottom: 18,
+          }}>
+            <div style={{ width: 3, height: 14, borderRadius: 2, background: '#8f4d2c' }} />
+            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 3, color: '#8f4d2c', textTransform: 'uppercase' as const }}>
+              购物清单 / Shopping List
+            </span>
+            <span style={{ color: '#827470', fontSize: 12, marginLeft: 'auto' }}>
+              {items.length} 件单品
+            </span>
+          </div>
+
+          {/* Item grid */}
+          <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 12 }}>
+            {rows.map((row, ri) => (
+              <div key={ri} style={{ display: 'flex', gap: 12 }}>
+                {row.map((item) => (
+                  <div key={item.id} style={{ width: colWidth, flexShrink: 0 }}>
+                    <ItemCard item={item} previewImages={previewImages} />
+                  </div>
+                ))}
+                {Array.from({ length: COLS - row.length }).map((_, i) => (
+                  <div key={`empty-${i}`} style={{ width: colWidth, flexShrink: 0 }} />
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Footer ──────────────────────────────────────────────────────────── */}
+      <div style={{
+        background: '#f1e7d9',
+        padding: '16px 52px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        borderTop: '1px solid #e0d0c0',
+        boxSizing: 'border-box' as const,
+      }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo.svg" alt="nook" style={{ height: 24, width: 'auto', display: 'block' }} />
+        <span style={{ color: '#827470', fontSize: 12 }}>由 NookAI 智能生成 · nookai.app</span>
+        <div />
+      </div>
     </div>
   );
 }

@@ -331,7 +331,7 @@ function BoardCellPreview({
 function BeforeAfterSlider({ before, after }: { before: string; after: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [ratio, setRatio] = useState(0.55);
-  const [dragging, setDragging] = useState(false);
+  const isDragging = useRef(false);
 
   const updateFromClientX = useCallback((clientX: number) => {
     const rect = containerRef.current?.getBoundingClientRect();
@@ -342,30 +342,17 @@ function BeforeAfterSlider({ before, after }: { before: string; after: string })
 
   const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault();
-    setDragging(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+    isDragging.current = true;
     updateFromClientX(event.clientX);
   };
 
-  useEffect(() => {
-    if (!dragging) return;
+  const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDragging.current) return;
+    updateFromClientX(event.clientX);
+  };
 
-    const onMove = (event: PointerEvent) => {
-      updateFromClientX(event.clientX);
-    };
-    const onUp = () => {
-      setDragging(false);
-    };
-
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-    window.addEventListener('pointercancel', onUp);
-
-    return () => {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-      window.removeEventListener('pointercancel', onUp);
-    };
-  }, [dragging, updateFromClientX]);
+  const stopDragging = () => { isDragging.current = false; };
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'ArrowLeft') {
@@ -390,7 +377,11 @@ function BeforeAfterSlider({ before, after }: { before: string; after: string })
     <div
       ref={containerRef}
       className="relative aspect-[4/3] overflow-hidden rounded-3xl bg-[#f7edde] shadow-2xl"
+      style={{ touchAction: 'none', userSelect: 'none' }}
       onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={stopDragging}
+      onPointerCancel={stopDragging}
     >
       <img src={before} alt="Before" className="absolute inset-0 h-full w-full object-cover" />
 
@@ -1125,11 +1116,11 @@ function ResultPageContent() {
                   <button
                     type="button"
                     onClick={handleExport}
-                    disabled={guideLoading || isExporting}
+                    disabled={guideLoading || isExporting || selectedItems.length === 0}
                     className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-white py-3 text-sm font-bold text-[#52372d] transition-colors hover:bg-[#fff8f2] disabled:cursor-not-allowed disabled:text-[#b8a8a2]"
                   >
                     <Download size={16} />
-                    {isExporting ? '生成中...' : '导出图片'}
+                    {isExporting ? '生成中...' : selectedItems.length > 0 ? `导出 ${selectedItems.length} 件` : '导出图片'}
                   </button>
                 </div>
 
@@ -1215,7 +1206,7 @@ function ResultPageContent() {
             before={beforeImage}
             after={afterImage}
             summary={summary || ''}
-            items={allVisibleItems.map((item): ExportItem => ({
+            items={selectedItems.map((item): ExportItem => ({
               id: item.id,
               name: item.name,
               priceRange: item.priceRange,

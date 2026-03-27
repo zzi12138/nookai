@@ -455,7 +455,7 @@ export function getFallbackRawItems(theme: string): RawItem[] {
 export function normalizeGuideRawItems(rawItems: RawItem[], options?: { allowSyntheticAnchor?: boolean }) {
   const allowSyntheticAnchor = Boolean(options?.allowSyntheticAnchor);
   return rawItems
-    .slice(0, 18)
+    .slice(0, 12)
     .map((item, index) => {
       const id = index + 1;
       const name = toChineseName(item.name || '');
