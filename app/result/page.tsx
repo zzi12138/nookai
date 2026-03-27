@@ -180,61 +180,8 @@ function normalizeCategory(value?: string): Category {
   return 'Functional accessories';
 }
 
-function getFallbackItems(): GuideItem[] {
-  return [
-    {
-      id: 1,
-      name: '复古百褶落地灯',
-      category: 'Ambient lighting',
-      quantity: 1,
-      priceMin: 159,
-      priceMax: 239,
-      priceRange: '¥159-239',
-      placement: '沙发右侧或沙发后方',
-      necessity: 'Must-have',
-      reason: '最快提升房间氛围层次',
-    },
-    {
-      id: 2,
-      name: '原木氛围台灯',
-      category: 'Ambient lighting',
-      quantity: 1,
-      priceMin: 69,
-      priceMax: 119,
-      priceRange: '¥69-119',
-      placement: '书桌右上角',
-      necessity: 'Recommended',
-      reason: '补充夜间柔光，减少顶灯压迫感',
-    },
-    {
-      id: 3,
-      name: '水洗棉麻四件套',
-      category: 'Bedding & soft textiles',
-      quantity: 1,
-      priceMin: 179,
-      priceMax: 259,
-      priceRange: '¥179-259',
-      placement: '床面整体替换',
-      necessity: 'Must-have',
-      reason: '统一空间主视觉色调',
-    },
-    {
-      id: 4,
-      name: '简约挂画',
-      category: 'Wall decor',
-      quantity: 1,
-      priceMin: 79,
-      priceMax: 129,
-      priceRange: '¥79-129',
-      placement: '床头背景墙中心',
-      necessity: 'Recommended',
-      reason: '补足视觉焦点，画面更完整',
-    },
-  ];
-}
-
 function normalizeItems(raw: GuideItem[] | undefined): GuideItem[] {
-  if (!raw || raw.length === 0) return getFallbackItems();
+  if (!raw || raw.length === 0) return [];
 
   return raw.slice(0, 14).map((item, index) => {
     const id = Number.isFinite(item.id) ? item.id : index + 1;
@@ -890,8 +837,7 @@ function ResultPageContent() {
         }
       } catch {
         if (!cancelled) {
-          const fallback = getFallbackItems();
-          setItems(fallback);
+          setItems([]);
           setSummary(current.suggestions || defaultSummary);
           setItemsBoardImageUrl('');
           setExtractedBoardStatus('request_failed');
@@ -1253,6 +1199,13 @@ function ResultPageContent() {
               >
                 {guideLoading ? (
                   <LoadingMiniGame active={guideLoading} progress={guideProgress} />
+                ) : allVisibleItems.length === 0 ? (
+                  <div className="flex min-h-[360px] flex-col items-center justify-center rounded-2xl border border-dashed border-[#d4c3be]/60 bg-white/40 px-6 text-center text-sm text-[#504440]">
+                    <p className="text-base font-bold text-[#52372d]">本次没有稳定识别到可购买物件</p>
+                    <p className="mt-2 max-w-sm leading-relaxed">
+                      我们不会自动补默认物件。当前购物清单只展示识别结果；你可以重新生成，尝试让模型识别到更多真实物件。
+                    </p>
+                  </div>
                 ) : (
                   CATEGORY_ORDER.map((category) => {
                     const categoryItems = grouped.get(category) || [];

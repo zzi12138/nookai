@@ -1264,16 +1264,7 @@ export async function POST(req: Request) {
       }
     }
 
-    let normalizedAll = normalizeGuideRawItems(analyzed.items);
-    let usedThemeFallback = false;
-
-    if (normalizedAll.length === 0) {
-      normalizedAll = normalizeGuideRawItems(getFallbackRawItems(theme), {
-        allowSyntheticAnchor: true,
-      });
-      usedThemeFallback = true;
-    }
-
+    const normalizedAll = normalizeGuideRawItems(analyzed.items);
     const normalized = normalizedAll;
 
     let reduced = normalized
@@ -1299,11 +1290,6 @@ export async function POST(req: Request) {
     const itemsBoardImageUrl = '';
     const finalItems = previewItems;
     const boardDebug = makeDefaultBoardDebug();
-    if (usedThemeFallback) {
-      boardDebug.failureCode = 'analysis_fallback';
-      boardDebug.failureReason = 'analysis returned no valid purchasable items; used theme fallback list';
-      boardDebug.fallbackReason = 'analysis_fallback';
-    }
 
     if (previewItems.length > 0) {
       boardDebug.generationAttempted = true;
@@ -1312,6 +1298,15 @@ export async function POST(req: Request) {
       boardDebug.status = 'generated_unchecked';
       boardDebug.failureCode = null;
       boardDebug.failureReason = null;
+      boardDebug.validation = makeDefaultValidation();
+    } else {
+      boardDebug.generationAttempted = true;
+      boardDebug.generationSucceeded = false;
+      boardDebug.thumbnailSource = 'main_image_fallback';
+      boardDebug.status = 'extracted_board_invalid';
+      boardDebug.failureCode = 'analysis_empty';
+      boardDebug.failureReason = 'analysis returned no valid purchasable items';
+      boardDebug.fallbackReason = 'analysis_empty';
       boardDebug.validation = makeDefaultValidation();
     }
 
