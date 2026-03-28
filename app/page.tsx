@@ -243,6 +243,13 @@ export default function Page() {
 
       setLoadingProgress(100);
 
+      // Store generate cost for the ledger
+      if (data.cost) {
+        try {
+          sessionStorage.setItem('nookai_generate_cost', JSON.stringify(data.cost));
+        } catch { /* ignore */ }
+      }
+
       try {
         const storedId = await saveResult({
           original: previewUrl,

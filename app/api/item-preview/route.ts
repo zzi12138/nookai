@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
-import { generateGeminiImageFromReferences } from '../../lib/server/gemini-image';
+import OpenAI from 'openai';
+import { toBase64File } from './to-base64-file';
+import { estimateCost, type CostEntry } from '../../lib/server/cost-ledger';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 type Payload = {
-  afterImage?: string;
-  afterCrop?: string;
+  afterImage?: string;   // full AFTER room image (data URL or base64)
+  afterCrop?: string;    // cropped region around the target object
   item?: {
     name?: string;
     category?: string;
@@ -21,24 +23,19 @@ type Payload = {
   };
 };
 
-function describeAnchor(anchor?: { centerX?: number; centerY?: number; width?: number; height?: number }) {
-  if (!anchor?.centerX || !anchor?.centerY) return '';
-  return `Position in AFTER image: approximately (${Math.round(anchor.centerX)}%, ${Math.round(anchor.centerY)}%), bounding box ~${Math.round(anchor.width || 0)}% x ${Math.round(anchor.height || 0)}% of image.`;
-}
+// ─── Prompt ──────────────────────────────────────────────────────────────
 
-function buildItemPrompt(item: Payload['item'], hasAfterCrop: boolean) {
-  const anchorDesc = describeAnchor(item?.anchor);
+function buildPrompt(item: Payload['item'], hasAfterCrop: boolean) {
   return `
 This is NOT a product generation task. This is a ZOOM-IN and ENHANCE task.
 
 === TASK ===
 ${hasAfterCrop
-    ? 'The FIRST image provided is a cropped region from the AFTER room photo, showing the target object and its immediate surroundings. The SECOND image is the full AFTER room photo for context.'
-    : 'The provided image is the full AFTER room photo.'}
+    ? 'The FIRST image is a cropped region from the room photo showing the target object and its surroundings. The SECOND image is the full room for context.'
+    : 'The provided image is the full room photo.'}
 
 Focus on this specific object: "${item?.name || 'item'}" (${item?.category || 'accessory'}).
-${item?.placement ? `It is located: ${item.placement}.` : ''}
-${anchorDesc}
+${item?.placement ? `Location: ${item.placement}.` : ''}
 
 Your job: Create a zoomed-in, enhanced view of THIS EXACT object as it appears in the image.
 
@@ -53,14 +50,13 @@ Your job: Create a zoomed-in, enhanced view of THIS EXACT object as it appears i
 - The ENTIRE object must be fully visible — no part may be cropped or cut off by the image edge.
 
 === WHAT NOT TO DO (CRITICAL) ===
-- Do NOT invent, redesign, or generate a new object. The object must be visually IDENTICAL to the one in the source image.
-- Do NOT create a studio product shot, catalog image, or clean white/gray background.
+- Do NOT invent, redesign, or generate a new object.
+- Do NOT create a studio product shot with a clean white/gray background.
 - Do NOT replace the object with a different style, color, or design.
 - Do NOT change the viewing angle or perspective of the object.
-- Do NOT add any objects that are not in the original image.
+- Do NOT add any objects not in the original image.
 - Do NOT show the full room — this should be a tight close-up.
 - Do NOT add text, labels, watermarks, borders, or arrows.
-- Do NOT use pure white or solid-color studio backgrounds.
 
 === VISUAL IDENTITY CHECK ===
 The output object must be visually identical to the one in the original image.
@@ -70,21 +66,13 @@ The result should look like a zoomed-in, enhanced crop of the SAME object from t
 `.trim();
 }
 
-function buildRetryPrompt(item: Payload['item'], hasAfterCrop: boolean) {
-  return `${buildItemPrompt(item, hasAfterCrop)}
+// ─── Helpers ─────────────────────────────────────────────────────────────
 
-=== RETRY — PREVIOUS ATTEMPT REJECTED ===
-The previous output did NOT match the source object. Common mistakes to avoid:
-- Generated a NEW object instead of extracting the existing one.
-- Changed the object's color, shape, or material.
-- Showed a full room scene instead of a close-up.
-- Used a studio/white background instead of natural context.
-
-You MUST preserve the exact visual identity of the object from the source image.
-Look carefully at the cropped reference — reproduce THAT object, not an idealized version.
-`;
+function stripDataUrl(value: string) {
+  return value.includes(',') ? value.split(',')[1] : value;
 }
 
+// ─── Route ───────────────────────────────────────────────────────────────
 
 export async function POST(req: Request) {
   try {
@@ -97,26 +85,48 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing item or afterImage' }, { status: 400 });
     }
 
-    // Reference images: afterCrop is PRIMARY (closest to the object), afterImage for full context
-    const references: string[] = [];
-    if (afterCrop) references.push(afterCrop);
-    references.push(afterImage);
-
-    const hasAfterCrop = Boolean(afterCrop);
-
-    // First attempt
-    const prompt1 = buildItemPrompt(item, hasAfterCrop);
-    const result1 = await generateGeminiImageFromReferences(references, prompt1);
-
-    if (result1) {
-      return NextResponse.json({ previewImage: result1 });
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      return NextResponse.json({ error: 'Missing OPENAI_API_KEY' }, { status: 500 });
     }
 
-    // Retry with reinforced prompt
-    const prompt2 = buildRetryPrompt(item, hasAfterCrop);
-    const result2 = await generateGeminiImageFromReferences(references, prompt2);
+    const openai = new OpenAI({ apiKey });
+    const hasAfterCrop = Boolean(afterCrop);
+    const prompt = buildPrompt(item, hasAfterCrop);
 
-    return NextResponse.json({ previewImage: result2 });
+    // Build image inputs: afterCrop first (primary), then full afterImage
+    const images = [];
+    if (afterCrop) {
+      images.push(await toBase64File(stripDataUrl(afterCrop), 'after-crop.png'));
+    }
+    images.push(await toBase64File(stripDataUrl(afterImage), 'after-image.png'));
+
+    const result = await openai.images.edit({
+      model: 'gpt-image-1-mini',
+      image: images.length === 1 ? images[0] : images,
+      prompt,
+      quality: 'low',
+      size: '1024x1024',
+    });
+
+    const b64 = result.data?.[0]?.b64_json;
+    if (!b64) {
+      return NextResponse.json({ error: 'No image data returned from OpenAI' }, { status: 500 });
+    }
+
+    const previewImage = `data:image/png;base64,${b64}`;
+
+    // Cost estimation
+    const cost = estimateCost({
+      api: 'item-preview',
+      model: 'gpt-image-1-mini',
+      inputImages: hasAfterCrop ? 2 : 1,
+      inputImageAvgSize: 800,
+      promptLength: prompt.length,
+      outputImages: 1,
+    });
+
+    return NextResponse.json({ previewImage, cost });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Server error';
     return NextResponse.json({ error: message }, { status: 500 });

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { estimateCost } from '../../lib/server/cost-ledger';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -281,11 +282,21 @@ export async function POST(req: Request) {
       );
     }
 
+    const cost = estimateCost({
+      api: 'generate',
+      model,
+      inputImages: 1,
+      inputImageAvgSize: 1000,
+      promptLength: prompt.length,
+      outputImages: 1,
+    });
+
     return NextResponse.json({
       imageUrl: `data:${mimeType};base64,${data}`,
       provider: 'gemini',
       evaluation: buildEvaluation(theme, requirements),
       suggestions: buildSuggestions(theme),
+      cost,
     });
   } catch {
     return NextResponse.json({ error: 'Server error' }, { status: 500 });

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { shrinkImageDataUrl, cropImageByAnchor } from '../../lib/imageUtils';
 
-// ─── Types ──────────────────────────────────────────────────────────────────
+// ─── Types ──────────────────────────────────────────────────────────────
 
 export type PreviewStatus = 'pending' | 'loading' | 'done' | 'failed';
 
@@ -23,6 +23,13 @@ export type ItemPreviewTrace = {
   error?: string;
 };
 
+export type CostEntry = {
+  api: string;
+  model: string;
+  estimatedCost: number;
+  timestamp: number;
+};
+
 export type PreviewBatchTrace = {
   totalItems: number;
   succeeded: number;
@@ -30,9 +37,10 @@ export type PreviewBatchTrace = {
   retried: number;
   totalDurationMs: number;
   items: ItemPreviewTrace[];
+  costs: CostEntry[];
 };
 
-// ─── Minimal item interface (avoids importing GuideItem) ────────────────────
+// ─── Minimal item interface (avoids importing GuideItem) ────────────────
 
 type PreviewableItem = {
   id: number;
@@ -48,7 +56,7 @@ type PreviewableItem = {
   };
 };
 
-// ─── Utilities ──────────────────────────────────────────────────────────────
+// ─── Utilities ──────────────────────────────────────────────────────────
 
 const MAX_ATTEMPTS = 2;
 const TIMEOUT_MS = 65_000;
@@ -76,7 +84,7 @@ async function callItemPreview(
   shrunkAfter: string,
   afterCrop: string | undefined,
   signal: AbortSignal,
-): Promise<{ previewImage?: string; error?: string }> {
+): Promise<{ previewImage?: string; error?: string; cost?: CostEntry }> {
   const anchor = item.imageTarget;
   const hasAnchor =
     anchor &&
@@ -104,14 +112,14 @@ async function callItemPreview(
     signal,
   });
 
-  const data = (await res.json().catch(() => ({}))) as { previewImage?: string; error?: string };
+  const data = (await res.json().catch(() => ({}))) as { previewImage?: string; error?: string; cost?: CostEntry };
   if (res.ok && data.previewImage) {
-    return { previewImage: data.previewImage };
+    return { previewImage: data.previewImage, cost: data.cost };
   }
   return { error: data.error || `HTTP ${res.status}` };
 }
 
-// ─── Hook ───────────────────────────────────────────────────────────────────
+// ─── Hook ───────────────────────────────────────────────────────────────
 
 export function useItemPreviews(
   items: PreviewableItem[],
@@ -134,6 +142,7 @@ export function useItemPreviews(
       const shrunkAfter = await shrinkImageDataUrl(afterImage, 1280, 0.84);
 
       const itemTraces: ItemPreviewTrace[] = [];
+      const costs: CostEntry[] = [];
 
       await mapWithConcurrency(items, CONCURRENCY, async (item) => {
         const itemStart = Date.now();
@@ -147,7 +156,7 @@ export function useItemPreviews(
           });
         }
 
-        // Prepare afterCrop — REQUIRED for quality, crop from AFTER image by anchor
+        // Prepare afterCrop — crop from AFTER image by anchor
         const anchor = item.imageTarget;
         const hasAnchor =
           anchor &&
@@ -166,11 +175,11 @@ export function useItemPreviews(
               height: anchor!.height!,
             });
           } catch {
-            // Crop failure doesn't block — but quality will be lower without it
+            // Crop failure doesn't block
           }
         }
 
-        // Try AI preview with auto-retry
+        // Try with auto-retry
         let lastError = '';
         let attempts = 0;
 
@@ -188,7 +197,6 @@ export function useItemPreviews(
             );
 
             if (result.previewImage) {
-              // Success
               const state: ItemPreviewState = {
                 status: 'done',
                 imageUrl: result.previewImage,
@@ -198,6 +206,8 @@ export function useItemPreviews(
               if (!cancelled) {
                 setPreviews((prev) => new Map(prev).set(item.id, state));
               }
+
+              if (result.cost) costs.push(result.cost);
 
               itemTraces.push({
                 itemId: item.id,
@@ -216,7 +226,6 @@ export function useItemPreviews(
             window.clearTimeout(timer);
           }
 
-          // Wait before retry
           if (attempt < MAX_ATTEMPTS) {
             await new Promise((r) => setTimeout(r, 800));
           }
@@ -253,6 +262,7 @@ export function useItemPreviews(
           retried: itemTraces.filter((t) => t.attempts > 1).length,
           totalDurationMs: Date.now() - startTime,
           items: itemTraces,
+          costs,
         });
       }
     }

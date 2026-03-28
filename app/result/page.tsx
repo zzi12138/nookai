@@ -91,6 +91,7 @@ type GuideResponse = {
     };
   };
   error?: string;
+  cost?: { api: string; model: string; estimatedCost: number };
 };
 
 const spring = { type: 'spring', stiffness: 120, damping: 20 } as const;
@@ -448,12 +449,35 @@ function ResultPageContent() {
   const [addedIds, setAddedIds] = useState<Set<number>>(new Set());
   const [previewItemId, setPreviewItemId] = useState<number | null>(null);
   const [showDebug, setShowDebug] = useState(debugParamEnabled || process.env.NODE_ENV !== 'production');
+  const [costLedger, setCostLedger] = useState<Array<{ api: string; model: string; estimatedCost: number }>>([]);
 
   // Item preview hook — AI-only, quality-first, auto-retry
   const { previews, trace: previewTrace } = useItemPreviews(
     items,
     stored?.generated || '',
   );
+
+  // Collect generate cost from sessionStorage
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('nookai_generate_cost');
+      if (raw) {
+        const c = JSON.parse(raw);
+        setCostLedger((prev) => [...prev, { api: c.api, model: c.model, estimatedCost: c.estimatedCost }]);
+        sessionStorage.removeItem('nookai_generate_cost');
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  // Collect preview costs when trace completes
+  useEffect(() => {
+    if (previewTrace?.costs?.length) {
+      setCostLedger((prev) => [
+        ...prev,
+        ...previewTrace.costs.map((c) => ({ api: c.api, model: c.model, estimatedCost: c.estimatedCost })),
+      ]);
+    }
+  }, [previewTrace]);
 
   useEffect(() => {
     if (debugParamEnabled) {
@@ -577,6 +601,12 @@ function ResultPageContent() {
           setBoardDebug(data.extractedBoardDebug || null);
           setGuideProgress(100);
           setError('');
+
+          // Collect explainer cost
+          if (data.cost) {
+            const ec = data.cost;
+            setCostLedger((prev) => [...prev, { api: ec.api, model: ec.model, estimatedCost: ec.estimatedCost }]);
+          }
         }
       } catch {
         if (!cancelled) {
@@ -826,6 +856,22 @@ function ResultPageContent() {
               </div>
             ) : items.length > 0 ? (
               <p>Preview: 等待识别完成...</p>
+            ) : null}
+
+            {/* Cost Ledger */}
+            {costLedger.length > 0 ? (
+              <div>
+                <p className="mb-2 font-bold text-[#52372d]">
+                  💰 本次预估费用: ${costLedger.reduce((s, c) => s + c.estimatedCost, 0).toFixed(4)}
+                </p>
+                <div className="space-y-0.5">
+                  {costLedger.map((c, i) => (
+                    <p key={i} className="font-mono">
+                      {c.api} <span className="text-[#827470]">({c.model})</span> → <span className="font-semibold">${c.estimatedCost.toFixed(5)}</span>
+                    </p>
+                  ))}
+                </div>
+              </div>
             ) : null}
 
             {/* Frozen board pipeline debug (kept for reference) */}

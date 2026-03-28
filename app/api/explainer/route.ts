@@ -9,6 +9,7 @@ import {
   makeDefaultBoardDebug,
 } from './board-state';
 import { toInlineImagePart } from '../../lib/server/gemini-image';
+import { estimateCost } from '../../lib/server/cost-ledger';
 
 export const runtime = 'nodejs';
 export const maxDuration = 90;
@@ -256,6 +257,15 @@ export async function POST(req: Request) {
       boardDebug.validation = makeDefaultValidation();
     }
 
+    const cost = estimateCost({
+      api: 'explainer',
+      model: 'gemini-2.5-flash',
+      inputImages: beforeImage ? 2 : 1,
+      inputImageAvgSize: 1000,
+      promptLength: 2000, // approximate prompt length
+      outputTextTokens: 2000,
+    });
+
     return NextResponse.json({
       summary:
         analyzed.summary ||
@@ -267,6 +277,7 @@ export async function POST(req: Request) {
       extractedBoardDebug: boardDebug,
       fallbackReason: boardDebug.fallbackReason,
       analysisError,
+      cost,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Server error';
