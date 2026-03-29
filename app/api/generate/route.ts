@@ -139,47 +139,99 @@ function buildPrompt(theme: string, constraints: string[], requirements: string[
       : 'Additional user requests: keep the setup simple, cozy, and renter-friendly.';
 
   return `
-Same room, same layout, same camera angle.
+=== USER INTENT (HIGHEST PRIORITY) ===
 
-Clean the space:
-remove all clutter, trash, plastic bags, messy objects.
-Make it clean and minimal.
-
-Apply ${themeStyle} styling:
-use textiles, plants, decor, and lighting to create a strong visual identity.
-Keep composition intentional and balanced.
-
-Atmosphere (priority):
-make the space feel warm, cozy, and aspirational.
-like a high-quality interior photo people would save.
-
-Lighting (critical):
-use warm cinematic lighting (~2700K).
-combine:
-- one strong warm key light
-- soft accent lights
-- subtle ambient glow
-create contrast: bright focal areas + soft shadow zones.
-avoid flat lighting.
-
-Enhance visually:
-slightly improve styling, layering, and visual balance.
-make it feel designed, not just cleaned.
-
-${dynamicRulesBlock}
+Style:
+${themeStyle}
 
 ${requirementBlock}
 
-Keep:
-same architecture, same geometry, no layout change.
+Constraints:
+${dynamicRulesBlock}
 
-Result:
-realistic but elevated, warm, aesthetic, visually striking.
+Rules:
+- Follow user constraints strictly
+- If conflict happens, user constraints override everything
 
-Negative:
+---
+
+We are NOT just decorating a room.
+
+We are creating an emotional, lifestyle-driven scene that feels real, warm, and highly shareable (Xiaohongshu / Pinterest level).
+
+Your goal is NOT "clean and nice".
+Your goal is: "make people want to live here".
+
+---
+
+PRIORITY 1 — LIGHTING (CRITICAL)
+Lighting must create atmosphere and visual focus.
+
+- Use warm lighting (~2700K)
+- Build contrast: bright focal areas + soft shadow zones
+- At least ONE clear visible light source (lamp / floor lamp / ambient light)
+- Light must interact with surfaces (fabric, wood, wall) — soft glow, natural falloff
+- Avoid flat lighting, avoid evenly lit room
+
+Think: cinematic, cozy, golden-hour indoor lighting
+
+---
+
+PRIORITY 2 — FOCAL POINT (VERY IMPORTANT)
+The image must have ONE clear visual focus.
+
+- Example: sofa corner / bed / table setup
+- This area should be slightly brighter, richer, and more detailed
+- Other areas should be quieter to support it
+
+---
+
+PRIORITY 3 — "DESIGNED BUT LIVED-IN"
+Avoid showroom look.
+
+- Add subtle lived-in feeling:
+  - slightly draped blanket
+  - natural pillow placement
+  - small asymmetry
+- BUT keep it clean and intentional (not messy)
+
+---
+
+PRIORITY 4 — LESS BUT BETTER
+Do NOT add too many small objects.
+
+- Fewer items, higher quality
+- Each object must contribute to atmosphere
+- Avoid clutter
+
+---
+
+PRIORITY 5 — DECLUTTER MUST BE COMPLETE
+Remove ALL trash, plastic bags, random objects completely.
+The room must look clean before styling.
+
+---
+
+KEEP STRICTLY:
+- Same room
+- Same layout
+- Same camera angle
+- Same perspective
+
+---
+
+RESULT REQUIREMENT:
+The final image should feel like:
+"someone just walked into a warm, aesthetic, carefully styled home and took a photo"
+
+NOT:
+"AI generated decoration"
+
+---
+
+NEGATIVE:
+flat lighting, evenly lit room, no shadows, showroom, over-clean, messy clutter, plastic bags,
 different room, layout change, camera change,
-clutter, trash,
-flat lighting, harsh overhead light, fluorescent light,
 blurry, distorted, low quality${dynamicNegatives ? `, ${dynamicNegatives}` : ''}
 `.trim();
 }
