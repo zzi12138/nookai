@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -97,11 +97,18 @@ const S = {
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export default function QAPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: 60, textAlign: 'center', color: '#999' }}>Loading...</div>}>
+      <QAGate />
+    </Suspense>
+  );
+}
+
+function QAGate() {
   const params = useSearchParams();
   const isDev = process.env.NODE_ENV !== 'production';
   const isQA = params.get('qa') === '1' || params.get('debug') === '1';
 
-  // Gate
   if (!isDev && !isQA) {
     return <div style={{ padding: 60, textAlign: 'center', color: '#999' }}>QA Panel — dev only. Add ?qa=1 to access.</div>;
   }
