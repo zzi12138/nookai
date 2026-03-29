@@ -88,7 +88,7 @@ Output per item:
 - reason (one short Chinese sentence)
 - anchor: { centerX, centerY, left, top, width, height, confidence } (all 0-100 percentage)
 
-Style: ${theme || '日式原木风'}
+Style: ${theme || '小红书爆款风'}
 
 Return JSON:
 {

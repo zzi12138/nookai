@@ -68,7 +68,7 @@ VISUAL STYLE:
 PLACE OBJECTS in exact reading order from top-left to bottom-right:
 ${assignedOrder || 'Use visible purchasable objects from the generated room and place them deterministically.'}
 
-  Theme context: ${theme || '日式原木风'}
+  Theme context: ${theme || '小红书爆款风'}
 `.trim();
 }
 
@@ -92,7 +92,7 @@ Rules:
 - coordinates must be percentages from 0 to 100
 - return at most 8 text regions and 8 frame regions
 
-Theme context: ${theme || '日式原木风'}
+Theme context: ${theme || '小红书爆款风'}
 
 Return JSON in this exact structure:
 {
@@ -147,7 +147,7 @@ Do not add new objects.
 Do not remove valid objects.
 Do not move objects.
 
-Theme context: ${theme || '日式原木风'}
+Theme context: ${theme || '小红书爆款风'}
 `.trim();
 }
 

@@ -164,7 +164,7 @@ function inferProvider(imageUrl: string) {
 export default function PlanPage() {
   const router = useRouter();
 
-  const [theme, setTheme] = useState('日式原木风');
+  const [theme, setTheme] = useState('小红书爆款风');
   const [originalUrl, setOriginalUrl] = useState('');
   const [generatedUrl, setGeneratedUrl] = useState('');
   const [provider, setProvider] = useState<'nanobanana' | 'gemini' | undefined>(undefined);
@@ -191,7 +191,7 @@ export default function PlanPage() {
 
     const hydrate = (data: Partial<StoredResult>) => {
       if (!isActive) return;
-      setTheme(data.theme || '日式原木风');
+      setTheme(data.theme || '小红书爆款风');
       setOriginalUrl(data.original || '');
       setGeneratedUrl(data.generated || '');
       setProvider(data.provider || inferProvider(data.generated || ''));

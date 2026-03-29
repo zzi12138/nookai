@@ -560,7 +560,7 @@ function ResultPageContent() {
               body: JSON.stringify({
                 beforeImage: beforeForGuide,
                 afterImage: afterForGuide,
-                theme: current.theme || '日式原木风',
+                theme: current.theme || '小红书爆款风',
                 provider:
                   current.provider === 'nanobanana' || current.provider === 'gemini'
                     ? current.provider
@@ -895,7 +895,7 @@ function ResultPageContent() {
             <div className="flex items-center justify-between rounded-2xl border border-[#ebe1d3]/50 bg-[#fcf2e4] p-6">
               <div className="space-y-1">
                 <p className="text-sm font-medium tracking-wide text-[#8f4d2c]">方案概览 / OVERVIEW</p>
-                <h2 className="text-xl font-bold text-[#52372d]">风格：{stored.theme || '日式原木风'}</h2>
+                <h2 className="text-xl font-bold text-[#52372d]">风格：{stored.theme || '小红书爆款风'}</h2>
               </div>
               <div className="text-right">
                 <p className="text-sm text-[#504440]">预计预算</p>
@@ -1175,7 +1175,7 @@ function ResultPageContent() {
           }}
         >
           <ExportCard
-            theme={stored.theme || '日式原木风'}
+            theme={stored.theme || '小红书爆款风'}
             before={beforeImage}
             after={afterImage}
             summary={summary || ''}

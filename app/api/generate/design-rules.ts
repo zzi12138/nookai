@@ -23,82 +23,24 @@ export type PreferenceRule = {
 // ─── PART 1: Style Rule Library ─────────────────────────────────────────────
 
 export const STYLE_RULES: Record<string, StyleRules> = {
-  日式原木风: {
-    lighting: [
-      'Primary: warm paper/linen floor lamp or pendant (~2700K golden glow)',
-      'Accent: wooden desk lamp or sculptural ceramic lamp',
-      'Mood: LED candles, fairy string lights, or backlit shelf',
-      'Light pools on wood surfaces with soft shadow edges',
-      'Overall tone: golden-hour warmth, tranquil',
-    ],
-    softFurnishing: [
-      'Linen or cotton curtains in natural beige/off-white',
-      'Neutral cushions: beige, cream, muted earth tones',
-      'Wooden trays, ceramic vases, washi paper objects',
-      'One large green plant: monstera, ficus, or olive tree',
-      'Woven baskets or rattan storage',
-    ],
-    composition: [
-      'Low furniture grouping, floor-level living feel',
-      'Asymmetric but balanced object placement',
-      'Generous negative space — do not fill every surface',
-      'One focal corner: reading nook or low table setup',
-    ],
-    color: [
-      'Dominant: light wood, warm beige, cream',
-      'Secondary: soft white, muted green',
-      'Accent: charcoal or dark brown (small dose)',
-      'Max 3 color families, no saturated tones',
-    ],
-  },
-
-  奶油治愈风: {
-    lighting: [
-      'Primary: soft globe or mushroom lamp (~2700K)',
-      'Accent: ceramic/glass table lamp with frosted shade',
-      'Mood: micro fairy lights or Himalayan salt lamp',
-      'Even soft glow — no harsh shadows, gentle falloff',
-      'Overall tone: warm cocoon, enveloping comfort',
-    ],
-    softFurnishing: [
-      'Boucle or teddy-texture cushions and throws',
-      'Fluffy pillows in cream/beige tones',
-      'Soft knit blanket draped casually',
-      'Round mirror or soft-frame art print',
-      'Dried flowers or pampas grass arrangement',
-    ],
-    composition: [
-      'Rounded shapes preferred over sharp angles',
-      'Layered textures: knit over linen over wood',
-      'Cozy corner as main focal point',
-      'Soft visual flow — no hard visual breaks',
-    ],
-    color: [
-      'Dominant: cream, warm white, soft beige',
-      'Secondary: light caramel, blush pink (subtle)',
-      'Accent: muted gold or soft brown',
-      'No black, no cool gray, no saturated color',
-    ],
-  },
-
   现代简约风: {
     lighting: [
-      'Primary: sleek geometric floor lamp or linear pendant (warm white)',
-      'Accent: minimal task lamp (Anglepoise-style or thin LED bar)',
-      'Mood: indirect LED strip along shelf edge or behind furniture',
-      'Clean light-shadow contrast — graphic but not harsh',
-      'Overall tone: warm precision, architectural',
+      'Primary: sleek geometric floor lamp or linear pendant (warm white ~3000K)',
+      'Accent: minimal task lamp (thin LED bar or Anglepoise-style)',
+      'Mood: indirect LED strip along shelf edge or behind furniture for depth',
+      'Clean light-shadow contrast — graphic, precise, not harsh',
+      'Overall tone: warm precision, architectural clarity',
     ],
     softFurnishing: [
-      'Monochrome cushions: black, white, charcoal',
+      'Monochrome cushions: black, white, charcoal, or single muted accent',
       'Simple geometric rug in neutral tone',
-      'Minimal wall art: one large piece or small grid',
-      'No decorative clutter — every object functional',
-      'One structural green plant (snake plant or fiddle leaf)',
+      'Minimal wall art: one large piece or clean small grid',
+      'No decorative clutter — every object functional or intentional',
+      'One structural green plant (snake plant, fiddle leaf, or bird of paradise)',
     ],
     composition: [
       'Strong grid alignment — objects follow invisible lines',
-      'Generous empty space between objects',
+      'Generous empty space between objects — breathing room is key',
       'One statement piece per zone (lamp, art, or plant)',
       'Symmetric or deliberately asymmetric — no random placement',
     ],
@@ -112,59 +54,63 @@ export const STYLE_RULES: Record<string, StyleRules> = {
 
   轻复古文艺风: {
     lighting: [
-      'Primary: vintage brass or Edison-bulb floor/table lamp (warm amber)',
-      'Accent: retro desk lamp or banker lamp for directional pool',
-      'Mood: string lights with exposed warm bulbs, candles in vintage holders',
-      'Warm amber pools with dramatic shadow interplay',
-      'Overall tone: late-night bookshop, artistic studio',
+      'Primary: vintage brass or Edison-bulb floor/table lamp casting warm amber pools',
+      'Accent: retro desk lamp, banker lamp, or adjustable arm lamp for directional glow',
+      'Mood: string lights with exposed warm bulbs, candles in vintage holders, or neon sign',
+      'Warm amber pools with dramatic shadow interplay — depth in every corner',
+      'Overall tone: late-night bookshop, cozy artist studio, cinematic warmth',
     ],
     softFurnishing: [
-      'Textured wool or velvet throw blanket',
-      'Vintage-pattern cushions: paisley, plaid, or muted floral',
-      'Stacked books as decor element',
-      'Vintage poster or framed art print',
-      'Optional props: film camera, record player, old clock',
+      'Textured wool or velvet throw blanket draped casually',
+      'Mix-pattern cushions: paisley, plaid, muted floral, or ethnic textile',
+      'Stacked books as decor — on tables, shelves, floor',
+      'Vintage poster, framed art print, or gallery wall with mixed frames',
+      'Optional props: film camera, record player, old clock, vinyl records, guitar',
     ],
     composition: [
-      'Layered, curated clutter — intentional not random',
-      'Mix of heights and textures on surfaces',
-      'Warm corner as focal point (desk or reading chair)',
-      'Objects tell a story — each piece has character',
+      'Layered, curated clutter — intentional and story-telling, not random',
+      'Mix of heights and textures on surfaces — visual richness',
+      'Warm corner as focal point (reading chair + lamp, or desk setup)',
+      'Objects have character — each piece feels collected over time',
     ],
     color: [
-      'Dominant: warm brown, caramel, aged wood',
-      'Secondary: muted burgundy, forest green, navy',
-      'Accent: brass, copper, amber',
-      'Warm-shifted palette, no cool tones',
+      'Dominant: warm brown, caramel, aged wood tones',
+      'Secondary: muted burgundy, forest green, navy, deep teal',
+      'Accent: brass, copper, amber, burnt orange',
+      'Warm-shifted palette throughout — no cool blue or gray tones',
     ],
   },
 
-  氛围感深色风: {
+  小红书爆款风: {
     lighting: [
-      'Primary: warm-toned floor lamp with dark/opaque shade (amber glow, ~2500K)',
-      'Accent: directional spotlight or adjustable arm lamp',
-      'Mood: LED candles, backlit shelves, hidden strip lights',
-      'Strong contrast: pools of warm light in dark surroundings',
-      'Overall tone: moody, intimate, bar-lounge atmosphere',
+      'Primary: one warm floor lamp or large table lamp as hero light — pleated shade, paper shade, or fabric dome (~2700K golden glow)',
+      'Accent: small table lamp or desk lamp near a cozy corner — creates a secondary warm pool',
+      'Mood: fairy string lights draped on wall/shelf, LED candles, or warm backlit shelf',
+      'Light must create visible warm glow on nearby surfaces — fabric picks up golden tones, wood surfaces glow',
+      'Overall tone: golden-hour indoor feeling, the kind of warm cozy light that makes you want to curl up and stay',
     ],
     softFurnishing: [
-      'Dark velvet or leather-texture cushions',
-      'Heavy knit or faux-fur throw in dark neutral',
-      'Dark-toned rug: charcoal, deep brown, or black',
-      'Statement art: dark or high-contrast piece',
-      'Metallic accents: brass, black iron, dark gold',
+      'Sofa/bed cover or throw in earth tone: olive green, warm brown, cream, or terracotta',
+      'Mix of cushions: 2-3 in coordinated warm tones, different textures (knit, linen, boucle)',
+      'Woven jute/sisal rug on floor — natural texture, warm neutral color',
+      'Wall decor: framed art prints, photo collage, or one statement painting (warm palette)',
+      'Plants: 1-2 medium green plants (monstera, pothos) in ceramic or woven basket planter',
+      'Personal touches: books stacked casually, a tray with mug/candle, small decor objects grouped in 3s',
+      'Woven storage baskets, rattan/wood organizers for visible but tidy storage',
     ],
     composition: [
-      'Dramatic depth — dark background, lit foreground',
-      'One strongly lit focal zone, rest in soft shadow',
-      'Heavy anchoring objects (dark furniture, thick textiles)',
-      'Vertical interest: tall lamp, hanging art, tall plant',
+      'One clear "hero zone" — bed corner, sofa area, or desk nook — this is the visual anchor',
+      'Hero zone is slightly brighter, richer, more detailed than the rest',
+      'Layered depth: foreground object (plant/lamp) + mid-ground (main furniture) + background (wall decor)',
+      'Intentional asymmetry — not perfectly balanced, feels natural and lived-in',
+      'Every surface has purpose but is not overcrowded — 2-3 items per surface max',
     ],
     color: [
-      'Dominant: charcoal, deep brown, black',
-      'Secondary: dark forest green, deep navy, burgundy',
-      'Accent: brass, warm gold, amber highlights',
-      'Saturated darks with warm metallic pops',
+      'Dominant: warm neutrals — cream, beige, light wood, warm white',
+      'Secondary: earth tones — olive green, warm brown, terracotta, caramel',
+      'Accent: natural green (plants), warm brass/gold (lamp, frame), soft rust or mustard',
+      'Overall palette feels warm, earthy, cohesive — like a Xiaohongshu saved photo',
+      'No cool gray, no bright neon, no pure white — everything leans warm',
     ],
   },
 };
@@ -251,8 +197,17 @@ const BASE_ROOM_LOCK = [
 ].join('\n');
 
 const DECLUTTER = [
-  'Remove ALL clutter, trash, plastic bags, messy belongings, random small objects.',
-  'Room must be clean and tidy before any styling.',
+  'CRITICAL: Before ANY styling, the room must be COMPLETELY cleaned first.',
+  'Remove ALL of the following — zero tolerance, no exceptions:',
+  '- Clothes: scattered clothing, piled laundry, clothes on chairs/bed/floor',
+  '- Bedding mess: wrinkled/bunched sheets, messy blankets, unfolded duvet',
+  '- Shoes: any shoes on floor, shoe racks with visible mess',
+  '- Trash: plastic bags, garbage, food containers, takeout boxes, empty bottles',
+  '- Random objects: cables, chargers, boxes, packaging, plastic containers',
+  '- Personal clutter: toiletries on surfaces, scattered papers, random small items',
+  'The room must look MOVE-IN READY clean before adding any decoration.',
+  'Bed must be neatly made. Surfaces must be clear. Floor must be clean.',
+  'If the original photo has mess, you MUST clean it — do not style on top of mess.',
 ].join('\n');
 
 const BOTTOM_AESTHETIC = [
@@ -262,13 +217,15 @@ const BOTTOM_AESTHETIC = [
   'Controlled composition — intentional placement, no random scattering.',
   'Limited palette — max 3 color families.',
   'Realistic but aesthetically elevated — not CG, not showroom.',
-  'Clean but lived-in — slight drape, natural pillow angle, small asymmetry.',
+  'Clean but lived-in — slight drape on throw, natural pillow angle, small asymmetry.',
+  'The result should look like someone carefully styled this room and took a beautiful photo.',
 ].join('\n');
 
 const BASE_NEGATIVE = [
   'flat lighting, evenly lit room, no shadows, fluorescent overhead',
   'showroom, over-clean, sterile, plastic-looking',
-  'messy clutter, plastic bags, trash, random objects',
+  'messy clutter, plastic bags, trash, random objects, scattered clothes, shoes on floor',
+  'wrinkled sheets, messy bedding, unfolded blankets',
   'different room, layout change, camera change, perspective shift',
   'blurry, distorted, low quality, watermark, text overlay',
 ].join(', ');
@@ -280,7 +237,7 @@ export function buildPrompt(
 ): string {
   // ── Step 1: Map inputs to rules ──
 
-  const style = STYLE_RULES[theme] || STYLE_RULES['日式原木风'];
+  const style = STYLE_RULES[theme] || STYLE_RULES['小红书爆款风'];
 
   const activeBoundaries = constraints
     .map((c) => BOUNDARY_RULES[c])

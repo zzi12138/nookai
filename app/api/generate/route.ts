@@ -42,7 +42,7 @@ export async function POST(req: Request) {
   try {
     const body = (await req.json()) as Payload;
     const image = body.image || '';
-    const theme = body.theme || '日式原木风';
+    const theme = body.theme || '小红书爆款风';
     const constraints = uniqueList(body.constraints || []);
     const requirements = uniqueList(body.requirements || []);
 

@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
-const STYLES = ['日式原木风', '奶油治愈风', '现代简约风', '轻复古文艺风', '氛围感深色风'] as const;
+const STYLES = ['现代简约风', '轻复古文艺风', '小红书爆款风'] as const;
 const BOUNDARIES = ['不动墙面', '不替换家具', '不改动布局', '不改门窗', '不改吊顶', '不增加人工光源'] as const;
 const PREFERENCES = ['宠物友好', '社交友好', '收纳优化', '加入绿植', '投影放松'] as const;
 

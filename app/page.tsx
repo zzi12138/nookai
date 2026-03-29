@@ -26,18 +26,6 @@ type StyleOption = {
 
 const styleOptions: StyleOption[] = [
   {
-    label: '日式原木风',
-    subtitle: '自然、治愈，大地的呼吸感',
-    image:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuCNRim0qBNvMc8HZedHQJ8wkhvPGJO0Ab_4fHEfxpCHojWkz3uWz4DGUNDvzqpeH6bUbjJSdXivyM8A3lJKSvopiuAe3sJ1YdaYykt2QWWwHr2j_9FdR-8bhu8IFDMy7m1f9mSMKRk9owFqy7AIknWURwWs2tYGZZR04xnW7QUhomYaDAVoPZlZO9fYW7s_zcaFubL8FBrvh8lKZWY-JP_DaSoZznz2OwDZpbqBspbAarYqe9WiT8u_DlodNPcPsPtvtxMdp5DhMB3d',
-  },
-  {
-    label: '奶油治愈风',
-    subtitle: '温润、柔和，棉花糖般的触感',
-    image:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuCGBHYgn-Q1PBKYM9QJ58i9LkR9OZ9NixL6gb-i5G12kfk_oiwNHYVKwhJPwnUg17u2Wf2PeGpohSx6_4BC9KLtWwfdDR96eidDWRJdUjGbZILxgSRTFGjwoIYSMOz2kjQCjAX-rQ9P_1gl6aD9MjKgT1S0e-A51m6lYBawBYR3z44USz6yQZrUpIyWGAaQq5d0QW5Qy0Ncw9gCbiLMzqdWIuwffHP71z5rOzRh1xO3DsJn7kIp7Lk5VSAJ1Gy5fJtcV1M_DstJojzd',
-  },
-  {
     label: '现代简约风',
     subtitle: '干练、纯粹，理性的空间秩序',
     image:
@@ -50,10 +38,10 @@ const styleOptions: StyleOption[] = [
       'https://lh3.googleusercontent.com/aida-public/AB6AXuCOw48FA2MkkkurCD9D_f3JzSeuSQzJwDHtv3Kpd5szi8-STBay3MKi-cb3r9EuKTkizQMsq4tIkKSz--O4jk5N-hvnYAcCIYTw9-2CKnMAxL2DvP9ngcJckfmDuU5MC5lF8bJ16nO6Zw015FVNgQyfRNpMeR0PWoRfCTO3w4pZvZ9OTCtYg1Japnm3t4BQCEK8Iz7xHGb6SIeoKVhB42yAc3njHXrqps7Syt22jXjWo0dR-yW4ofhzinKKMAwUuWjYs_93rVpkvVNm',
   },
   {
-    label: '氛围感深色风',
-    subtitle: '静谧、私藏，独处的深邃魅力',
+    label: '小红书爆款风',
+    subtitle: '温暖、治愈，让人想住进去的家',
     image:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuCnwVnoz9v-CDFD2RYGaDR-BXJiEwM06F_aTTxlwErR-wmkEf0rSOX_phhCJKVP-_4eZykr-wCHvSfpCiqnmkJ7ME7XSwFz5hAq4ab_wvyy4r1E_Tfob052hCLlPMNTf1_LSOmgrkyQwlpyycPaTzn9eSx7tWWzlM-8VB7udupRWf7-EbEAd7yoC4fh5ytvwzru_dKsLzUVja_D9xr9UVROpg9X36iGqmdrZZF7XIsJFbcFnm5LVnWRv6MZO1CQUek49A_MZWLzzHmM',
+      'https://lh3.googleusercontent.com/aida-public/AB6AXuCNRim0qBNvMc8HZedHQJ8wkhvPGJO0Ab_4fHEfxpCHojWkz3uWz4DGUNDvzqpeH6bUbjJSdXivyM8A3lJKSvopiuAe3sJ1YdaYykt2QWWwHr2j_9FdR-8bhu8IFDMy7m1f9mSMKRk9owFqy7AIknWURwWs2tYGZZR04xnW7QUhomYaDAVoPZlZO9fYW7s_zcaFubL8FBrvh8lKZWY-JP_DaSoZznz2OwDZpbqBspbAarYqe9WiT8u_DlodNPcPsPtvtxMdp5DhMB3d',
   },
 ];
 
