@@ -139,6 +139,9 @@ function QAPanel() {
   });
   const [templateName, setTemplateName] = useState('');
 
+  // ── Repeat count ──
+  const [repeatCount, setRepeatCount] = useState(1);
+
   // ── Running state ──
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
@@ -191,9 +194,11 @@ function QAPanel() {
     if (!imageDataUrl || selStyles.size === 0) return;
     setRunning(true);
 
-    const combos: { style: string; boundaries: string[]; preferences: string[] }[] = [];
+    const combos: { style: string; boundaries: string[]; preferences: string[]; round: number }[] = [];
     for (const style of selStyles) {
-      combos.push({ style, boundaries: [...selBounds], preferences: [...selPrefs] });
+      for (let round = 1; round <= repeatCount; round++) {
+        combos.push({ style, boundaries: [...selBounds], preferences: [...selPrefs], round });
+      }
     }
 
     setProgress({ done: 0, total: combos.length });
@@ -248,7 +253,7 @@ function QAPanel() {
             status: 'done' as const,
             imageUrl: data.imageUrl,
             durationMs: elapsed,
-            promptSummary: `style=${combo.style} bounds=[${combo.boundaries.join(',')}] prefs=[${combo.preferences.join(',')}]`,
+            promptSummary: `#${combo.round} style=${combo.style} bounds=[${combo.boundaries.join(',')}] prefs=[${combo.preferences.join(',')}]`,
           } : x));
         } else {
           setResults((prev) => prev.map((x) => x.id === r.id ? {
@@ -381,12 +386,24 @@ function QAPanel() {
 
       {/* ── Actions ── */}
       <div style={{ ...S.section, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 13, color: '#555' }}>每组重复</span>
+          <input
+            type="number"
+            min={1}
+            max={10}
+            value={repeatCount}
+            onChange={(e) => setRepeatCount(Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))}
+            style={{ width: 48, padding: '5px 8px', borderRadius: 6, border: '1px solid #d0c8c0', fontSize: 13, textAlign: 'center' as const }}
+          />
+          <span style={{ fontSize: 13, color: '#555' }}>次</span>
+        </div>
         <button
           style={{ ...S.btn(true), opacity: running || !imageDataUrl || selStyles.size === 0 ? 0.5 : 1 }}
           disabled={running || !imageDataUrl || selStyles.size === 0}
           onClick={runBatch}
         >
-          {running ? `生成中 ${progress.done}/${progress.total}...` : `批量生成 (${selStyles.size} 组)`}
+          {running ? `生成中 ${progress.done}/${progress.total}...` : `批量生成 (${selStyles.size} 风格 × ${repeatCount} 次 = ${selStyles.size * repeatCount} 组)`}
         </button>
         <button style={S.btn()} onClick={exportJSON}>导出 JSON</button>
         <button style={S.btn()} onClick={exportCSV}>导出 CSV</button>
