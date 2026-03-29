@@ -51,14 +51,44 @@ function toCSV(results: TestResult[]): string {
   const headers = [
     'testCaseId', 'selectedStyle', 'selectedBoundaries', 'selectedPreferences',
     'status', 'durationMs', 'overallScore', 'styleAccuracy', 'boundaryCompliance',
-    'preferenceReflection', 'note', 'createdAt',
+    'preferenceReflection', 'note', 'imageFile', 'createdAt',
   ];
-  const rows = results.map((r) => [
-    r.id, r.style, r.boundaries.join(';'), r.preferences.join(';'),
-    r.status, r.durationMs, r.overallScore, r.styleAccuracy, r.boundaryCompliance,
-    r.preferenceReflection, `"${(r.note || '').replace(/"/g, '""')}"`, r.createdAt,
-  ].join(','));
+  const rows = results.map((r) => {
+    const imgFile = r.imageUrl ? `${r.id}.png` : '';
+    return [
+      r.id, r.style, `"${r.boundaries.join(';')}"`, `"${r.preferences.join(';')}"`,
+      r.status, r.durationMs, r.overallScore, r.styleAccuracy, r.boundaryCompliance,
+      r.preferenceReflection, `"${(r.note || '').replace(/"/g, '""')}"`, imgFile, r.createdAt,
+    ].join(',');
+  });
   return [headers.join(','), ...rows].join('\n');
+}
+
+async function exportZip(results: TestResult[]) {
+  // Dynamically import JSZip
+  const { default: JSZip } = await import('jszip');
+  const zip = new JSZip();
+
+  // Add CSV
+  zip.file('qa-results.csv', toCSV(results));
+
+  // Add images
+  for (const r of results) {
+    if (!r.imageUrl) continue;
+    // Convert data URL to blob
+    const base64 = r.imageUrl.split(',')[1];
+    if (base64) {
+      zip.file(`${r.id}.png`, base64, { base64: true });
+    }
+  }
+
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `qa-results-${Date.now()}.zip`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 // ─── Styles (inline, minimal) ───────────────────────────────────────────────
@@ -407,6 +437,7 @@ function QAPanel() {
         </button>
         <button style={S.btn()} onClick={exportJSON}>导出 JSON</button>
         <button style={S.btn()} onClick={exportCSV}>导出 CSV</button>
+        <button style={S.btn()} onClick={() => exportZip(results)}>导出 ZIP（含图片+评价）</button>
         <button style={{ ...S.btn(), color: '#c00' }} onClick={clearResults}>清空结果</button>
         <span style={{ fontSize: 12, color: '#999' }}>共 {results.length} 条结果</span>
       </div>
