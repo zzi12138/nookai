@@ -100,22 +100,22 @@ export const STYLE_RULES: Record<string, StyleRules> = {
       '2-3 cushions in mixed textures (corduroy, knit, linen) — coordinated tones but not matching',
       'Wall art: 1-2 framed prints or posters with strong graphic identity (Yves Klein, Matisse, botanical illustration, abstract). Black or slim wood frames.',
       'One woven rattan pouf or seating cushion near seating area',
-      'One grounding rug under the seating zone — can be bold solid color (deep navy, charcoal) or natural jute/wool',
+      'One area rug to ground the seating zone — bold solid color (deep navy, charcoal) or natural jute/wool',
     ],
     composition: [
       'One clear hero zone with most visual detail and light: sofa corner with pendant + plant + lamp, or desk area with pendant + art + backlight',
       'Layered 3-plane depth: foreground (plant leaf edge, lamp, or table corner) + midground (main furniture, rug) + background (wall art, pendant, backlit wall)',
       'Intentional asymmetry — slightly more weight on one side, natural not staged',
       'Surfaces are curated: 3-5 items max per surface, each object has purpose. Generous empty space between groups.',
-      'Mix of material textures visible: glass + dark wood + metal + woven + ceramic — material contrast creates richness',
-      'The feeling is "design-conscious person lives here" — every piece looks chosen, not random',
+      'Mix of material textures visible: glass + wood + metal + woven + ceramic — material contrast creates richness',
+      'The feeling is "design-conscious person lives here" — every added piece looks chosen, not random',
     ],
     color: [
-      'Base: clean neutral walls (white, warm white, light gray) as backdrop',
-      'Furniture anchor: one or two bold dark pieces — black sofa, dark walnut table, charcoal shelf. These ground the room.',
+      'Base: keep existing wall color as backdrop — do not repaint',
+      'Work with existing furniture colors — add throws, cushions, and accessories to shift the palette',
       'Accent: warm brass/gold from pendant and frames, deep green from plants, warm amber from backlight on walls',
-      'Allow ONE bold color statement: a deep navy/indigo rug, a cobalt blue poster, or a rich terracotta piece — this gives the room personality',
-      'Overall: warm despite neutral base — warmth comes from layered lighting, wood tones, and plant life. Never cold or sterile.',
+      'Allow ONE bold color element via accessories: a deep navy rug, a colorful art print, or a rich-toned throw',
+      'Overall: warm despite any neutral base — warmth comes from layered lighting, wood tones, and plant life. Never cold or sterile.',
     ],
   },
 };
@@ -273,18 +273,27 @@ export function buildPrompt(
 
   const sections: string[] = [];
 
-  // 1. Base room lock
-  sections.push(`[BASE]\n${BASE_ROOM_LOCK}`);
+  // 1. DECLUTTER FIRST — highest priority, must be at the top
+  sections.push(`=== STEP 0: CLEAN THE ROOM FIRST (HIGHEST PRIORITY) ===\n${DECLUTTER}`);
 
-  // 2. Declutter
-  sections.push(`[DECLUTTER]\n${DECLUTTER}`);
+  // 2. Base room lock
+  sections.push(`=== ROOM LOCK ===\n${BASE_ROOM_LOCK}`);
 
   // 3. Style rules
-  sections.push(`[STYLE: ${theme}]
+  // 3. BOUNDARIES — before style, so constraints override style suggestions
+  sections.push(`=== ABSOLUTE CONSTRAINTS (override ALL style rules below) ===
+If any style rule below conflicts with these constraints, IGNORE the style rule.
+${boundaryBlock}`);
+
+  // 4. Style rules
+  sections.push(`=== STYLE: ${theme} ===
+Apply these rules ONLY where they do not conflict with the constraints above.
+Do NOT replace or swap existing furniture — only ADD soft furnishings on top of what exists.
+
 Lighting:
 ${style.lighting.map((r) => `- ${r}`).join('\n')}
 
-Soft furnishing:
+Soft furnishing (ADD only, do not replace existing items):
 ${style.softFurnishing.map((r) => `- ${r}`).join('\n')}
 
 Composition:
@@ -293,20 +302,25 @@ ${style.composition.map((r) => `- ${r}`).join('\n')}
 Color:
 ${style.color.map((r) => `- ${r}`).join('\n')}`);
 
-  // 4. Boundary rules
-  sections.push(`[BOUNDARIES]\n${boundaryBlock}`);
-
   // 5. Preference rules
   if (preferenceBlock || freeTextBlock) {
     const parts = [preferenceBlock, freeTextBlock].filter(Boolean).join('\n');
-    sections.push(`[PREFERENCES]\n${parts}`);
+    sections.push(`=== PREFERENCES ===\n${parts}`);
   }
 
   // 6. Bottom aesthetic rules
-  sections.push(`[AESTHETIC FLOOR]\n${BOTTOM_AESTHETIC}`);
+  sections.push(`=== AESTHETIC FLOOR ===\n${BOTTOM_AESTHETIC}`);
 
-  // 7. Negative
-  sections.push(`[NEGATIVE]\n${BASE_NEGATIVE}${dynamicNegatives ? `, ${dynamicNegatives}` : ''}`);
+  // 7. REPEAT DECLUTTER — reinforce at end (models weight end of prompt heavily)
+  sections.push(`=== FINAL CHECK (MUST PASS) ===
+Before outputting the final image, verify:
+1. ALL trash, plastic bags, scattered clothes, shoes, messy bedding have been REMOVED
+2. The room looks CLEAN and TIDY — not styled on top of mess
+3. ALL user constraints above are respected — no replaced furniture, no modified walls, etc.
+If any of these fail, redo the image.`);
+
+  // 8. Negative
+  sections.push(`=== NEGATIVE (must avoid) ===\n${BASE_NEGATIVE}${dynamicNegatives ? `, ${dynamicNegatives}` : ''}`);
 
   return sections.join('\n\n');
 }
