@@ -53,29 +53,44 @@ function safeParseJson<T>(text: string): T | null {
 
 function getPrompt(theme: string, hasBefore: boolean) {
   return `
-你是一名专业软装购物助手。
+Analyze the AFTER image${hasBefore ? ' and compare with BEFORE' : ''}.
 
-任务：仔细观察【效果图 AFTER】，列出图中所有可在电商平台购买的软装单品。
-${hasBefore ? '对比【原图 BEFORE】，只列出效果图中新添置的软装；原图中已有的大型固定家具（床架/衣柜/沙发本身）无需列出。' : '不要列出建筑结构（墙/地板/天花板）或大型固定家具本身（床架/衣柜/沙发主体）。'}
+Task:
+List ONLY newly added major visual items that significantly affect the room atmosphere.
 
-识别规则（严格执行）：
-1. 只输出效果图中实际可见的物件，绝不虚构，绝不凭空添加。
-2. 逐类检查，不要遗漏：
-   - 灯具：落地灯、台灯、床头灯、壁灯、灯串——每盏单独列出
-   - 布艺：所有抱枕/靠枕合并为一条（名称如”装饰抱枕”，quantity填实际个数，不要拆成多条）；盖毯/披毯单独一条；窗帘单独一条；床单+被套+枕套算一组”床品套装”
-   - 地毯：效果图中如有地毯或铺地织物，必须列出（标记为 Must-have 或 Recommended）；若看到地面有纹理/织物感也要标注；注明形状（方形/圆形/长条）
-   - 绿植：大叶植物、小盆栽、多肉、花束——各自单独列出
-   - 墙面装饰：挂画、海报、装饰镜
-   - 摆件：蜡烛、香薰、花瓶、小雕塑、托盘——逐一列出
-3. 同类物件若有多件（如两盏台灯），分别输出一条。
-4. 每个物件必须有 anchor（均为 0-100 百分比）：centerX/centerY 为中心点，left/top/width/height 为边界框，confidence 为可见度（清晰可见 0.8+，部分遮挡 0.55-0.75）。
-5. category 必须从以下枚举中选一个：灯具 | 布艺 | 地毯 | 绿植 | 墙面装饰 | 摆件
-6. necessity：Must-have = 效果图核心物件；Recommended = 明显可见但可替代；Optional = 点缀。
-7. 价格区间参考中国电商实际，名称用简洁中文（如”暖光落地灯”而非”灯”）。
+Focus ONLY on:
+- lighting (floor lamp, table lamp, wall lamp, string lights)
+- rugs
+- wall decor (painting, poster, mirror)
+- small movable furniture (chair, side table, shelf)
+- visual devices (projector, screen)
 
-风格参考：${theme || '日式原木风'}
+Ignore:
+- cushions, bedding, curtains
+- small plants
+- small decorative objects
 
-返回 JSON，格式严格如下：
+Rules:
+- Only include clearly visible items
+- No guessing or hallucination
+- Each item must exist in AFTER${hasBefore ? ' but not BEFORE' : ''}
+- If multiple of the same type (e.g. two table lamps), list each separately
+- Names in Chinese (e.g. “暖光落地灯”)
+- Price ranges based on Chinese e-commerce
+
+Output per item:
+- name (Chinese)
+- category: 灯具 | 地毯 | 墙面装饰 | 功能家具
+- quantity
+- necessity: Must-have / Recommended
+- priceMin, priceMax
+- placement (Chinese, e.g. “沙发右侧”)
+- reason (one short Chinese sentence)
+- anchor: { centerX, centerY, left, top, width, height, confidence } (all 0-100 percentage)
+
+Style: ${theme || '日式原木风'}
+
+Return JSON:
 {
   “summary”: “一句简短中文总结”,
   “items”: [

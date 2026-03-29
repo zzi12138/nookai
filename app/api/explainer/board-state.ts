@@ -239,7 +239,8 @@ function inferCategory(name: string, aiCategory?: string): Category {
     if (c === '墙面装饰' || /wall/i.test(c)) return 'Wall decor';
     if (c === '绿植' || /plant/i.test(c)) return 'Plants';
     if (c === '布艺' || /bedding|textile/i.test(c)) return 'Bedding & soft textiles';
-    if (c === '摆件' || /accessory|functional/i.test(c)) return 'Functional accessories';
+    if (c === '功能家具' || /furniture|chair|table|shelf/i.test(c)) return 'Functional accessories';
+    if (c === '摆件' || /accessory/i.test(c)) return 'Functional accessories';
   }
 
   // Fallback: keyword match on Chinese item name
