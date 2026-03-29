@@ -26,12 +26,6 @@ type StyleOption = {
 
 const styleOptions: StyleOption[] = [
   {
-    label: '现代简约风',
-    subtitle: '干练、纯粹，理性的空间秩序',
-    image:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuAZTFYZsnrja1Kpt6unx6ZlHo6Trt01Bnkxkbk_p1Rbh75ClKtyjKMVWxh5awxX6taJrri04H_sr4vd7GrksXpbW2jm7LHjxTAfB_24Fv-Dmp1Nb-GSZvMnfdSM1HkCa2RyG2idZxuYTV_SS4CZdf1G_0PJfj9wrt7Tfkr2Bf-fNExqD3eMcvmTI5aS5HXwsuk-aUkrggwHDEa9fSJcATVcaMpI0sog5Nbu90MKlkVUpSNz0m7PlxxgoKIksycgH44NBFj_nrQj_3ib',
-  },
-  {
     label: '轻复古文艺风',
     subtitle: '经典、格调，电影质感的时光',
     image:
@@ -42,6 +36,12 @@ const styleOptions: StyleOption[] = [
     subtitle: '温暖、治愈，让人想住进去的家',
     image:
       'https://lh3.googleusercontent.com/aida-public/AB6AXuCNRim0qBNvMc8HZedHQJ8wkhvPGJO0Ab_4fHEfxpCHojWkz3uWz4DGUNDvzqpeH6bUbjJSdXivyM8A3lJKSvopiuAe3sJ1YdaYykt2QWWwHr2j_9FdR-8bhu8IFDMy7m1f9mSMKRk9owFqy7AIknWURwWs2tYGZZR04xnW7QUhomYaDAVoPZlZO9fYW7s_zcaFubL8FBrvh8lKZWY-JP_DaSoZznz2OwDZpbqBspbAarYqe9WiT8u_DlodNPcPsPtvtxMdp5DhMB3d',
+  },
+  {
+    label: '质感氛围风',
+    subtitle: '克制、设计感，博主的精致生活',
+    image:
+      'https://lh3.googleusercontent.com/aida-public/AB6AXuAZTFYZsnrja1Kpt6unx6ZlHo6Trt01Bnkxkbk_p1Rbh75ClKtyjKMVWxh5awxX6taJrri04H_sr4vd7GrksXpbW2jm7LHjxTAfB_24Fv-Dmp1Nb-GSZvMnfdSM1HkCa2RyG2idZxuYTV_SS4CZdf1G_0PJfj9wrt7Tfkr2Bf-fNExqD3eMcvmTI5aS5HXwsuk-aUkrggwHDEa9fSJcATVcaMpI0sog5Nbu90MKlkVUpSNz0m7PlxxgoKIksycgH44NBFj_nrQj_3ib',
   },
 ];
 

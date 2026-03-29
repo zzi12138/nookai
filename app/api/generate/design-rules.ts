@@ -23,35 +23,6 @@ export type PreferenceRule = {
 // ─── PART 1: Style Rule Library ─────────────────────────────────────────────
 
 export const STYLE_RULES: Record<string, StyleRules> = {
-  现代简约风: {
-    lighting: [
-      'Primary: sleek geometric floor lamp or linear pendant (warm white ~3000K)',
-      'Accent: minimal task lamp (thin LED bar or Anglepoise-style)',
-      'Mood: indirect LED strip along shelf edge or behind furniture for depth',
-      'Clean light-shadow contrast — graphic, precise, not harsh',
-      'Overall tone: warm precision, architectural clarity',
-    ],
-    softFurnishing: [
-      'Monochrome cushions: black, white, charcoal, or single muted accent',
-      'Simple geometric rug in neutral tone',
-      'Minimal wall art: one large piece or clean small grid',
-      'No decorative clutter — every object functional or intentional',
-      'One structural green plant (snake plant, fiddle leaf, or bird of paradise)',
-    ],
-    composition: [
-      'Strong grid alignment — objects follow invisible lines',
-      'Generous empty space between objects — breathing room is key',
-      'One statement piece per zone (lamp, art, or plant)',
-      'Symmetric or deliberately asymmetric — no random placement',
-    ],
-    color: [
-      'Dominant: white, light gray, off-white',
-      'Secondary: charcoal, matte black',
-      'Accent: warm wood tone or single muted color (terracotta, sage)',
-      'Max 2-3 color families, high contrast ratio',
-    ],
-  },
-
   轻复古文艺风: {
     lighting: [
       'Primary: vintage brass or Edison-bulb floor/table lamp casting warm amber pools',
@@ -111,6 +82,40 @@ export const STYLE_RULES: Record<string, StyleRules> = {
       'Accent: natural green (plants), warm brass/gold (lamp, frame), soft rust or mustard',
       'Overall palette feels warm, earthy, cohesive — like a Xiaohongshu saved photo',
       'No cool gray, no bright neon, no pure white — everything leans warm',
+    ],
+  },
+
+  质感氛围风: {
+    lighting: [
+      'MUST have one statement pendant light as the room\'s visual signature — paper ball pendant (Noguchi-style), dome pendant, PH5 pendant, or large round fabric shade',
+      'Accent: one warm table lamp with small shade near sofa/desk (~2700K), creating a focused warm pool on the surface',
+      'Mood: warm amber LED backlight placed behind a large plant or behind furniture — casts a golden glow wash on the wall. Add 1-2 candles on coffee/side table.',
+      'At least 2-3 distinct light sources must be visible in the final image — pendant + table lamp + backlight/candle',
+      'Light creates visible warm pools on surfaces — golden glow on walls behind plants, warm reflections on glass and dark wood',
+    ],
+    softFurnishing: [
+      'One large statement plant: monstera, fiddle-leaf fig, or bird of paradise in a simple dark ceramic planter — placed in a corner near a warm backlight so leaves cast shadows on wall',
+      'Coffee/side table vignette: 3-5 items grouped with intention — candle + stacked art/design books + one small object (whiskey glass, ceramic piece, fruit bowl). Curated, not cluttered.',
+      'Throw blanket: one quality throw draped casually on sofa arm — not folded neatly, relaxed but intentional',
+      '2-3 cushions in mixed textures (corduroy, knit, linen) — coordinated tones but not matching',
+      'Wall art: 1-2 framed prints or posters with strong graphic identity (Yves Klein, Matisse, botanical illustration, abstract). Black or slim wood frames.',
+      'One woven rattan pouf or seating cushion near seating area',
+      'One grounding rug under the seating zone — can be bold solid color (deep navy, charcoal) or natural jute/wool',
+    ],
+    composition: [
+      'One clear hero zone with most visual detail and light: sofa corner with pendant + plant + lamp, or desk area with pendant + art + backlight',
+      'Layered 3-plane depth: foreground (plant leaf edge, lamp, or table corner) + midground (main furniture, rug) + background (wall art, pendant, backlit wall)',
+      'Intentional asymmetry — slightly more weight on one side, natural not staged',
+      'Surfaces are curated: 3-5 items max per surface, each object has purpose. Generous empty space between groups.',
+      'Mix of material textures visible: glass + dark wood + metal + woven + ceramic — material contrast creates richness',
+      'The feeling is "design-conscious person lives here" — every piece looks chosen, not random',
+    ],
+    color: [
+      'Base: clean neutral walls (white, warm white, light gray) as backdrop',
+      'Furniture anchor: one or two bold dark pieces — black sofa, dark walnut table, charcoal shelf. These ground the room.',
+      'Accent: warm brass/gold from pendant and frames, deep green from plants, warm amber from backlight on walls',
+      'Allow ONE bold color statement: a deep navy/indigo rug, a cobalt blue poster, or a rich terracotta piece — this gives the room personality',
+      'Overall: warm despite neutral base — warmth comes from layered lighting, wood tones, and plant life. Never cold or sterile.',
     ],
   },
 };
