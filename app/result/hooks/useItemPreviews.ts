@@ -60,7 +60,8 @@ type PreviewableItem = {
 
 const MAX_ATTEMPTS = 2;
 const TIMEOUT_MS = 65_000;
-const CONCURRENCY = 3;
+const CONCURRENCY = 1;
+const DELAY_BETWEEN_MS = 1_500; // avoid Gemini rate limits
 
 async function mapWithConcurrency<T, R>(
   values: T[],
@@ -144,7 +145,11 @@ export function useItemPreviews(
       const itemTraces: ItemPreviewTrace[] = [];
       const costs: CostEntry[] = [];
 
-      await mapWithConcurrency(items, CONCURRENCY, async (item) => {
+      await mapWithConcurrency(items, CONCURRENCY, async (item, index) => {
+        // Stagger requests to avoid Gemini rate limits
+        if (index > 0) {
+          await new Promise((r) => setTimeout(r, DELAY_BETWEEN_MS));
+        }
         const itemStart = Date.now();
 
         // Set loading
