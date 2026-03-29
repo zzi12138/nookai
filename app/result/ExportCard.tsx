@@ -116,7 +116,7 @@ export function ExportCard({ theme, before, after, summary, items, previewImages
     <div style={{
       width: W,
       background: '#fff8f2',
-      display: 'inline-flex',
+      display: 'flex',
       flexDirection: 'column' as const,
       fontFamily: '-apple-system, "PingFang SC", "Hiragino Sans GB", sans-serif',
     }}>
@@ -144,7 +144,7 @@ export function ExportCard({ theme, before, after, summary, items, previewImages
       </div>
 
       {/* ── Before / After ─────────────────────────────────────────────────── */}
-      <div style={{ padding: '36px 52px 0', boxSizing: 'border-box' as const }}>
+      <div style={{ padding: '24px 52px 0', boxSizing: 'border-box' as const }}>
         {/* Section label */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
           <div style={{ width: 3, height: 14, borderRadius: 2, background: '#8f4d2c' }} />
@@ -205,12 +205,12 @@ export function ExportCard({ theme, before, after, summary, items, previewImages
 
       {/* ── Shopping list ───────────────────────────────────────────────────── */}
       {items.length > 0 && (
-        <div style={{ padding: '0 52px 44px', boxSizing: 'border-box' as const }}>
+        <div style={{ padding: '0 52px 28px', boxSizing: 'border-box' as const }}>
           {/* Section label */}
           <div style={{
             display: 'flex', alignItems: 'center', gap: 10,
             borderTop: '1px solid #e0d0c0',
-            marginTop: 28, paddingTop: 24, marginBottom: 18,
+            marginTop: 16, paddingTop: 14, marginBottom: 12,
           }}>
             <div style={{ width: 3, height: 14, borderRadius: 2, background: '#8f4d2c' }} />
             <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 3, color: '#8f4d2c', textTransform: 'uppercase' as const }}>

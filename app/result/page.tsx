@@ -756,7 +756,8 @@ function ResultPageContent() {
       el.style.left = '0';
       el.style.top = '0';
       el.style.zIndex = '9999';
-      await new Promise((r) => setTimeout(r, 120));
+      el.style.position = 'absolute';
+      await new Promise((r) => setTimeout(r, 300));
 
       const canvas = await html2canvas(el, {
         scale: 2,
@@ -766,6 +767,7 @@ function ResultPageContent() {
         logging: false,
       });
 
+      el.style.position = 'fixed';
       el.style.left = '-9999px';
       el.style.top = '-9999px';
       el.style.zIndex = '-1';
