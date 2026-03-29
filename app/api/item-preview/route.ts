@@ -25,43 +25,44 @@ type Payload = {
 // ─── Prompt ──────────────────────────────────────────────────────────────
 
 function buildPrompt(item: Payload['item'], hasAfterCrop: boolean) {
+  const name = item?.name || 'item';
+  const category = item?.category || 'accessory';
+  const placement = item?.placement || '';
+
   return `
-This is NOT a product generation task. This is a ZOOM-IN and ENHANCE task.
+Focus on the target object: "${name}" (${category})${placement ? ` at ${placement}` : ''}.
 
-=== TASK ===
+Input:
 ${hasAfterCrop
-    ? 'The FIRST image is a cropped region from the room photo showing the target object and its surroundings. The SECOND image is the full room for context.'
-    : 'The provided image is the full room photo.'}
+    ? '- cropped image (object region)\n- full room image (context)'
+    : '- full room image'}
 
-Focus on this specific object: "${item?.name || 'item'}" (${item?.category || 'accessory'}).
-${item?.placement ? `Location: ${item.placement}.` : ''}
+Task:
+Create a close-up view of the SAME object.
 
-Your job: Create a zoomed-in, enhanced view of THIS EXACT object as it appears in the image.
+Rules:
+- The object must stay IDENTICAL (shape, color, material, texture).
+- Keep original perspective and angle.
+- The object fills 60–80% of the frame.
+- Center it with slight breathing space.
+- Show the FULL object (no cropping).
 
-=== WHAT TO DO ===
-- Identify the target object in the provided image(s).
-- Produce a close-up view where the object fills 60-80% of the frame.
-- Center the object with a small amount of breathing room.
-- Keep the object's EXACT appearance: same shape, color, material, texture, pattern, and proportions.
-- Keep the object's original perspective and viewing angle — do NOT straighten or re-angle it.
-- Slightly soften or simplify the surrounding area so the object stands out, but keep some natural context (the surface it sits on, nearby shadows).
-- Subtly improve lighting clarity for better visibility, but keep it realistic and consistent with the room's lighting.
-- The ENTIRE object must be fully visible — no part may be cropped or cut off by the image edge.
+Enhance:
+- slightly improve clarity and lighting
+- softly reduce background distractions
+- keep natural context (surface, shadows)
 
-=== WHAT NOT TO DO (CRITICAL) ===
-- Do NOT invent, redesign, or generate a new object.
-- Do NOT create a studio product shot with a clean white/gray background.
-- Do NOT replace the object with a different style, color, or design.
-- Do NOT change the viewing angle or perspective of the object.
-- Do NOT add any objects not in the original image.
-- Do NOT show the full room — this should be a tight close-up.
-- Do NOT add text, labels, watermarks, borders, or arrows.
+Do NOT:
+- redesign or replace the object
+- generate a new product
+- change angle or structure
+- create studio background
+- include unrelated objects
+- show full room
+- add text or overlays
 
-=== VISUAL IDENTITY CHECK ===
-The output object must be visually identical to the one in the original image.
-If someone compared the output side-by-side with the source image, they should immediately recognize it as the same object — same color, same form, same material, same details.
-
-The result should look like a zoomed-in, enhanced crop of the SAME object from the original room — not a new product.
+Result:
+a clean, zoomed-in, enhanced view of the SAME object.
 `.trim();
 }
 
