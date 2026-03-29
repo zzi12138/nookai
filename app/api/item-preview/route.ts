@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import OpenAI from 'openai';
-import { toBase64File } from './to-base64-file';
+import { generateGeminiImageFromReferences } from '../../lib/server/gemini-image';
 import { estimateCost, type CostEntry } from '../../lib/server/cost-ledger';
 
 export const runtime = 'nodejs';
@@ -66,12 +65,6 @@ The result should look like a zoomed-in, enhanced crop of the SAME object from t
 `.trim();
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────
-
-function stripDataUrl(value: string) {
-  return value.includes(',') ? value.split(',')[1] : value;
-}
-
 // ─── Route ───────────────────────────────────────────────────────────────
 
 export async function POST(req: Request) {
@@ -85,43 +78,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing item or afterImage' }, { status: 400 });
     }
 
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json({ error: 'Missing OPENAI_API_KEY' }, { status: 500 });
-    }
-
-    const openai = new OpenAI({ apiKey });
     const hasAfterCrop = Boolean(afterCrop);
     const prompt = buildPrompt(item, hasAfterCrop);
 
-    // Build image inputs: afterCrop first (primary), then full afterImage
-    const images = [];
-    if (afterCrop) {
-      images.push(await toBase64File(stripDataUrl(afterCrop), 'after-crop.png'));
-    }
-    images.push(await toBase64File(stripDataUrl(afterImage), 'after-image.png'));
+    // Build image list: afterCrop first (primary), then full afterImage
+    const images: string[] = [];
+    if (afterCrop) images.push(afterCrop);
+    images.push(afterImage);
 
-    const result = await openai.images.edit({
-      model: 'gpt-image-1-mini',
-      image: images.length === 1 ? images[0] : images,
-      prompt,
-      quality: 'low',
-      size: '1024x1024',
-    });
-
-    const b64 = result.data?.[0]?.b64_json;
-    if (!b64) {
-      return NextResponse.json({ error: 'No image data returned from OpenAI' }, { status: 500 });
-    }
-
-    const previewImage = `data:image/png;base64,${b64}`;
+    const previewImage = await generateGeminiImageFromReferences(images, prompt);
 
     // Cost estimation
+    const model = process.env.GEMINI_IMAGE_MODEL || 'gemini-2.5-flash-image';
     const cost = estimateCost({
       api: 'item-preview',
-      model: 'gpt-image-1-mini',
+      model,
       inputImages: hasAfterCrop ? 2 : 1,
-      inputImageAvgSize: 800,
+      inputImageAvgSize: hasAfterCrop ? 500 : 800,
       promptLength: prompt.length,
       outputImages: 1,
     });
