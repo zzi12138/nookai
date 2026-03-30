@@ -214,7 +214,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing API key' }, { status: 500 });
     }
 
-    const model = process.env.GEMINI_TEXT_MODEL || 'gemini-3.1-flash';
+    const model = process.env.GEMINI_TEXT_MODEL || 'gemini-3.0-flash';
     const prompt = buildPlanPrompt();
     const base64Image = stripDataUrl(image);
 
