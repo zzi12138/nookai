@@ -5,10 +5,6 @@ import {
   ArrowLeft,
   ArrowRight,
   Cat,
-  Check,
-  CheckCircle2,
-  Layers3,
-  Palette,
   Sparkles,
   UploadCloud,
   UserCircle2,
@@ -19,37 +15,8 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { saveResult } from './lib/imageStore';
 import type { PlanningPackage, DynamicQuestion } from './api/plan/route';
 
-type StyleOption = {
-  label: string;
-  subtitle: string;
-  image: string;
-};
-
-const styleOptions: StyleOption[] = [
-  {
-    label: '轻复古文艺风',
-    subtitle: '经典、格调，电影质感的时光',
-    image:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuCOw48FA2MkkkurCD9D_f3JzSeuSQzJwDHtv3Kpd5szi8-STBay3MKi-cb3r9EuKTkizQMsq4tIkKSz--O4jk5N-hvnYAcCIYTw9-2CKnMAxL2DvP9ngcJckfmDuU5MC5lF8bJ16nO6Zw015FVNgQyfRNpMeR0PWoRfCTO3w4pZvZ9OTCtYg1Japnm3t4BQCEK8Iz7xHGb6SIeoKVhB42yAc3njHXrqps7Syt22jXjWo0dR-yW4ofhzinKKMAwUuWjYs_93rVpkvVNm',
-  },
-  {
-    label: '小红书爆款风',
-    subtitle: '温暖、治愈，让人想住进去的家',
-    image:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuCNRim0qBNvMc8HZedHQJ8wkhvPGJO0Ab_4fHEfxpCHojWkz3uWz4DGUNDvzqpeH6bUbjJSdXivyM8A3lJKSvopiuAe3sJ1YdaYykt2QWWwHr2j_9FdR-8bhu8IFDMy7m1f9mSMKRk9owFqy7AIknWURwWs2tYGZZR04xnW7QUhomYaDAVoPZlZO9fYW7s_zcaFubL8FBrvh8lKZWY-JP_DaSoZznz2OwDZpbqBspbAarYqe9WiT8u_DlodNPcPsPtvtxMdp5DhMB3d',
-  },
-  {
-    label: '质感氛围风',
-    subtitle: '克制、设计感，博主的精致生活',
-    image:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuAZTFYZsnrja1Kpt6unx6ZlHo6Trt01Bnkxkbk_p1Rbh75ClKtyjKMVWxh5awxX6taJrri04H_sr4vd7GrksXpbW2jm7LHjxTAfB_24Fv-Dmp1Nb-GSZvMnfdSM1HkCa2RyG2idZxuYTV_SS4CZdf1G_0PJfj9wrt7Tfkr2Bf-fNExqD3eMcvmTI5aS5HXwsuk-aUkrggwHDEa9fSJcATVcaMpI0sog5Nbu90MKlkVUpSNz0m7PlxxgoKIksycgH44NBFj_nrQj_3ib',
-  },
-];
-
-const TOTAL_STEPS = 7;
-const stepTitles = ['欢迎', '选择风格', '上传照片', 'AI 分析中', '个性化选择', '确认方案', '生成中'];
-
-const constraintOptions = ['不动墙面', '不替换家具', '不改动布局', '不改门窗', '不改吊顶', '不增加人工光源'];
+const TOTAL_STEPS = 5;
+const stepTitles = ['欢迎', '上传照片', 'AI 分析中', '个性化选择', '确认方案'];
 
 const loadingLines = ['正在理解你的风格偏好...', '正在生成改造效果图...', '正在整理购物指南...'];
 
@@ -96,8 +63,6 @@ export default function Page() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [step, setStep] = useState(1);
-  const [selectedStyle, setSelectedStyle] = useState(styleOptions[0].label);
-  const [selectedConstraints, setSelectedConstraints] = useState<string[]>(['不动墙面', '不替换家具', '不改动布局']);
 
   const [previewUrl, setPreviewUrl] = useState('');
   const [imageBase64, setImageBase64] = useState('');
@@ -132,18 +97,6 @@ export default function Page() {
     return () => window.clearInterval(timer);
   }, [isLoading]);
 
-  const toggleValue = (
-    value: string,
-    list: string[],
-    setter: (updater: (prev: string[]) => string[]) => void
-  ) => {
-    if (list.includes(value)) {
-      setter((prev) => prev.filter((item) => item !== value));
-      return;
-    }
-    setter((prev) => [...prev, value]);
-  };
-
   const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -168,17 +121,13 @@ export default function Page() {
     if (!imageBase64) return;
     setIsPlanLoading(true);
     setPlanError('');
-    setStep(4); // "AI 分析中"
+    setStep(3); // "AI 分析中"
 
     try {
       const res = await fetch('/api/plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          image: imageBase64,
-          style: selectedStyle,
-          constraints: selectedConstraints,
-        }),
+        body: JSON.stringify({ image: imageBase64 }),
       });
       const data = await res.json();
       if (!res.ok || !data.planningPackage) {
@@ -186,17 +135,17 @@ export default function Page() {
       }
       setPlanningPackage(data.planningPackage);
       setDynamicAnswers({});
-      setStep(5); // Move to dynamic questions
+      setStep(4); // Move to dynamic questions
     } catch (err) {
       setPlanError(err instanceof Error ? err.message : 'AI 分析失败，请重试');
-      setStep(3); // Go back to upload
+      setStep(2); // Go back to upload
     } finally {
       setIsPlanLoading(false);
     }
   };
 
   const goNext = () => {
-    if (step === 3 && imageBase64) {
+    if (step === 2 && imageBase64) {
       // After upload, trigger AI plan
       fetchPlan();
       return;
@@ -204,9 +153,9 @@ export default function Page() {
     setStep((prev) => Math.min(TOTAL_STEPS, prev + 1));
   };
   const goPrev = () => {
-    if (step === 5) {
+    if (step === 4) {
       // From dynamic questions, go back to upload (skip AI loading step)
-      setStep(3);
+      setStep(2);
       return;
     }
     setStep((prev) => Math.max(1, prev - 1));
@@ -246,9 +195,11 @@ export default function Page() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               image: imageBase64,
-              theme: selectedStyle,
-              constraints: selectedConstraints,
+              theme: planningPackage?.designStrategy.colorDirection || 'AI推荐',
+              constraints: [],
               requirements,
+              planningPackage,
+              dynamicAnswers,
             }),
             signal: controller.signal,
           });
@@ -290,12 +241,13 @@ export default function Page() {
       } catch { /* ignore */ }
 
       try {
+        const inferredTheme = planningPackage?.designStrategy.colorDirection || 'AI推荐';
         const storedId = await saveResult({
           original: previewUrl,
           generated: data.imageUrl,
           provider: data.provider,
-          theme: selectedStyle,
-          constraints: selectedConstraints,
+          theme: inferredTheme,
+          constraints: [],
           requirements,
           evaluation: data.evaluation || '',
           suggestions: data.suggestions || '',
@@ -310,8 +262,8 @@ export default function Page() {
             original: previewUrl,
             generated: data.imageUrl,
             provider: data.provider,
-            theme: selectedStyle,
-            constraints: selectedConstraints,
+            theme: planningPackage?.designStrategy.colorDirection || 'AI推荐',
+            constraints: [],
             requirements,
             evaluation: data.evaluation || '',
             suggestions: data.suggestions || '',
@@ -395,7 +347,7 @@ export default function Page() {
                 <div className="mt-6 grid w-full max-w-3xl grid-cols-1 gap-3 text-left md:grid-cols-2">
                   <div className="space-y-2 rounded-2xl border border-[#d4c3be]/20 bg-[#fcf2e4] p-4">
                     <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#fca780]/20 text-[#8f4d2c]">
-                      <Palette className="h-4 w-4" />
+                      <Wand2 className="h-4 w-4" />
                     </div>
                     <h3 className="text-sm font-bold text-[#52372d]">软装配色方案</h3>
                     <p className="text-xs leading-relaxed text-[#504440]/70">低预算软装组合，保持租房友好。</p>
@@ -413,104 +365,19 @@ export default function Page() {
             </motion.section>
           )}
 
+          {/* Step 2: Upload photo */}
           {step === 2 && (
             <motion.section
-              key="step-2"
-              initial={{ opacity: 0, y: 24, scale: 0.98, filter: 'blur(8px)' }}
-              animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
-              exit={{ opacity: 0, y: -16, scale: 0.98, filter: 'blur(6px)' }}
-              transition={spring}
-            >
-              <div className="mb-8">
-                <span className="text-sm font-bold uppercase tracking-widest text-[#8f4d2c]">Step 02 / 06</span>
-                <h1 className="mt-1 text-4xl font-extrabold tracking-tight text-[#52372d]">选择你的理想风格</h1>
-                <p className="mt-2 text-lg text-[#504440]">点击选择一个你喜欢的空间氛围</p>
-              </div>
-
-              <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-6">
-                {styleOptions.map((option, index) => {
-                  const selected = option.label === selectedStyle;
-                  const isLarge = index === 0;
-                  const cardSpan = isLarge ? 'md:col-span-3 md:row-span-2' : 'md:col-span-3';
-                  const aspectClass = isLarge ? 'aspect-[4/5]' : index >= 3 ? 'aspect-[21/9]' : 'aspect-[16/9]';
-
-                  return (
-                    <button
-                      key={option.label}
-                      type="button"
-                      onClick={() => setSelectedStyle(option.label)}
-                      className={`group relative overflow-hidden rounded-3xl border-2 text-left transition-all duration-300 active:scale-[0.98] ${cardSpan} ${
-                        selected
-                          ? 'border-[#6b4e43] shadow-xl ring-4 ring-[#6b4e43]/10'
-                          : 'border-transparent hover:border-[#d4c3be]'
-                      }`}
-                    >
-                      <div className={`relative w-full ${aspectClass}`}>
-                        <img
-                          src={option.image}
-                          alt={option.label}
-                          loading="lazy"
-                          decoding="async"
-                          referrerPolicy="no-referrer"
-                          className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/10 to-transparent" />
-
-                        {selected && (
-                          <div className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-[#52372d] text-white">
-                            <Check className="h-4 w-4" />
-                          </div>
-                        )}
-
-                        <div className="absolute bottom-4 left-5 right-5">
-                          <h3 className={`font-bold text-white ${isLarge ? 'text-2xl' : 'text-xl'}`}>{option.label}</h3>
-                          <p className="mt-1 text-xs text-white/85">{option.subtitle}</p>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </motion.section>
-          )}
-
-          {/* Step 3: Upload photo (moved from step 6) */}
-          {step === 3 && (
-            <motion.section
-              key="step-3-upload"
+              key="step-2-upload"
               initial={{ opacity: 0, y: 24, scale: 0.98, filter: 'blur(8px)' }}
               animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
               exit={{ opacity: 0, y: -16, scale: 0.98, filter: 'blur(6px)' }}
               transition={spring}
             >
               <div className="mb-6">
-                <span className="text-sm font-bold uppercase tracking-widest text-[#8f4d2c]">Step 03 / {TOTAL_STEPS.toString().padStart(2, '0')}</span>
+                <span className="text-sm font-bold uppercase tracking-widest text-[#8f4d2c]">Step 01 / {TOTAL_STEPS.toString().padStart(2, '0')}</span>
                 <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-[#52372d]">上传房间照片</h1>
-                <p className="mt-2 text-base text-[#504440]">拍摄一张光线充足、能看清房间布局的照片</p>
-              </div>
-
-              {/* Constraint chips */}
-              <div className="mb-6 rounded-3xl bg-white p-6">
-                <h3 className="mb-3 text-sm font-bold text-[#52372d]">改造边界</h3>
-                <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
-                  {constraintOptions.map((option) => {
-                    const selected = selectedConstraints.includes(option);
-                    return (
-                      <button
-                        key={option}
-                        type="button"
-                        onClick={() => toggleValue(option, selectedConstraints, setSelectedConstraints)}
-                        className={`rounded-xl border px-3 py-2 text-xs transition ${
-                          selected
-                            ? 'border-[#52372d] bg-[#f7edde] font-semibold text-[#52372d]'
-                            : 'border-[#d4c3be] bg-[#fff8f2] text-[#504440]'
-                        }`}
-                      >
-                        {option}
-                      </button>
-                    );
-                  })}
-                </div>
+                <p className="mt-2 text-base text-[#504440]">拍摄一张光线充足、能看清房间布局的照片，AI 将为你量身设计方案</p>
               </div>
 
               <div className="mx-auto w-full max-w-3xl">
@@ -536,10 +403,10 @@ export default function Page() {
             </motion.section>
           )}
 
-          {/* Step 4: AI analyzing (loading state) */}
-          {step === 4 && (
+          {/* Step 3: AI analyzing (loading state) */}
+          {step === 3 && (
             <motion.section
-              key="step-4-analyzing"
+              key="step-3-analyzing"
               initial={{ opacity: 0, y: 24, scale: 0.98, filter: 'blur(8px)' }}
               animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
               exit={{ opacity: 0, y: -16, scale: 0.98, filter: 'blur(6px)' }}
@@ -566,18 +433,18 @@ export default function Page() {
             </motion.section>
           )}
 
-          {/* Step 5: Dynamic AI questions */}
-          {step === 5 && planningPackage && (
+          {/* Step 4: Dynamic AI questions */}
+          {step === 4 && planningPackage && (
             <motion.section
-              key="step-5-questions"
+              key="step-4-questions"
               initial={{ opacity: 0, y: 24, scale: 0.98, filter: 'blur(8px)' }}
               animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
               exit={{ opacity: 0, y: -16, scale: 0.98, filter: 'blur(6px)' }}
               transition={spring}
             >
               <div className="mb-6">
-                <span className="text-sm font-bold uppercase tracking-widest text-[#8f4d2c]">Step 05 / {TOTAL_STEPS.toString().padStart(2, '0')}</span>
-                <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-[#52372d]">为你量身定制</h1>
+                <span className="text-sm font-bold uppercase tracking-widest text-[#8f4d2c]">Step 02 / {TOTAL_STEPS.toString().padStart(2, '0')}</span>
+                <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-[#52372d]">告诉我们你的理想房间</h1>
                 <p className="mt-2 text-base text-[#504440]">AI 根据你的房间生成了以下问题，帮助精准匹配方案</p>
               </div>
 
@@ -631,17 +498,17 @@ export default function Page() {
             </motion.section>
           )}
 
-          {/* Step 6: Confirm & Generate (was step 6 upload, now just confirm) */}
-          {step === 6 && planningPackage && (
+          {/* Step 5: Confirm & Generate */}
+          {step === 5 && planningPackage && (
             <motion.section
-              key="step-6-confirm"
+              key="step-5-confirm"
               initial={{ opacity: 0, y: 24, scale: 0.98, filter: 'blur(8px)' }}
               animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
               exit={{ opacity: 0, y: -16, scale: 0.98, filter: 'blur(6px)' }}
               transition={spring}
             >
               <div className="mb-6">
-                <span className="text-sm font-bold uppercase tracking-widest text-[#8f4d2c]">Step 06 / {TOTAL_STEPS.toString().padStart(2, '0')}</span>
+                <span className="text-sm font-bold uppercase tracking-widest text-[#8f4d2c]">Step 03 / {TOTAL_STEPS.toString().padStart(2, '0')}</span>
                 <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-[#52372d]">确认你的改造方案</h1>
                 <p className="mt-2 text-base text-[#504440]">检查以下信息，确认无误后开始生成效果图</p>
               </div>
@@ -658,10 +525,6 @@ export default function Page() {
                 <div className="rounded-2xl bg-white p-5">
                   <div className="grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
                     <div>
-                      <span className="text-xs font-bold uppercase tracking-wider text-[#8f4d2c]">风格</span>
-                      <p className="mt-1 font-semibold text-[#52372d]">{selectedStyle}</p>
-                    </div>
-                    <div>
                       <span className="text-xs font-bold uppercase tracking-wider text-[#8f4d2c]">房间类型</span>
                       <p className="mt-1 font-semibold text-[#52372d]">{planningPackage.sceneAnalysis.roomType}</p>
                     </div>
@@ -673,37 +536,33 @@ export default function Page() {
                       <span className="text-xs font-bold uppercase tracking-wider text-[#8f4d2c]">灯光方案</span>
                       <p className="mt-1 text-[#504440]">{planningPackage.designStrategy.lightingApproach}</p>
                     </div>
+                    <div>
+                      <span className="text-xs font-bold uppercase tracking-wider text-[#8f4d2c]">配色方向</span>
+                      <p className="mt-1 text-[#504440]">{planningPackage.designStrategy.colorDirection}</p>
+                    </div>
                   </div>
                 </div>
 
-                {/* Constraints & answers */}
+                {/* User answers */}
+                {Object.keys(dynamicAnswers).length > 0 && (
                 <div className="rounded-2xl bg-white p-5">
-                  <span className="text-xs font-bold uppercase tracking-wider text-[#8f4d2c]">约束条件</span>
+                  <span className="text-xs font-bold uppercase tracking-wider text-[#8f4d2c]">你的选择</span>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {selectedConstraints.map((c) => (
-                      <span key={c} className="rounded-full bg-[#f7edde] px-3 py-1 text-xs font-medium text-[#52372d]">{c}</span>
-                    ))}
+                    {Object.entries(dynamicAnswers).map(([qId, ans]) => {
+                      const q = planningPackage.dynamicQuestionnaire.find((sq) => sq.id === qId);
+                      const values = Array.isArray(ans) ? ans : [ans];
+                      return values.map((v) => {
+                        const opt = q?.options.find((o) => o.value === v);
+                        return (
+                          <span key={`${qId}-${v}`} className="rounded-full bg-[#f7edde] px-3 py-1 text-xs font-medium text-[#52372d]">
+                            {opt?.label || v}
+                          </span>
+                        );
+                      });
+                    })}
                   </div>
-                  {Object.keys(dynamicAnswers).length > 0 && (
-                    <>
-                      <span className="mt-4 block text-xs font-bold uppercase tracking-wider text-[#8f4d2c]">你的选择</span>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {Object.entries(dynamicAnswers).map(([qId, ans]) => {
-                          const q = planningPackage.dynamicQuestionnaire.find((sq) => sq.id === qId);
-                          const values = Array.isArray(ans) ? ans : [ans];
-                          return values.map((v) => {
-                            const opt = q?.options.find((o) => o.value === v);
-                            return (
-                              <span key={`${qId}-${v}`} className="rounded-full bg-[#f7edde] px-3 py-1 text-xs font-medium text-[#52372d]">
-                                {opt?.label || v}
-                              </span>
-                            );
-                          });
-                        })}
-                      </div>
-                    </>
-                  )}
                 </div>
+                )}
               </div>
 
               {error && <p className="mt-4 text-center text-sm text-[#ba1a1a]">{error}</p>}
@@ -727,10 +586,10 @@ export default function Page() {
             </button>
           )}
 
-          {step === 4 ? (
+          {step === 3 ? (
             /* AI analyzing — no next button */
             <div />
-          ) : step === 3 ? (
+          ) : step === 2 ? (
             <button
               type="button"
               onClick={goNext}
@@ -744,7 +603,7 @@ export default function Page() {
               AI 分析
               <Sparkles className="h-4 w-4" />
             </button>
-          ) : step === 6 ? (
+          ) : step === 5 ? (
             <button
               type="button"
               onClick={handleGenerate}
@@ -833,7 +692,7 @@ export default function Page() {
             >
               {index === 0 ? <Sparkles className="h-4 w-4" /> : null}
               {index === 1 ? <Wand2 className="h-4 w-4" /> : null}
-              {index === 2 ? <Layers3 className="h-4 w-4" /> : null}
+              {index === 2 ? <UploadCloud className="h-4 w-4" /> : null}
               {index === 3 ? <UserCircle2 className="h-4 w-4" /> : null}
               <span className="mt-1 text-[11px] font-medium tracking-wider">{label}</span>
             </div>
