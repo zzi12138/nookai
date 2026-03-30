@@ -22,60 +22,15 @@ const QUALITY_BASELINE = [
   'realistic and visually striking',
 ] as const;
 
-// Fixed questions Q1–Q4 (AI must not alter these)
-const FIXED_QUESTIONS = [
-  {
-    id: 'q1',
-    question: '这个房间你主要用来做什么？',
-    purpose: 'Determine primary function to guide layout and furnishing priority',
-    options: [
-      { value: 'sleep', label: '睡觉休息', desc: '安静、舒适、助眠' },
-      { value: 'work', label: '工作学习', desc: '专注、有序、高效' },
-      { value: 'relax', label: '放松追剧', desc: '慵懒、舒服、窝着' },
-      { value: 'mixed', label: '都有一点', desc: '多功能，灵活使用' },
-    ],
-    allowMultiple: false,
-    fallbackOption: '你来决定',
-  },
-  {
-    id: 'q2',
-    question: '你希望待在房间里的感觉是？',
-    purpose: 'Determine emotional direction for atmosphere and styling',
-    options: [
-      { value: 'warm_cozy', label: '温暖治愈', desc: '像被毯子裹住一样舒服' },
-      { value: 'calm_quiet', label: '安静平和', desc: '干净、放空、不被打扰' },
-      { value: 'energetic', label: '有活力', desc: '明亮、鲜活、有生命力' },
-      { value: 'ritual', label: '有仪式感', desc: '精致、讲究、每个角落都好看' },
-    ],
-    allowMultiple: false,
-    fallbackOption: '你来决定',
-  },
-  {
-    id: 'q3',
-    question: '你喜欢什么样的光线感觉？',
-    purpose: 'Determine lighting strategy — key driver of final image quality',
-    options: [
-      { value: 'bright', label: '明亮通透', desc: '阳光感，白天自然光的感觉' },
-      { value: 'soft_warm', label: '柔和温暖', desc: '暖黄灯光，像咖啡馆的氛围' },
-      { value: 'dim_moody', label: '偏暗有氛围', desc: '微光、蜡烛感、有层次' },
-    ],
-    allowMultiple: false,
-    fallbackOption: '你来决定',
-  },
-  {
-    id: 'q4',
-    question: '房间整体色调你更偏好？',
-    purpose: 'Determine color palette direction',
-    options: [
-      { value: 'light_warm', label: '浅色温暖', desc: '米白、奶油、原木色' },
-      { value: 'light_cool', label: '浅色清爽', desc: '白色、浅灰、薄荷绿' },
-      { value: 'dark_rich', label: '深色沉稳', desc: '深棕、墨绿、藏青' },
-      { value: 'neutral', label: '无所谓', desc: 'AI 根据房间条件决定' },
-    ],
-    allowMultiple: false,
-    fallbackOption: '你来决定',
-  },
-];
+// Fixed question type framework — AI must follow this order and these types
+const QUESTION_FRAMEWORK = [
+  { id: 'q1', type: 'usage', label: '使用目的', prompt: 'What will this room mainly be used for? Adapt options to roomType.' },
+  { id: 'q2', type: 'emotion', label: '情绪感受', prompt: 'What feeling should the room evoke? Adapt to room size and current state.' },
+  { id: 'q3', type: 'lighting', label: '光线偏好', prompt: 'What lighting feel do they want? Adapt to current lightCondition.' },
+  { id: 'q4', type: 'color', label: '色调倾向', prompt: 'Color palette preference? Adapt to existing furniture colors and wall color.' },
+  { id: 'q5', type: 'boundary', label: '改造边界', prompt: 'What can/cannot be changed? Adapt to existing furniture situation.' },
+  { id: 'q6', type: 'detail', label: '房间细节偏好', prompt: 'Specific detail preference for THIS room. Must be unique to what is visible.' },
+] as const;
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -125,89 +80,89 @@ export type PlanningPackage = {
 // ─── Prompt ─────────────────────────────────────────────────────────────────
 
 function buildPlanPrompt() {
+  const frameworkJSON = QUESTION_FRAMEWORK.map((q) => ({
+    id: q.id,
+    type: q.type,
+    instruction: q.prompt,
+  }));
+
   return `You are an expert interior designer analyzing a rental apartment photo.
 
-Analyze this room and return a JSON object with EXACTLY this structure.
-No markdown, no code fences — ONLY raw JSON.
+Return a JSON object with EXACTLY this structure. No markdown, no code fences — ONLY raw JSON.
 
 {
   "sceneAnalysis": {
-    "roomType": "<卧室/客厅/书房/工作室/etc — pick one>",
+    "roomType": "<卧室/客厅/书房/工作室/etc>",
     "estimatedSize": "<e.g. '约12㎡'>",
-    "existingFurniture": ["<list 3-8 main items visible, in Chinese>"],
-    "layout": "<one sentence: spatial arrangement, e.g. '床靠北墙，书桌在窗边'>",
-    "lightCondition": "<one sentence: current light situation, e.g. '自然光充足但无人工光源'>",
+    "existingFurniture": ["<3-8 main items, Chinese>"],
+    "layout": "<one sentence: spatial arrangement>",
+    "lightCondition": "<one sentence: current lighting>",
     "clutterLevel": "<整洁/轻度杂乱/中度杂乱/严重杂乱>",
-    "keyAreas": ["<1-3 areas with most renovation potential, e.g. '床头区域', '窗台'>"]
+    "keyAreas": ["<1-3 areas with renovation potential>"]
   },
   "designStrategy": {
-    "focalPoint": "<which specific area should be the visual center, max 15 words>",
-    "lightingApproach": "<what to add/change, specific lamp types, max 20 words>",
-    "softFurnishingApproach": "<specific items to add: throws, cushions, rug, etc. Max 20 words>",
-    "colorDirection": "<palette in 3-4 color names, e.g. '米白基底+焦糖棕+雾霾蓝点缀'>",
-    "risks": ["<2-3 specific risks for THIS room, e.g. '空间小容易堆砌'>"],
+    "focalPoint": "<specific area as visual center, max 15 words>",
+    "lightingApproach": "<specific lamp types to add, max 20 words>",
+    "softFurnishingApproach": "<specific items: throws, cushions, rug, etc. Max 20 words>",
+    "colorDirection": "<3-4 color names, e.g. '米白基底+焦糖棕+雾霾蓝点缀'>",
+    "risks": ["<2-3 risks for THIS room>"],
     "styleMapping": {
-      "warm_cozy+soft_warm+light_warm": "<best matching tag from: ${STYLE_TAGS.join(', ')}>",
-      "calm_quiet+bright+light_cool": "<best matching tag>",
-      "energetic+bright+light_warm": "<best matching tag>",
-      "ritual+dim_moody+dark_rich": "<best matching tag>"
+      "<combo1>": "<tag from: ${STYLE_TAGS.join(', ')}>",
+      "<combo2>": "<tag>",
+      "<combo3>": "<tag>",
+      "<combo4>": "<tag>"
     }
   },
   "dynamicQuestions": [
-    {
-      "id": "q5",
-      "question": "<about renovation boundary for THIS room, in Chinese, max 20 chars>",
-      "purpose": "<internal: what this decides, in English>",
-      "options": [
-        { "value": "<short_key>", "label": "<Chinese, max 8 chars>", "desc": "<Chinese, max 15 chars>" }
-      ],
-      "allowMultiple": false,
-      "fallbackOption": "你来决定"
-    },
-    {
-      "id": "q6",
-      "question": "<about a specific detail preference for THIS room, in Chinese, max 20 chars>",
-      "purpose": "<internal: what this decides, in English>",
-      "options": [
-        { "value": "<short_key>", "label": "<Chinese, max 8 chars>", "desc": "<Chinese, max 15 chars>" }
-      ],
-      "allowMultiple": false,
-      "fallbackOption": "你来决定"
-    }
+    // EXACTLY 6 questions, one for each type below
   ],
   "generationGuidance": {
-    "targetAtmosphere": "<one sentence: the emotional feeling the final image should evoke>",
-    "focalPointHint": "<one sentence: where the eye goes and how to achieve it in THIS room>",
-    "lightingHint": "<one sentence: specific lighting layers for THIS room>",
-    "mustAvoid": ["<3-5 specific things to avoid, based on THIS room's issues>"]
+    "targetAtmosphere": "<one sentence>",
+    "focalPointHint": "<one sentence>",
+    "lightingHint": "<one sentence>",
+    "mustAvoid": ["<3-5 items>"]
   }
 }
 
-RULES for dynamicQuestions:
-- Generate EXACTLY 2 questions: q5 and q6
-- q5: about renovation boundary (what to keep/change in THIS room)
-- q6: about a room-specific detail (bedding, desk setup, plants, etc.)
-- Each question: 3-4 options + fallbackOption is always "你来决定"
-- Questions must relate to what's actually IN the photo
-- Options must be concrete and easy to understand — no design jargon
-- All text in Chinese
+=== DYNAMIC QUESTIONNAIRE (CRITICAL) ===
 
-RULES for styleMapping:
-- Map 4 likely user-preference combos to style tags
-- ONLY use these tags: ${STYLE_TAGS.join(', ')}
-- Keys should be combo patterns like "emotion+light+color"
-- This helps the downstream prompt builder pick a coherent direction
+You must generate EXACTLY 6 questions, following this fixed type framework:
+${JSON.stringify(frameworkJSON, null, 2)}
 
-RULES for designStrategy:
-- Every field: short, specific, actionable
-- Use concrete nouns: "落地灯" not "灯具", "亚麻床品" not "床品"
-- No marketing copy, no vague adjectives
+EACH question must:
+- Follow the type and id from the framework above (q1-q6 in order)
+- Have 3-4 options (each: value, label max 6 chars Chinese, desc max 15 chars Chinese)
+- Have fallbackOption: "你来决定"
+- Have allowMultiple: false
 
-RULES for generationGuidance:
-- mustAvoid: based on THIS room's actual problems (clutter type, lighting issues, etc.)
-- All hints must be specific to THIS room, not generic
+KEY RULES — options must adapt to THIS room:
+- q1 (usage): If 卧室, include "睡觉休息"; if has desk, include "工作学习"; if has sofa, include "放松追剧". Don't offer irrelevant options.
+- q2 (emotion): If room is dark/small, lean toward cozy/calm options. If bright/spacious, offer energetic options too.
+- q3 (lighting): If natural light is strong, start with "保持明亮自然". If room is dark, start with "加暖光改善". Match options to lightCondition.
+- q4 (color): Reference actual wall color and furniture colors in desc. E.g. if walls are white and furniture is wood, desc might say "配合现有原木色".
+- q5 (boundary): Reference actual furniture. E.g. "现有的[具体家具]你想？" not generic "家具怎么处理".
+- q6 (detail): Must be UNIQUE to this room. If bed is visible, ask about bedding. If there's a desk, ask about desk setup. If bare walls, ask about wall decor.
 
-Return ONLY the JSON. No other text.`;
+FORBIDDEN:
+- Do NOT use design jargon (no "日式", "北欧", "极简主义")
+- Do NOT ask about "style" or "风格"
+- All questions must be answerable by someone with zero design knowledge
+- Do NOT generate the same options for every room — if two rooms look different, questions must be different
+
+=== STYLE MAPPING ===
+- Map 4 likely user-preference combos to tags
+- ONLY use: ${STYLE_TAGS.join(', ')}
+- Keys: combo of q2_value+q3_value+q4_value (e.g. "warm_cozy+soft_warm+light_warm")
+
+=== DESIGN STRATEGY ===
+- Short, specific, actionable — concrete nouns not vague adjectives
+- "落地灯+台灯组合" not "增加灯光层次"
+
+=== GENERATION GUIDANCE ===
+- mustAvoid: based on THIS room's actual problems
+- All hints specific to THIS room
+
+Return ONLY the JSON.`;
 }
 
 // ─── Handler ────────────────────────────────────────────────────────────────
@@ -328,20 +283,33 @@ export async function POST(req: Request) {
 
     // ── Assemble final PlanningPackage ──
 
-    // Q1-Q4 fixed + Q5-Q6 from AI (capped at 2, with fallback enforced)
-    const aiQuestions = (aiOutput.dynamicQuestions || []).slice(0, 2).map((q, i) => ({
-      id: `q${5 + i}`,
-      question: q.question,
-      purpose: q.purpose || '',
-      options: (q.options || []).slice(0, 4),
-      allowMultiple: q.allowMultiple ?? false,
-      fallbackOption: q.fallbackOption || '你来决定',
-    }));
-
-    const dynamicQuestionnaire: DynamicQuestion[] = [
-      ...FIXED_QUESTIONS,
-      ...aiQuestions,
-    ];
+    // All 6 questions from AI, enforce structure
+    const rawQuestions = aiOutput.dynamicQuestions || [];
+    const dynamicQuestionnaire: DynamicQuestion[] = QUESTION_FRAMEWORK.map((frame, i) => {
+      const aiQ = rawQuestions.find((q) => q.id === frame.id) || rawQuestions[i];
+      if (aiQ) {
+        return {
+          id: frame.id,
+          question: aiQ.question || `关于${frame.label}的偏好？`,
+          purpose: aiQ.purpose || frame.prompt,
+          options: (aiQ.options || []).slice(0, 4),
+          allowMultiple: false,
+          fallbackOption: aiQ.fallbackOption || '你来决定',
+        };
+      }
+      // Fallback if AI missed this question
+      return {
+        id: frame.id,
+        question: `关于${frame.label}的偏好？`,
+        purpose: frame.prompt,
+        options: [
+          { value: 'option_a', label: '选项A', desc: '默认选项' },
+          { value: 'option_b', label: '选项B', desc: '默认选项' },
+        ],
+        allowMultiple: false,
+        fallbackOption: '你来决定',
+      };
+    });
 
     // Force qualityBaseline to fixed constant
     const generationGuidance: GenerationGuidance = {
