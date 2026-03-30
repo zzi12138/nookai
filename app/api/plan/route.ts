@@ -130,55 +130,49 @@ You must generate EXACTLY 6 questions, following this fixed type framework:
 ${JSON.stringify(frameworkJSON, null, 2)}
 
 QUESTIONNAIRE GOAL:
-- This should feel like a warm, taste-driven conversation, not a cold survey.
-- The purpose is to quickly discover the strongest image-changing preferences.
-- Prioritize what most affects rendering: desired feeling, color/depth preference, dislike of current objects, willingness for small refresh vs obvious change, and the area/object the user most wants to move visually.
-- Do NOT just collect generic information. Every answer must be useful for the next prompt stage.
+- The questionnaire should feel like a warm, natural conversation with someone who has taste, not a survey or form.
+- Its job is to uncover the few preferences that most strongly change the generated image.
+- Prioritize discovering: what feeling the user wants, what color/depth direction they prefer, what in the current room they dislike, whether they want a subtle refresh or obvious change, and which visible area/object matters most.
+- The questions should help reveal both positive preferences and negative reactions.
+- Every answer must be useful for the next prompt stage. Do not ask anything that will not influence generation.
 
-TONE RULES:
+TONE + EXPERIENCE:
 - All questions must be Chinese only, natural, spoken, simple, and warm.
-- The assistant should sound like a friendly person with taste chatting while looking at the photo.
-- Do NOT sound like a form, product survey, or design consultant.
-- Avoid stiff wording like: “请选择你的偏好”, “你的空间氛围是”, “你对当前家具保留策略的态度是”.
-- Prefer wording like:
-  - “这个房间你更想让它变成什么感觉？”
-  - “看到现在这张图，你第一反应最想改哪里？”
-  - “你会更喜欢哪种颜色待在房间里？”
-  - “这个桌子你还想留着吗？”
+- The assistant should sound friendly, aesthetically sensitive, and easy to talk to.
+- Do NOT sound like a questionnaire, product survey, or professional interview.
+- Avoid stiff phrasing, labels, and abstract wording. The user should feel like they are being guided, not examined.
 
-EACH question must:
-- Follow the type and id from the framework above (q1-q6 in order)
-- Have 3-6 options (each: value, label max 6 chars Chinese, desc max 15 chars Chinese)
-- The LAST option of EVERY question must ALWAYS use value "ai_decide", but the label/desc should feel natural, such as:
-  - { "value": "ai_decide", "label": "你来决定", "desc": "按这张图帮我搭" }
-  - { "value": "ai_decide", "label": "你帮我搭", "desc": "我先交给你判断" }
-  - { "value": "ai_decide", "label": "我也说不清", "desc": "你看着帮我配" }
-- Set allowMultiple: true for questions where multiple answers make sense (q1 usage, q2 emotion, q5 boundary, q6 detail). Keep false for q3 and q4 unless the photo strongly requires multiple answers.
-- Every option should be concrete enough to affect the final image, not abstract or generic.
+QUESTION QUALITY RULES:
+- Follow the type and id from the framework above (q1-q6 in order).
+- Keep total questions at exactly 6, but make them feel light and purposeful.
+- Have 3-6 options per question (label max 6 Chinese chars, desc max 15 Chinese chars).
+- The LAST option of EVERY question must ALWAYS use value "ai_decide", but its label/desc should feel natural and relaxed rather than mechanical.
+- Use allowMultiple only when it truly helps the user express something meaningful.
+- Options must be concrete, easy to understand, and directly usable by scene 2.
 
-QUESTION DESIGN RULES — adapt to THIS room:
-- q1 (usage): Ask what this room should mainly support in daily life. If 卧室, include "睡觉休息"; if desk is visible, include "工作学习"; if sofa is visible, include "放松追剧". Make it feel like daily life, not functionality jargon.
-- q2 (emotion): Ask what feeling they want most. This question should help distinguish “更有氛围感” vs “更整洁清爽” vs “更有个性/更有存在感”. If the room is small/dim, still allow one stronger, mood-heavy option instead of only soft/cozy options.
-- q3 (lighting): Ask in plain language about brightness and mood, not technical lighting. Options should help infer things like: brighter natural / warmer and softer / darker but more atmospheric / obvious local light pools. This question should influence whether the final image leans clean-bright or moody-layered.
-- q4 (color): This question must be MUCH more actionable than “色调偏好”. Options must help infer specific color families and depth preference. Include concrete directions such as black/gray high-contrast, creamy light wood, warm brown/red-brown, green accents, low-saturation neutrals. At least one option should express dark or high-contrast preference, and at least one should express light/natural preference. If possible, let one option imply “统一一点” and another imply “想跳一点颜色”.
-- q5 (boundary): This is the MOST IMPORTANT upgrade. It MUST reference a real visible object or area in the current photo by name, such as 床 / 桌子 / 沙发 / 窗帘 / 柜子 / 墙面空区. The question must help discover dislike, retain intent, weaken intent, or visual replacement intent. Good examples:
-  - “这个桌子你还想留着吗？”
-  - “床这块你想继续现在这样，还是想明显换个感觉？”
-  - “这面空墙你想让它更安静，还是更有存在感？”
-  One option must explicitly surface a negative or replacement-like intent, such as “看腻了，想弱化”, “先别那么抢眼”, “想换种感觉”.
-- q6 (detail): Ask only one final high-value follow-up based on THIS room. Use it to capture either:
-  - which area the user most wants to handle first, or
-  - whether they want a small refresh vs obvious change, or
-  - what current thing feels most碍眼 /最想改.
-  This question should help uncover stronger intent, not repeat earlier questions.
+CONTENT DIRECTION:
+- q1 should quickly clarify how the room should mainly serve daily life.
+- q2 should uncover the emotional direction of the final image, especially whether the user values atmosphere, calmness, cleanliness, personality, or liveliness.
+- q3 and q4 together should produce actionable image cues, especially brightness, warmth, depth, contrast, dark-vs-light preference, and specific color-family leanings.
+- At least one question must reveal dislike, annoyance, weakening intent, or replacement intent — not only “what do you like”.
+- q5 must reference a REAL visible object or area from the current photo by name, such as bed, desk, sofa, curtains, cabinet, or empty wall. It should help reveal whether the user wants to keep it, soften it, hide it visually, or give it a different feeling.
+- q6 should be a high-value follow-up that helps clarify change intensity, first-priority area, or the thing the user most wants to fix.
 
-FORBIDDEN:
-- Do NOT use design jargon (no "日式", "北欧", "极简主义")
-- Do NOT ask about "style" or "风格"
-- Do NOT ask generic questions that could fit any room
-- Do NOT make all questions positive-only; at least one question must reveal dislike / annoyance / what to weaken
-- All questions must be answerable by someone with zero design knowledge
-- Do NOT generate the same options for every room — if two rooms look different, questions must be different
+COLOR REQUIREMENT:
+- Color questions must be specific enough that scene 2 can infer useful prompt instructions.
+- The answers should make it possible to infer things like:
+  - black / gray / white / wood / warm brown / red accents / green accents
+  - light vs dark
+  - low saturation vs stronger contrast
+  - unified palette vs one accent color
+- Do not keep color at the level of vague “tone preference”.
+
+IMPORTANT BEHAVIOR:
+- Different rooms should produce noticeably different questions and options.
+- Do not make every question optimistic-only; the model must be able to discover what the user wants to weaken or change.
+- All questions must be answerable by someone with zero design knowledge.
+- Do NOT ask about “style” or “风格”.
+- Do NOT use design jargon.
 
 === STYLE MAPPING ===
 - Map 4 likely user-preference combos to tags
@@ -220,7 +214,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing API key' }, { status: 500 });
     }
 
-    const model = 'gemini-2.5-flash';
+    const model = process.env.GEMINI_TEXT_MODEL || 'gemini-3.1-flash';
     const prompt = buildPlanPrompt();
     const base64Image = stripDataUrl(image);
 

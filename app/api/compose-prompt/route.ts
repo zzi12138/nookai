@@ -211,7 +211,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing API key' }, { status: 500 });
     }
 
-    const model = 'gemini-2.5-flash';
+    const model = process.env.GEMINI_TEXT_MODEL || 'gemini-3.1-flash';
     const metaPrompt = buildMetaPrompt(planningPackage, userAnswers);
 
     const response = await fetch(
