@@ -131,9 +131,9 @@ ${JSON.stringify(frameworkJSON, null, 2)}
 
 EACH question must:
 - Follow the type and id from the framework above (q1-q6 in order)
-- Have 3-4 options (each: value, label max 6 chars Chinese, desc max 15 chars Chinese)
-- Have fallbackOption: "你来决定"
-- Have allowMultiple: false
+- Have 3-6 options (each: value, label max 6 chars Chinese, desc max 15 chars Chinese)
+- The LAST option of EVERY question must ALWAYS be: { "value": "ai_decide", "label": "你来决定", "desc": "交给 AI 自动判断" }
+- Set allowMultiple: true for questions where multiple answers make sense (e.g. q1 usage, q2 emotion, q5 boundary, q6 detail). Set false for q3 lighting and q4 color where only one answer is logical.
 
 KEY RULES — options must adapt to THIS room:
 - q1 (usage): If 卧室, include "睡觉休息"; if has desk, include "工作学习"; if has sofa, include "放松追剧". Don't offer irrelevant options.
@@ -284,17 +284,21 @@ export async function POST(req: Request) {
     // ── Assemble final PlanningPackage ──
 
     // All 6 questions from AI, enforce structure
+    const AI_DECIDE_OPTION = { value: 'ai_decide', label: '你来决定', desc: '交给 AI 自动判断' };
     const rawQuestions = aiOutput.dynamicQuestions || [];
     const dynamicQuestionnaire: DynamicQuestion[] = QUESTION_FRAMEWORK.map((frame, i) => {
       const aiQ = rawQuestions.find((q) => q.id === frame.id) || rawQuestions[i];
       if (aiQ) {
+        // Cap at 6 options, ensure "你来决定" is always the last option
+        let options = (aiQ.options || []).slice(0, 6).filter((o) => o.value !== 'ai_decide');
+        options.push(AI_DECIDE_OPTION);
         return {
           id: frame.id,
           question: aiQ.question || `关于${frame.label}的偏好？`,
           purpose: aiQ.purpose || frame.prompt,
-          options: (aiQ.options || []).slice(0, 4),
-          allowMultiple: false,
-          fallbackOption: aiQ.fallbackOption || '你来决定',
+          options,
+          allowMultiple: aiQ.allowMultiple ?? false,
+          fallbackOption: '你来决定',
         };
       }
       // Fallback if AI missed this question
@@ -305,6 +309,7 @@ export async function POST(req: Request) {
         options: [
           { value: 'option_a', label: '选项A', desc: '默认选项' },
           { value: 'option_b', label: '选项B', desc: '默认选项' },
+          AI_DECIDE_OPTION,
         ],
         allowMultiple: false,
         fallbackOption: '你来决定',
