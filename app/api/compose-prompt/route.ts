@@ -120,6 +120,12 @@ User choices:
 ${answerText}
 
 Atmosphere: ${pkg.generationGuidance.targetAtmosphere}
+Visual impact rules:
+- Light hierarchy: ${pkg.generationGuidance.visualImpactRules.lightingContrast}
+- Focus hierarchy: ${pkg.generationGuidance.visualImpactRules.focalPriority}
+- Emotional tone: ${pkg.generationGuidance.visualImpactRules.emotionalTone}
+- Restraint: ${pkg.generationGuidance.visualImpactRules.minimalismDiscipline}
+- Lived-in realism: ${pkg.generationGuidance.visualImpactRules.livedInFeeling}
 
 Write EXACTLY 5 change rules, split into two tiers:
 
@@ -135,6 +141,7 @@ Each rule must:
 Integrate designStrategy + user choices.
 For "AI decides" answers, use the strategy to choose.
 Do NOT replace furniture. Do NOT paint walls.
+The final [DESIGN_PLAN] must obey the visualImpactRules above, so the image has stronger light-shadow contrast, clearer focus, more emotional mood, more restraint, and a more lived-in finish.
 
 Also write:
 - evaluation: 2-sentence Chinese summary of the design approach

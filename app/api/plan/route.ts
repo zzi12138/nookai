@@ -66,6 +66,13 @@ export type GenerationGuidance = {
   targetAtmosphere: string;
   focalPointHint: string;
   lightingHint: string;
+  visualImpactRules: {
+    lightingContrast: string;
+    focalPriority: string;
+    emotionalTone: string;
+    minimalismDiscipline: string;
+    livedInFeeling: string;
+  };
   mustAvoid: string[];
   qualityBaseline: readonly string[];
 };
@@ -120,6 +127,13 @@ Return a JSON object with EXACTLY this structure. No markdown, no code fences �
     "targetAtmosphere": "<one sentence>",
     "focalPointHint": "<one sentence>",
     "lightingHint": "<one sentence>",
+    "visualImpactRules": {
+      "lightingContrast": "<one sentence about light and shadow structure>",
+      "focalPriority": "<one sentence about visual center and surrounding hierarchy>",
+      "emotionalTone": "<one sentence about the emotional mood of the frame>",
+      "minimalismDiscipline": "<one sentence about restraint and fewer-but-stronger additions>",
+      "livedInFeeling": "<one sentence about natural, lived-in realism>"
+    },
     "mustAvoid": ["<3-5 items>"]
   }
 }
@@ -186,6 +200,36 @@ IMPORTANT BEHAVIOR:
 === GENERATION GUIDANCE ===
 - mustAvoid: based on THIS room's actual problems
 - All hints specific to THIS room
+
+=== VISUAL IMPACT RULES (NEW, VERY IMPORTANT) ===
+You must define what makes the final image feel "editorial", "Xiaohongshu-ready", and visually striking.
+
+This section is NOT about objects, shopping, or style labels.
+It is about image-making principles — as if guiding a photographer or interior stylist.
+
+visualImpactRules must contain exactly these 5 fields:
+- lightingContrast
+- focalPriority
+- emotionalTone
+- minimalismDiscipline
+- livedInFeeling
+
+Rules for visualImpactRules:
+- Write only visual principles, not shopping suggestions.
+- Do NOT mention specific objects like lamp / rug / sofa / cushion.
+- Do NOT mention style words like 日式 / 北欧 / 法式.
+- Focus on how the image should work, not what to buy.
+
+Each field should define:
+- lightingContrast: clear light source, visible bright-dark contrast, local glow plus local shadow, never evenly lit.
+- focalPriority: one obvious visual center, brighter/richer focal area, surrounding areas intentionally weaker.
+- emotionalTone: the frame must communicate one clear feeling, such as warm / calm / relaxed / immersive, not just "pretty".
+- minimalismDiscipline: fewer but stronger, no over-decoration, every added element must earn its place.
+- livedInFeeling: realistic, slightly imperfect, slightly relaxed, never showroom-stiff.
+
+Goal:
+- After scene 1, scene 2 should naturally move toward images with stronger light hierarchy, clearer focus, stronger emotional tone, and more editorial tension.
+- The output should define what makes the frame impressive, not just reasonable.
 
 Return ONLY the JSON.`;
 }
@@ -346,6 +390,23 @@ export async function POST(req: Request) {
       targetAtmosphere: aiOutput.generationGuidance.targetAtmosphere || '',
       focalPointHint: aiOutput.generationGuidance.focalPointHint || '',
       lightingHint: aiOutput.generationGuidance.lightingHint || '',
+      visualImpactRules: {
+        lightingContrast:
+          aiOutput.generationGuidance.visualImpactRules?.lightingContrast ||
+          'Light should have a clear source and visible bright-dark contrast, never flat or evenly spread.',
+        focalPriority:
+          aiOutput.generationGuidance.visualImpactRules?.focalPriority ||
+          'The frame needs one obvious visual center, with richer detail there and quieter surrounding areas.',
+        emotionalTone:
+          aiOutput.generationGuidance.visualImpactRules?.emotionalTone ||
+          'The final image should communicate one clear mood instead of only looking neat or decorative.',
+        minimalismDiscipline:
+          aiOutput.generationGuidance.visualImpactRules?.minimalismDiscipline ||
+          'Use fewer but stronger additions, and avoid filling the room with unnecessary decorative noise.',
+        livedInFeeling:
+          aiOutput.generationGuidance.visualImpactRules?.livedInFeeling ||
+          'Keep a natural lived-in softness so the room feels real, relaxed, and not like a showroom.',
+      },
       mustAvoid: (aiOutput.generationGuidance.mustAvoid || []).slice(0, 5),
       qualityBaseline: QUALITY_BASELINE,
     };
