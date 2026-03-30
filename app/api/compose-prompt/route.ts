@@ -35,6 +35,22 @@ const FIXED_AESTHETIC = [
   'realistic and visually striking',
 ].map((r) => `- ${r}`).join('\n');
 
+function buildVisualImpactBlock(pkg: PlanningPackage) {
+  const rules = pkg.generationGuidance.visualImpactRules;
+  return [
+    '- This section has HIGHER priority than decorative details.',
+    '- The final image must feel visually striking, emotionally clear, and editorial rather than merely tidy.',
+    `- Light hierarchy: ${rules.lightingContrast}`,
+    `- Focus hierarchy: ${rules.focalPriority}`,
+    `- Emotional tone: ${rules.emotionalTone}`,
+    `- Restraint: ${rules.minimalismDiscipline}`,
+    `- Lived-in realism: ${rules.livedInFeeling}`,
+    '- If decorative choices conflict with the visual impact rules, follow the visual impact rules.',
+    '- The focal zone should carry the most light, detail, and atmosphere. Non-focal areas should be intentionally quieter.',
+    '- The image should succeed as a social-media-ready interior shot, not just as a correct room makeover.',
+  ].join('\n');
+}
+
 const FIXED_NEGATIVE_BASE = [
   'flat lighting, evenly lit, no shadows, fluorescent overhead',
   'showroom, sterile, plastic-looking, CG render',
@@ -129,8 +145,8 @@ Visual impact rules:
 
 Write EXACTLY 5 change rules, split into two tiers:
 
-PRIMARY (exactly 2): The visual focal point changes — lighting hero piece, or main area transformation.
-SECONDARY (exactly 3): Supporting atmosphere — cushions, throws, plants, small decor.
+PRIMARY (exactly 2): The changes that most strongly create visual drama, focal clarity, and emotional mood.
+SECONDARY (exactly 3): Supporting atmosphere — only additions that reinforce the PRIMARY changes.
 
 Each rule must:
 - Start with a verb: Add / Place / Drape / Hang
@@ -141,7 +157,9 @@ Each rule must:
 Integrate designStrategy + user choices.
 For "AI decides" answers, use the strategy to choose.
 Do NOT replace furniture. Do NOT paint walls.
-The final [DESIGN_PLAN] must obey the visualImpactRules above, so the image has stronger light-shadow contrast, clearer focus, more emotional mood, more restraint, and a more lived-in finish.
+The final [DESIGN_PLAN] must obey the visualImpactRules above.
+Do not optimize for "reasonable decoration". Optimize for a more striking final image with stronger light-shadow contrast, clearer focus, more emotional mood, more restraint, and a more lived-in finish.
+PRIMARY rules should directly create the "wow" factor of the final image.
 
 Also write:
 - evaluation: 2-sentence Chinese summary of the design approach
@@ -182,8 +200,19 @@ function assemblePrompt(
   // [DESIGN_PLAN] — AI-generated, layered
   sections.push(`[DESIGN_PLAN]\n[PRIMARY CHANGES]\n${primary.map((r) => `- ${r}`).join('\n')}\n\n[SECONDARY CHANGES]\n${secondary.map((r) => `- ${r}`).join('\n')}`);
 
+  // [VISUAL IMPACT] — high-priority frame rules from scene 1
+  sections.push(`[VISUAL_IMPACT]\n${buildVisualImpactBlock(pkg)}`);
+
   // [AESTHETIC] — fixed, never AI-generated
   sections.push(`[AESTHETIC]\n${FIXED_AESTHETIC}`);
+
+  // [SUCCESS CRITERIA] — defines what counts as an impressive result
+  sections.push(`[SUCCESS_CRITERIA]
+- The final image must not look evenly lit or visually flat.
+- There must be one obvious hero area that draws the eye first.
+- The image should communicate a clear feeling, not just generic neatness.
+- The final frame should feel intentional, restrained, and photo-ready.
+- If the result looks merely "correct" but not striking, it has failed.`);
 
   // [BOUNDARIES] — derived from user answers
   const boundaries = deriveBoundaries(pkg, answers);
