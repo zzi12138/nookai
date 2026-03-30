@@ -121,12 +121,20 @@ ${answerText}
 
 Atmosphere: ${pkg.generationGuidance.targetAtmosphere}
 
-Write 10-15 short rules (max 20 words each) for what to ADD to this room.
-Rules must integrate designStrategy + user choices.
+Write EXACTLY 5 change rules, split into two tiers:
+
+PRIMARY (exactly 2): The visual focal point changes — lighting hero piece, or main area transformation.
+SECONDARY (exactly 3): Supporting atmosphere — cushions, throws, plants, small decor.
+
+Each rule must:
+- Start with a verb: Add / Place / Drape / Hang
+- Be ONE simple sentence, max 15 words
+- Name exact item, color, material, and placement
+- No compound sentences, no explanations
+
+Integrate designStrategy + user choices.
 For "AI decides" answers, use the strategy to choose.
-Only addable items: lamps, throws, cushions, plants, wall art, small decor.
 Do NOT replace furniture. Do NOT paint walls.
-Be SPECIFIC: name exact items, colors, materials, placement.
 
 Also write:
 - evaluation: 2-sentence Chinese summary of the design approach
@@ -134,7 +142,8 @@ Also write:
 
 Return JSON only:
 {
-  "designRules": ["rule1", "rule2", ...],
+  "primary": ["rule1", "rule2"],
+  "secondary": ["rule1", "rule2", "rule3"],
   "evaluation": "...",
   "suggestions": "..."
 }`;
@@ -145,7 +154,8 @@ Return JSON only:
 function assemblePrompt(
   pkg: PlanningPackage,
   answers: Record<string, string | string[]>,
-  designRules: string[],
+  primary: string[],
+  secondary: string[],
 ): string {
   const sections: string[] = [];
 
@@ -162,8 +172,8 @@ function assemblePrompt(
     : '';
   sections.push(`[DECLUTTER]\n${FIXED_DECLUTTER_BASE}${clutterExtra}`);
 
-  // [DESIGN_PLAN] — AI-generated rules
-  sections.push(`[DESIGN_PLAN]\n${designRules.map((r) => `- ${r}`).join('\n')}`);
+  // [DESIGN_PLAN] — AI-generated, layered
+  sections.push(`[DESIGN_PLAN]\n[PRIMARY CHANGES]\n${primary.map((r) => `- ${r}`).join('\n')}\n\n[SECONDARY CHANGES]\n${secondary.map((r) => `- ${r}`).join('\n')}`);
 
   // [AESTHETIC] — fixed, never AI-generated
   sections.push(`[AESTHETIC]\n${FIXED_AESTHETIC}`);
@@ -247,7 +257,8 @@ export async function POST(req: Request) {
     }
 
     let aiOutput: {
-      designRules: string[];
+      primary: string[];
+      secondary: string[];
       evaluation: string;
       suggestions: string;
     };
@@ -261,26 +272,26 @@ export async function POST(req: Request) {
       );
     }
 
-    // Validate
-    if (!Array.isArray(aiOutput.designRules) || aiOutput.designRules.length === 0) {
+    // Validate & cap: primary ≤ 2, secondary ≤ 3
+    const primary = (Array.isArray(aiOutput.primary) ? aiOutput.primary : []).slice(0, 2);
+    const secondary = (Array.isArray(aiOutput.secondary) ? aiOutput.secondary : []).slice(0, 3);
+
+    if (primary.length === 0 && secondary.length === 0) {
       return NextResponse.json(
-        { error: 'Empty designRules from model', raw: rawText.slice(0, 500) },
+        { error: 'Empty design rules from model', raw: rawText.slice(0, 500) },
         { status: 500 },
       );
     }
 
-    // Cap rules at 15
-    const designRules = aiOutput.designRules.slice(0, 15);
-
     // Assemble final prompt
-    const prompt = assemblePrompt(planningPackage, userAnswers, designRules);
+    const prompt = assemblePrompt(planningPackage, userAnswers, primary, secondary);
 
     return NextResponse.json({
       prompt,
       evaluation: aiOutput.evaluation || '',
       suggestions: aiOutput.suggestions || '',
       // Debug info
-      designPlan: designRules,
+      designPlan: { primary, secondary },
     });
   } catch (err) {
     return NextResponse.json(
