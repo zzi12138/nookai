@@ -7,6 +7,10 @@ export const maxDuration = 60;
 
 type Payload = {
   image?: string;
+  composedPrompt?: string;
+  evaluation?: string;
+  suggestions?: string;
+  // Legacy fields (used when composedPrompt is not provided)
   theme?: string;
   constraints?: string[];
   requirements?: string[];
@@ -59,7 +63,8 @@ export async function POST(req: Request) {
     }
 
     const model = process.env.GEMINI_IMAGE_MODEL || 'gemini-2.5-flash-image';
-    const prompt = buildPrompt(theme, constraints, requirements);
+    // Use pre-composed prompt if available, otherwise fall back to legacy buildPrompt
+    const prompt = body.composedPrompt || buildPrompt(theme, constraints, requirements);
     const base64Image = stripDataUrl(image);
 
     const response = await fetch(
@@ -125,8 +130,8 @@ export async function POST(req: Request) {
     return NextResponse.json({
       imageUrl: `data:${mimeType};base64,${data}`,
       provider: 'gemini',
-      evaluation: buildEvaluation(theme, requirements),
-      suggestions: buildSuggestions(theme),
+      evaluation: body.evaluation || buildEvaluation(theme, requirements),
+      suggestions: body.suggestions || buildSuggestions(theme),
       cost,
     });
   } catch {

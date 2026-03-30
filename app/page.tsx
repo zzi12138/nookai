@@ -178,10 +178,22 @@ export default function Page() {
     setError('');
     setIsLoading(true);
 
-    // Collect requirements from dynamic answers
-    const requirements = Object.values(dynamicAnswers).flat().filter(Boolean) as string[];
-
     try {
+      // ── Stage 2: compose-prompt ──
+      const composeRes = await fetch('/api/compose-prompt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          planningPackage,
+          userAnswers: dynamicAnswers,
+        }),
+      });
+      const composeData = await composeRes.json().catch(() => null);
+      if (!composeRes.ok || !composeData?.prompt) {
+        throw new Error(composeData?.error || '方案生成失败');
+      }
+
+      // ── Stage 3: generate image ──
       let response: Response | null = null;
       let data: any = null;
       let lastMessage = '生成失败，请稍后再试';
@@ -195,11 +207,9 @@ export default function Page() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               image: imageBase64,
-              theme: planningPackage?.designStrategy.colorDirection || 'AI推荐',
-              constraints: [],
-              requirements,
-              planningPackage,
-              dynamicAnswers,
+              composedPrompt: composeData.prompt,
+              evaluation: composeData.evaluation,
+              suggestions: composeData.suggestions,
             }),
             signal: controller.signal,
           });
@@ -238,10 +248,12 @@ export default function Page() {
         if (data.cost) sessionStorage.setItem('nookai_generate_cost', JSON.stringify(data.cost));
         if (planningPackage) sessionStorage.setItem('nookai_planning_package', JSON.stringify(planningPackage));
         if (dynamicAnswers) sessionStorage.setItem('nookai_dynamic_answers', JSON.stringify(dynamicAnswers));
+        if (composeData?.designPlan) sessionStorage.setItem('nookai_design_plan', JSON.stringify(composeData.designPlan));
       } catch { /* ignore */ }
 
       try {
         const inferredTheme = planningPackage?.designStrategy.colorDirection || 'AI推荐';
+        const requirements = Object.values(dynamicAnswers).flat().filter(Boolean) as string[];
         const storedId = await saveResult({
           original: previewUrl,
           generated: data.imageUrl,
@@ -256,6 +268,7 @@ export default function Page() {
         router.push(`/result?id=${encodeURIComponent(storedId)}`);
         return;
       } catch {
+        const fallbackRequirements = Object.values(dynamicAnswers).flat().filter(Boolean) as string[];
         sessionStorage.setItem(
           'nookai_result_image',
           JSON.stringify({
@@ -264,7 +277,7 @@ export default function Page() {
             provider: data.provider,
             theme: planningPackage?.designStrategy.colorDirection || 'AI推荐',
             constraints: [],
-            requirements,
+            requirements: fallbackRequirements,
             evaluation: data.evaluation || '',
             suggestions: data.suggestions || '',
           })
