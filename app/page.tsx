@@ -17,7 +17,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { saveResult } from './lib/imageStore';
-import type { PlanningPackage, StepQuestion } from './api/plan/route';
+import type { PlanningPackage, DynamicQuestion } from './api/plan/route';
 
 type StyleOption = {
   label: string;
@@ -585,16 +585,16 @@ export default function Page() {
               <div className="mb-6 rounded-2xl border border-[#ebe1d3] bg-[#fcf2e4] p-5">
                 <h3 className="mb-2 text-sm font-bold text-[#8f4d2c]">AI 初步方案</h3>
                 <div className="grid grid-cols-1 gap-2 text-xs text-[#504440] md:grid-cols-2">
-                  <p><span className="font-semibold text-[#52372d]">焦点区域：</span>{planningPackage.designStrategy.focusArea}</p>
+                  <p><span className="font-semibold text-[#52372d]">焦点区域：</span>{planningPackage.designStrategy.focalPoint}</p>
                   <p><span className="font-semibold text-[#52372d]">灯光方案：</span>{planningPackage.designStrategy.lightingApproach}</p>
                   <p><span className="font-semibold text-[#52372d]">配色方向：</span>{planningPackage.designStrategy.colorDirection}</p>
-                  <p><span className="font-semibold text-[#52372d]">预估预算：</span>{planningPackage.designStrategy.estimatedBudget}</p>
+                  <p><span className="font-semibold text-[#52372d]">软装方向：</span>{planningPackage.designStrategy.softFurnishingApproach}</p>
                 </div>
               </div>
 
               {/* Dynamic questions */}
               <div className="space-y-5">
-                {planningPackage.stepQuestions.map((q, qi) => (
+                {planningPackage.dynamicQuestionnaire.map((q, qi) => (
                   <div key={q.id} className="rounded-3xl bg-white p-6">
                     <h3 className="mb-1 text-base font-bold text-[#52372d]">
                       {qi + 1}. {q.question}
@@ -667,11 +667,11 @@ export default function Page() {
                     </div>
                     <div>
                       <span className="text-xs font-bold uppercase tracking-wider text-[#8f4d2c]">焦点区域</span>
-                      <p className="mt-1 text-[#504440]">{planningPackage.designStrategy.focusArea}</p>
+                      <p className="mt-1 text-[#504440]">{planningPackage.designStrategy.focalPoint}</p>
                     </div>
                     <div>
-                      <span className="text-xs font-bold uppercase tracking-wider text-[#8f4d2c]">预估预算</span>
-                      <p className="mt-1 text-[#504440]">{planningPackage.designStrategy.estimatedBudget}</p>
+                      <span className="text-xs font-bold uppercase tracking-wider text-[#8f4d2c]">灯光方案</span>
+                      <p className="mt-1 text-[#504440]">{planningPackage.designStrategy.lightingApproach}</p>
                     </div>
                   </div>
                 </div>
@@ -689,7 +689,7 @@ export default function Page() {
                       <span className="mt-4 block text-xs font-bold uppercase tracking-wider text-[#8f4d2c]">你的选择</span>
                       <div className="mt-2 flex flex-wrap gap-2">
                         {Object.entries(dynamicAnswers).map(([qId, ans]) => {
-                          const q = planningPackage.stepQuestions.find((sq) => sq.id === qId);
+                          const q = planningPackage.dynamicQuestionnaire.find((sq) => sq.id === qId);
                           const values = Array.isArray(ans) ? ans : [ans];
                           return values.map((v) => {
                             const opt = q?.options.find((o) => o.value === v);
