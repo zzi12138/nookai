@@ -17,6 +17,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { saveResult } from './lib/imageStore';
+import type { PlanningPackage, StepQuestion } from './api/plan/route';
 
 type StyleOption = {
   label: string;
@@ -45,19 +46,10 @@ const styleOptions: StyleOption[] = [
   },
 ];
 
-const stepTitles = ['欢迎', '选择风格', '改造边界', '偏好补充', '个性细节', '上传照片'];
+const TOTAL_STEPS = 7;
+const stepTitles = ['欢迎', '选择风格', '上传照片', 'AI 分析中', '个性化选择', '确认方案', '生成中'];
 
 const constraintOptions = ['不动墙面', '不替换家具', '不改动布局', '不改门窗', '不改吊顶', '不增加人工光源'];
-
-type RequirementOption = { label: string; desc: string };
-const requirementOptions: RequirementOption[] = [
-  { label: '增加氛围灯', desc: '落地灯、灯串等暖光营造' },
-  { label: '加入绿植', desc: '低维护，提升空间生气' },
-  { label: '投影放松角', desc: '打造观影 / 休闲区' },
-  { label: '收纳优化', desc: '让台面和地面更整洁' },
-  { label: '社交友好', desc: '适合多人聚会的布局' },
-  { label: '宠物友好', desc: '耐抓、易清洁的软装选择' },
-];
 
 const loadingLines = ['正在理解你的风格偏好...', '正在生成改造效果图...', '正在整理购物指南...'];
 
@@ -106,8 +98,6 @@ export default function Page() {
   const [step, setStep] = useState(1);
   const [selectedStyle, setSelectedStyle] = useState(styleOptions[0].label);
   const [selectedConstraints, setSelectedConstraints] = useState<string[]>(['不动墙面', '不替换家具', '不改动布局']);
-  const [selectedRequirements, setSelectedRequirements] = useState<string[]>(['增加氛围灯']);
-  const [customRequirement, setCustomRequirement] = useState('');
 
   const [previewUrl, setPreviewUrl] = useState('');
   const [imageBase64, setImageBase64] = useState('');
@@ -115,8 +105,14 @@ export default function Page() {
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [error, setError] = useState('');
 
-  const percent = Math.round((step / 6) * 100);
-  const canGenerate = Boolean(imageBase64);
+  // Planning package state (Phase 1)
+  const [planningPackage, setPlanningPackage] = useState<PlanningPackage | null>(null);
+  const [isPlanLoading, setIsPlanLoading] = useState(false);
+  const [planError, setPlanError] = useState('');
+  const [dynamicAnswers, setDynamicAnswers] = useState<Record<string, string | string[]>>({});
+
+  const percent = Math.round((step / TOTAL_STEPS) * 100);
+  const canGenerate = Boolean(imageBase64) && Boolean(planningPackage);
 
   const loadingText = useMemo(() => {
     if (loadingProgress < 36) return loadingLines[0];
@@ -168,8 +164,64 @@ export default function Page() {
     }
   };
 
-  const goNext = () => setStep((prev) => Math.min(6, prev + 1));
-  const goPrev = () => setStep((prev) => Math.max(1, prev - 1));
+  const fetchPlan = async () => {
+    if (!imageBase64) return;
+    setIsPlanLoading(true);
+    setPlanError('');
+    setStep(4); // "AI 分析中"
+
+    try {
+      const res = await fetch('/api/plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image: imageBase64,
+          style: selectedStyle,
+          constraints: selectedConstraints,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.planningPackage) {
+        throw new Error(data.error || 'AI 分析失败');
+      }
+      setPlanningPackage(data.planningPackage);
+      setDynamicAnswers({});
+      setStep(5); // Move to dynamic questions
+    } catch (err) {
+      setPlanError(err instanceof Error ? err.message : 'AI 分析失败，请重试');
+      setStep(3); // Go back to upload
+    } finally {
+      setIsPlanLoading(false);
+    }
+  };
+
+  const goNext = () => {
+    if (step === 3 && imageBase64) {
+      // After upload, trigger AI plan
+      fetchPlan();
+      return;
+    }
+    setStep((prev) => Math.min(TOTAL_STEPS, prev + 1));
+  };
+  const goPrev = () => {
+    if (step === 5) {
+      // From dynamic questions, go back to upload (skip AI loading step)
+      setStep(3);
+      return;
+    }
+    setStep((prev) => Math.max(1, prev - 1));
+  };
+
+  const setDynamicAnswer = (qId: string, value: string, allowMultiple: boolean) => {
+    setDynamicAnswers((prev) => {
+      if (!allowMultiple) return { ...prev, [qId]: value };
+      const current = (prev[qId] as string[]) || [];
+      if (current.includes(value)) {
+        return { ...prev, [qId]: current.filter((v) => v !== value) };
+      }
+      return { ...prev, [qId]: [...current, value] };
+    });
+  };
 
   const handleGenerate = async () => {
     if (!imageBase64 || isLoading) return;
@@ -177,9 +229,8 @@ export default function Page() {
     setError('');
     setIsLoading(true);
 
-    const requirements = [...selectedRequirements];
-    const extra = customRequirement.trim();
-    if (extra) requirements.push(extra);
+    // Collect requirements from dynamic answers
+    const requirements = Object.values(dynamicAnswers).flat().filter(Boolean) as string[];
 
     try {
       let response: Response | null = null;
@@ -231,12 +282,12 @@ export default function Page() {
 
       setLoadingProgress(100);
 
-      // Store generate cost for the ledger
-      if (data.cost) {
-        try {
-          sessionStorage.setItem('nookai_generate_cost', JSON.stringify(data.cost));
-        } catch { /* ignore */ }
-      }
+      // Store generate cost and planning package for debug
+      try {
+        if (data.cost) sessionStorage.setItem('nookai_generate_cost', JSON.stringify(data.cost));
+        if (planningPackage) sessionStorage.setItem('nookai_planning_package', JSON.stringify(planningPackage));
+        if (dynamicAnswers) sessionStorage.setItem('nookai_dynamic_answers', JSON.stringify(dynamicAnswers));
+      } catch { /* ignore */ }
 
       try {
         const storedId = await saveResult({
@@ -287,7 +338,7 @@ export default function Page() {
               <span className="cursor-pointer font-medium text-[#52372d]/70 hover:opacity-80">方案</span>
             </nav>
             <div className="flex items-center gap-3">
-              <span className="hidden text-sm font-medium text-primary/70 md:inline-block">步骤 {step} / 6</span>
+              <span className="hidden text-sm font-medium text-primary/70 md:inline-block">步骤 {step} / {TOTAL_STEPS}</span>
               <UserCircle2 className="h-6 w-6 text-primary" />
             </div>
           </div>
@@ -423,115 +474,48 @@ export default function Page() {
             </motion.section>
           )}
 
+          {/* Step 3: Upload photo (moved from step 6) */}
           {step === 3 && (
             <motion.section
-              key="step-3"
+              key="step-3-upload"
               initial={{ opacity: 0, y: 24, scale: 0.98, filter: 'blur(8px)' }}
               animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
               exit={{ opacity: 0, y: -16, scale: 0.98, filter: 'blur(6px)' }}
               transition={spring}
-              className="rounded-3xl bg-white p-8"
             >
-              <h2 className="text-2xl font-bold text-[#52372d]">设置改造边界</h2>
-              <p className="mt-2 text-sm text-[#504440]">这些限制会直接写入生成提示词，保证方案贴合租房场景。</p>
-              <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-3">
-                {constraintOptions.map((option) => {
-                  const selected = selectedConstraints.includes(option);
-                  return (
-                    <button
-                      key={option}
-                      type="button"
-                      onClick={() => toggleValue(option, selectedConstraints, setSelectedConstraints)}
-                      className={`rounded-2xl border px-4 py-3 text-sm transition ${
-                        selected
-                          ? 'border-[#52372d] bg-[#f7edde] font-semibold text-[#52372d]'
-                          : 'border-[#d4c3be] bg-[#fff8f2] text-[#504440]'
-                      }`}
-                    >
-                      {option}
-                    </button>
-                  );
-                })}
+              <div className="mb-6">
+                <span className="text-sm font-bold uppercase tracking-widest text-[#8f4d2c]">Step 03 / {TOTAL_STEPS.toString().padStart(2, '0')}</span>
+                <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-[#52372d]">上传房间照片</h1>
+                <p className="mt-2 text-base text-[#504440]">拍摄一张光线充足、能看清房间布局的照片</p>
               </div>
-            </motion.section>
-          )}
 
-          {step === 4 && (
-            <motion.section
-              key="step-4"
-              initial={{ opacity: 0, y: 24, scale: 0.98, filter: 'blur(8px)' }}
-              animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
-              exit={{ opacity: 0, y: -16, scale: 0.98, filter: 'blur(6px)' }}
-              transition={spring}
-              className="rounded-3xl bg-white p-8"
-            >
-              <h2 className="text-2xl font-bold text-[#52372d]">添加你的偏好</h2>
-              <p className="mt-2 text-sm text-[#504440]">这些偏好会影响软装、灯光和可购买物件建议。</p>
-              <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-3">
-                {requirementOptions.map(({ label, desc }) => {
-                  const selected = selectedRequirements.includes(label);
-                  return (
-                    <button
-                      key={label}
-                      type="button"
-                      onClick={() => toggleValue(label, selectedRequirements, setSelectedRequirements)}
-                      className={`flex flex-col items-start rounded-2xl border px-4 py-3 text-left text-sm transition ${
-                        selected
-                          ? 'border-[#52372d] bg-[#f7edde] font-semibold text-[#52372d]'
-                          : 'border-[#d4c3be] bg-[#fff8f2] text-[#504440]'
-                      }`}
-                    >
-                      <span className={selected ? 'font-semibold' : 'font-medium'}>{label}</span>
-                      <span className="mt-0.5 text-xs font-normal text-[#827470]">{desc}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </motion.section>
-          )}
-
-          {step === 5 && (
-            <motion.section
-              key="step-5"
-              initial={{ opacity: 0, y: 24, scale: 0.98, filter: 'blur(8px)' }}
-              animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
-              exit={{ opacity: 0, y: -16, scale: 0.98, filter: 'blur(6px)' }}
-              transition={spring}
-              className="rounded-3xl bg-white p-8"
-            >
-              <h2 className="text-2xl font-bold text-[#52372d]">补充个性化需求</h2>
-              <p className="mt-2 text-sm text-[#504440]">例如：希望保留书桌办公区、强调阅读角、预算优先等。</p>
-              <textarea
-                value={customRequirement}
-                onChange={(event) => setCustomRequirement(event.target.value)}
-                placeholder="输入你的补充说明..."
-                className="mt-6 min-h-[180px] w-full resize-none rounded-2xl border border-[#d4c3be] bg-[#fff8f2] p-4 text-sm text-[#1f1b13] outline-none placeholder:text-[#827470]"
-              />
-            </motion.section>
-          )}
-
-          {step === 6 && (
-            <motion.section
-              key="step-6"
-              initial={{ opacity: 0, y: 24, scale: 0.98, filter: 'blur(8px)' }}
-              animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
-              exit={{ opacity: 0, y: -16, scale: 0.98, filter: 'blur(6px)' }}
-              transition={spring}
-            >
-              <div className="mb-8 text-center">
-                <h1 className="text-3xl font-extrabold tracking-tight text-[#52372d] md:text-4xl">最后一步：上传房间照片</h1>
-                <p className="mt-3 text-lg text-[#504440]">请拍摄一张光线充足、能看清房间布局的照片</p>
+              {/* Constraint chips */}
+              <div className="mb-6 rounded-3xl bg-white p-6">
+                <h3 className="mb-3 text-sm font-bold text-[#52372d]">改造边界</h3>
+                <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+                  {constraintOptions.map((option) => {
+                    const selected = selectedConstraints.includes(option);
+                    return (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => toggleValue(option, selectedConstraints, setSelectedConstraints)}
+                        className={`rounded-xl border px-3 py-2 text-xs transition ${
+                          selected
+                            ? 'border-[#52372d] bg-[#f7edde] font-semibold text-[#52372d]'
+                            : 'border-[#d4c3be] bg-[#fff8f2] text-[#504440]'
+                        }`}
+                      >
+                        {option}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="mx-auto w-full max-w-3xl">
                 <button type="button" onClick={() => fileInputRef.current?.click()} className="group relative w-full cursor-pointer transition-transform duration-300 active:scale-[0.98]">
-                  <div
-                    className="flex aspect-[16/10] w-full flex-col items-center justify-center rounded-[24px] border-2 border-dashed border-[#d4c3be] bg-[#fcf2e4] transition-colors group-hover:bg-[#f1e7d9]"
-                    style={{
-                      backgroundImage:
-                        "url(\"data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' rx='24' ry='24' stroke='%23d4c3be' stroke-width='2' stroke-dasharray='12%2c12'/%3e%3c/svg%3e\")",
-                    }}
-                  >
+                  <div className="flex aspect-[16/10] w-full flex-col items-center justify-center rounded-[24px] border-2 border-dashed border-[#d4c3be] bg-[#fcf2e4] transition-colors group-hover:bg-[#f1e7d9]">
                     {previewUrl ? (
                       <img src={previewUrl} alt="上传预览" className="h-full w-full rounded-[22px] object-cover" />
                     ) : (
@@ -545,17 +529,184 @@ export default function Page() {
                     )}
                   </div>
                 </button>
+              </div>
 
-                <div className="mt-4 space-y-2 px-1 text-sm">
-                  <div className="flex items-center gap-2 text-[#52372d]">
-                    <CheckCircle2 className="h-5 w-5" />
-                    <span className="font-semibold">{previewUrl ? '照片质量良好' : '等待上传照片'}</span>
-                  </div>
-                  <p className="leading-relaxed text-[#504440]">我们会保留原有布局，仅提供软装建议。光影处理已自动优化。</p>
+              {planError && <p className="mt-4 text-center text-sm text-[#ba1a1a]">{planError}</p>}
+              {error && <p className="mt-4 text-center text-sm text-[#ba1a1a]">{error}</p>}
+            </motion.section>
+          )}
+
+          {/* Step 4: AI analyzing (loading state) */}
+          {step === 4 && (
+            <motion.section
+              key="step-4-analyzing"
+              initial={{ opacity: 0, y: 24, scale: 0.98, filter: 'blur(8px)' }}
+              animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
+              exit={{ opacity: 0, y: -16, scale: 0.98, filter: 'blur(6px)' }}
+              transition={spring}
+              className="flex min-h-[400px] flex-col items-center justify-center rounded-3xl bg-white p-8"
+            >
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+                className="mb-6"
+              >
+                <Sparkles className="h-12 w-12 text-[#8f4d2c]" />
+              </motion.div>
+              <h2 className="text-2xl font-bold text-[#52372d]">AI 正在分析你的房间</h2>
+              <p className="mt-3 text-sm text-[#504440]">正在识别房间结构、生成个性化设计方案...</p>
+              <div className="mt-6 h-1 w-48 overflow-hidden rounded-full bg-[#ebe1d3]">
+                <motion.div
+                  className="h-full bg-[#8f4d2c]"
+                  animate={{ x: ['-100%', '100%'] }}
+                  transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+                  style={{ width: '50%' }}
+                />
+              </div>
+            </motion.section>
+          )}
+
+          {/* Step 5: Dynamic AI questions */}
+          {step === 5 && planningPackage && (
+            <motion.section
+              key="step-5-questions"
+              initial={{ opacity: 0, y: 24, scale: 0.98, filter: 'blur(8px)' }}
+              animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
+              exit={{ opacity: 0, y: -16, scale: 0.98, filter: 'blur(6px)' }}
+              transition={spring}
+            >
+              <div className="mb-6">
+                <span className="text-sm font-bold uppercase tracking-widest text-[#8f4d2c]">Step 05 / {TOTAL_STEPS.toString().padStart(2, '0')}</span>
+                <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-[#52372d]">为你量身定制</h1>
+                <p className="mt-2 text-base text-[#504440]">AI 根据你的房间生成了以下问题，帮助精准匹配方案</p>
+              </div>
+
+              {/* Design strategy summary card */}
+              <div className="mb-6 rounded-2xl border border-[#ebe1d3] bg-[#fcf2e4] p-5">
+                <h3 className="mb-2 text-sm font-bold text-[#8f4d2c]">AI 初步方案</h3>
+                <div className="grid grid-cols-1 gap-2 text-xs text-[#504440] md:grid-cols-2">
+                  <p><span className="font-semibold text-[#52372d]">焦点区域：</span>{planningPackage.designStrategy.focusArea}</p>
+                  <p><span className="font-semibold text-[#52372d]">灯光方案：</span>{planningPackage.designStrategy.lightingApproach}</p>
+                  <p><span className="font-semibold text-[#52372d]">配色方向：</span>{planningPackage.designStrategy.colorDirection}</p>
+                  <p><span className="font-semibold text-[#52372d]">预估预算：</span>{planningPackage.designStrategy.estimatedBudget}</p>
                 </div>
               </div>
 
-              {error ? <p className="mt-4 text-sm text-[#ba1a1a]">{error}</p> : null}
+              {/* Dynamic questions */}
+              <div className="space-y-5">
+                {planningPackage.stepQuestions.map((q, qi) => (
+                  <div key={q.id} className="rounded-3xl bg-white p-6">
+                    <h3 className="mb-1 text-base font-bold text-[#52372d]">
+                      {qi + 1}. {q.question}
+                    </h3>
+                    {q.allowMultiple && (
+                      <p className="mb-3 text-xs text-[#827470]">可多选</p>
+                    )}
+                    <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
+                      {q.options.map((opt) => {
+                        const currentAnswer = dynamicAnswers[q.id];
+                        const isSelected = q.allowMultiple
+                          ? Array.isArray(currentAnswer) && currentAnswer.includes(opt.value)
+                          : currentAnswer === opt.value;
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => setDynamicAnswer(q.id, opt.value, q.allowMultiple)}
+                            className={`flex flex-col items-start rounded-2xl border px-4 py-3 text-left text-sm transition ${
+                              isSelected
+                                ? 'border-[#52372d] bg-[#f7edde] font-semibold text-[#52372d]'
+                                : 'border-[#d4c3be] bg-[#fff8f2] text-[#504440] hover:border-[#b8a89e]'
+                            }`}
+                          >
+                            <span className={isSelected ? 'font-semibold' : 'font-medium'}>{opt.label}</span>
+                            <span className="mt-0.5 text-xs font-normal text-[#827470]">{opt.desc}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.section>
+          )}
+
+          {/* Step 6: Confirm & Generate (was step 6 upload, now just confirm) */}
+          {step === 6 && planningPackage && (
+            <motion.section
+              key="step-6-confirm"
+              initial={{ opacity: 0, y: 24, scale: 0.98, filter: 'blur(8px)' }}
+              animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
+              exit={{ opacity: 0, y: -16, scale: 0.98, filter: 'blur(6px)' }}
+              transition={spring}
+            >
+              <div className="mb-6">
+                <span className="text-sm font-bold uppercase tracking-widest text-[#8f4d2c]">Step 06 / {TOTAL_STEPS.toString().padStart(2, '0')}</span>
+                <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-[#52372d]">确认你的改造方案</h1>
+                <p className="mt-2 text-base text-[#504440]">检查以下信息，确认无误后开始生成效果图</p>
+              </div>
+
+              <div className="space-y-4">
+                {/* Photo preview */}
+                {previewUrl && (
+                  <div className="overflow-hidden rounded-2xl">
+                    <img src={previewUrl} alt="原图" className="w-full object-cover" style={{ maxHeight: 280 }} />
+                  </div>
+                )}
+
+                {/* Summary card */}
+                <div className="rounded-2xl bg-white p-5">
+                  <div className="grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
+                    <div>
+                      <span className="text-xs font-bold uppercase tracking-wider text-[#8f4d2c]">风格</span>
+                      <p className="mt-1 font-semibold text-[#52372d]">{selectedStyle}</p>
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold uppercase tracking-wider text-[#8f4d2c]">房间类型</span>
+                      <p className="mt-1 font-semibold text-[#52372d]">{planningPackage.sceneAnalysis.roomType}</p>
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold uppercase tracking-wider text-[#8f4d2c]">焦点区域</span>
+                      <p className="mt-1 text-[#504440]">{planningPackage.designStrategy.focusArea}</p>
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold uppercase tracking-wider text-[#8f4d2c]">预估预算</span>
+                      <p className="mt-1 text-[#504440]">{planningPackage.designStrategy.estimatedBudget}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Constraints & answers */}
+                <div className="rounded-2xl bg-white p-5">
+                  <span className="text-xs font-bold uppercase tracking-wider text-[#8f4d2c]">约束条件</span>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {selectedConstraints.map((c) => (
+                      <span key={c} className="rounded-full bg-[#f7edde] px-3 py-1 text-xs font-medium text-[#52372d]">{c}</span>
+                    ))}
+                  </div>
+                  {Object.keys(dynamicAnswers).length > 0 && (
+                    <>
+                      <span className="mt-4 block text-xs font-bold uppercase tracking-wider text-[#8f4d2c]">你的选择</span>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {Object.entries(dynamicAnswers).map(([qId, ans]) => {
+                          const q = planningPackage.stepQuestions.find((sq) => sq.id === qId);
+                          const values = Array.isArray(ans) ? ans : [ans];
+                          return values.map((v) => {
+                            const opt = q?.options.find((o) => o.value === v);
+                            return (
+                              <span key={`${qId}-${v}`} className="rounded-full bg-[#f7edde] px-3 py-1 text-xs font-medium text-[#52372d]">
+                                {opt?.label || v}
+                              </span>
+                            );
+                          });
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {error && <p className="mt-4 text-center text-sm text-[#ba1a1a]">{error}</p>}
             </motion.section>
           )}
         </AnimatePresence>
@@ -576,16 +727,24 @@ export default function Page() {
             </button>
           )}
 
-          {step < 6 ? (
+          {step === 4 ? (
+            /* AI analyzing — no next button */
+            <div />
+          ) : step === 3 ? (
             <button
               type="button"
               onClick={goNext}
-              className="flex items-center gap-2 rounded-2xl bg-[#52372d] px-10 py-3 font-bold text-white shadow-lg shadow-[#52372d]/20 transition-all hover:bg-[#6b4e43] active:scale-95"
+              disabled={!imageBase64 || isPlanLoading}
+              className={`flex items-center gap-2 rounded-2xl px-10 py-3 font-bold transition-all active:scale-95 ${
+                imageBase64 && !isPlanLoading
+                  ? 'bg-[#52372d] text-white shadow-lg shadow-[#52372d]/20 hover:bg-[#6b4e43]'
+                  : 'cursor-not-allowed bg-[#d4c3be] text-[#827470]'
+              }`}
             >
-              下一步
-              <ArrowRight className="h-4 w-4" />
+              AI 分析
+              <Sparkles className="h-4 w-4" />
             </button>
-          ) : (
+          ) : step === 6 ? (
             <button
               type="button"
               onClick={handleGenerate}
@@ -598,6 +757,15 @@ export default function Page() {
             >
               开始生成
               <Wand2 className="h-4 w-4" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={goNext}
+              className="flex items-center gap-2 rounded-2xl bg-[#52372d] px-10 py-3 font-bold text-white shadow-lg shadow-[#52372d]/20 transition-all hover:bg-[#6b4e43] active:scale-95"
+            >
+              下一步
+              <ArrowRight className="h-4 w-4" />
             </button>
           )}
         </div>
