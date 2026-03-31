@@ -142,7 +142,19 @@ export async function POST(req: Request) {
     const model = process.env.GEMINI_IMAGE_MODEL || 'gemini-2.5-flash-image';
     // Use pre-composed prompt if available, otherwise fall back to legacy buildPrompt
     const prompt = body.composedPrompt || buildPrompt(theme, constraints, requirements);
-    const sourceImage = await resolveImagePart(image, req);
+    let sourceImage: { mimeType: string; data: string };
+    try {
+      sourceImage = await resolveImagePart(image, req);
+    } catch {
+      const fallbackBase64 = stripDataUrl(image || '');
+      if (!fallbackBase64) {
+        return NextResponse.json(
+          { error: 'Invalid source image payload' },
+          { status: 400 }
+        );
+      }
+      sourceImage = { mimeType: 'image/jpeg', data: fallbackBase64 };
+    }
     const referenceParts: Array<{ inline_data: { mime_type: string; data: string } }> = [];
 
     for (const ref of referenceImages) {
@@ -238,7 +250,13 @@ export async function POST(req: Request) {
       suggestions: body.suggestions || buildSuggestions(theme),
       cost,
     });
-  } catch {
-    return NextResponse.json({ error: 'Server error' }, { status: 500 });
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : typeof error === 'string'
+          ? error
+          : 'Server error';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
