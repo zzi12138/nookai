@@ -122,7 +122,7 @@ export async function POST(req: Request) {
   try {
     const body = (await req.json()) as Payload;
     const image = body.image || '';
-    const referenceImages = Array.isArray(body.referenceImages) ? body.referenceImages.slice(0, 6) : [];
+    const referenceImages = Array.isArray(body.referenceImages) ? body.referenceImages.slice(0, 1) : [];
     const theme = body.theme || '小红书爆款风';
     const constraints = uniqueList(body.constraints || []);
     const requirements = uniqueList(body.requirements || []);

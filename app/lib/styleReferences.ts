@@ -169,7 +169,7 @@ function scoreReference(reference: StyleReference, signalText: string) {
 export function selectReferenceImages(
   planningPackage: PlanningPackage,
   userAnswers: Record<string, string | string[]>,
-  maxCount = 4
+  maxCount = 1
 ) {
   const signalText = getPlanSignalText(planningPackage, userAnswers);
   const ranked = STYLE_REFERENCES.map((ref) => ({
@@ -180,7 +180,7 @@ export function selectReferenceImages(
     .slice(0, Math.max(1, maxCount));
 
   const selected = ranked.filter((item) => item.score > 0).map((item) => item.ref);
-  if (selected.length >= 2) return selected.slice(0, maxCount);
+  if (selected.length > 0) return selected.slice(0, maxCount);
 
   // Stable fallback set for consistent style anchoring.
   const fallbackIds = ['ref-763', 'ref-765', 'ref-766', 'ref-771'];

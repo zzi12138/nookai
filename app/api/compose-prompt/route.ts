@@ -280,7 +280,7 @@ export async function POST(req: Request) {
     }
 
     const model = process.env.GEMINI_TEXT_MODEL || 'gemini-3-flash-preview';
-    const selectedReferences = selectReferenceImages(planningPackage, userAnswers, 4);
+    const selectedReferences = selectReferenceImages(planningPackage, userAnswers, 1);
     const metaPrompt = buildMetaPrompt(planningPackage, userAnswers, selectedReferences);
 
     const response = await fetch(
