@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { PlanningPackage } from '../plan/route';
+import { selectReferenceImages, type StyleReference } from '../../lib/styleReferences';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -48,6 +49,21 @@ function buildVisualImpactBlock(pkg: PlanningPackage) {
     '- If decorative choices conflict with the visual impact rules, follow the visual impact rules.',
     '- The focal zone should carry the most light, detail, and atmosphere. Non-focal areas should be intentionally quieter.',
     '- The image should succeed as a social-media-ready interior shot, not just as a correct room makeover.',
+  ].join('\n');
+}
+
+function buildReferenceAnchorBlock(references: StyleReference[]) {
+  if (!references.length) {
+    return '- No reference style anchors selected.';
+  }
+  return [
+    '- Use the attached reference images as STYLE ANCHORS only.',
+    '- Borrow lighting mood, color rhythm, decor density, and material feeling.',
+    '- NEVER copy layout, camera angle, or exact furniture positions from references.',
+    '- Preserve source-room structure as absolute priority.',
+    ...references.map(
+      (ref) => `- Anchor ${ref.id}: ${ref.label} (${ref.category})`
+    ),
   ].join('\n');
 }
 
@@ -116,8 +132,12 @@ function deriveBoundaries(
 function buildMetaPrompt(
   pkg: PlanningPackage,
   answers: Record<string, string | string[]>,
+  references: StyleReference[],
 ): string {
   const answerText = resolveAnswers(pkg, answers);
+  const referenceText = references.length
+    ? references.map((ref) => `- ${ref.label} (${ref.category})`).join('\n')
+    : '- none';
 
   return `You are composing a [DESIGN_PLAN] section for an image generation prompt.
 
@@ -142,6 +162,14 @@ Visual impact rules:
 - Emotional tone: ${pkg.generationGuidance.visualImpactRules.emotionalTone}
 - Restraint: ${pkg.generationGuidance.visualImpactRules.minimalismDiscipline}
 - Lived-in realism: ${pkg.generationGuidance.visualImpactRules.livedInFeeling}
+
+Selected reference anchors:
+${referenceText}
+
+Reference usage rule:
+- Use references only to steer visual tone (light layering, color rhythm, material feeling, decor density).
+- Never copy reference layouts or camera framing.
+- Keep source-room structure unchanged.
 
 Write EXACTLY 5 change rules, split into two tiers:
 
@@ -181,6 +209,7 @@ function assemblePrompt(
   answers: Record<string, string | string[]>,
   primary: string[],
   secondary: string[],
+  references: StyleReference[],
 ): string {
   const sections: string[] = [];
 
@@ -202,6 +231,9 @@ function assemblePrompt(
 
   // [VISUAL IMPACT] — high-priority frame rules from scene 1
   sections.push(`[VISUAL_IMPACT]\n${buildVisualImpactBlock(pkg)}`);
+
+  // [REFERENCE_ANCHORS] — visual direction guardrails for stronger style outcome
+  sections.push(`[REFERENCE_ANCHORS]\n${buildReferenceAnchorBlock(references)}`);
 
   // [AESTHETIC] — fixed, never AI-generated
   sections.push(`[AESTHETIC]\n${FIXED_AESTHETIC}`);
@@ -248,7 +280,8 @@ export async function POST(req: Request) {
     }
 
     const model = process.env.GEMINI_TEXT_MODEL || 'gemini-3-flash-preview';
-    const metaPrompt = buildMetaPrompt(planningPackage, userAnswers);
+    const selectedReferences = selectReferenceImages(planningPackage, userAnswers, 4);
+    const metaPrompt = buildMetaPrompt(planningPackage, userAnswers, selectedReferences);
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
@@ -320,12 +353,18 @@ export async function POST(req: Request) {
     }
 
     // Assemble final prompt
-    const prompt = assemblePrompt(planningPackage, userAnswers, primary, secondary);
+    const prompt = assemblePrompt(planningPackage, userAnswers, primary, secondary, selectedReferences);
 
     return NextResponse.json({
       prompt,
       evaluation: aiOutput.evaluation || '',
       suggestions: aiOutput.suggestions || '',
+      referenceImages: selectedReferences.map((ref) => ref.url),
+      referenceImageMeta: selectedReferences.map((ref) => ({
+        id: ref.id,
+        label: ref.label,
+        category: ref.category,
+      })),
       // Debug info
       designPlan: { primary, secondary },
     });

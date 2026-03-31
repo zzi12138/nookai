@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import { estimateCost } from '../../lib/server/cost-ledger';
 import { buildPrompt } from './design-rules';
 
@@ -8,6 +10,7 @@ export const maxDuration = 60;
 type Payload = {
   image?: string;
   composedPrompt?: string;
+  referenceImages?: string[];
   evaluation?: string;
   suggestions?: string;
   // Legacy fields (used when composedPrompt is not provided)
@@ -18,6 +21,79 @@ type Payload = {
 
 function stripDataUrl(value: string) {
   return value.includes(',') ? value.split(',')[1] : value;
+}
+
+function isDataUrl(value: string) {
+  return /^data:[^;]+;base64,/i.test(value);
+}
+
+function isHttpUrl(value: string) {
+  return /^https?:\/\//i.test(value);
+}
+
+function isProbablyBase64(value: string) {
+  if (!value) return false;
+  return /^[A-Za-z0-9+/=\r\n]+$/.test(value) && value.length > 64;
+}
+
+function parseDataUrl(dataUrl: string) {
+  const match = dataUrl.match(/^data:([^;]+);base64,(.*)$/i);
+  if (!match) return null;
+  return {
+    mimeType: match[1] || 'image/jpeg',
+    data: match[2] || '',
+  };
+}
+
+function detectMimeType(filePath: string) {
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext === '.png') return 'image/png';
+  if (ext === '.webp') return 'image/webp';
+  return 'image/jpeg';
+}
+
+async function resolveImagePart(value: string, req: Request) {
+  if (!value) throw new Error('Empty image input');
+
+  if (isDataUrl(value)) {
+    const parsed = parseDataUrl(value);
+    if (!parsed) throw new Error('Invalid data URL');
+    return parsed;
+  }
+
+  if (isHttpUrl(value)) {
+    const response = await fetch(value, { method: 'GET' });
+    if (!response.ok) throw new Error(`Failed to fetch remote image: ${response.status}`);
+    const mimeType = response.headers.get('content-type') || 'image/jpeg';
+    const data = Buffer.from(await response.arrayBuffer()).toString('base64');
+    return { mimeType, data };
+  }
+
+  if (value.startsWith('/')) {
+    // Treat root-relative paths as /public assets.
+    const publicRoot = path.resolve(process.cwd(), 'public');
+    const resolved = path.resolve(publicRoot, value.replace(/^\/+/, ''));
+    if (!resolved.startsWith(publicRoot)) {
+      throw new Error('Invalid reference image path');
+    }
+    const fileBuffer = await readFile(resolved);
+    return {
+      mimeType: detectMimeType(resolved),
+      data: fileBuffer.toString('base64'),
+    };
+  }
+
+  if (isProbablyBase64(value)) {
+    return { mimeType: 'image/jpeg', data: stripDataUrl(value) };
+  }
+
+  // Try same-origin URL fallback for unusual relative paths.
+  const url = new URL(value, req.url).toString();
+  const response = await fetch(url, { method: 'GET' });
+  if (!response.ok) throw new Error(`Failed to fetch relative image: ${response.status}`);
+  const mimeType = response.headers.get('content-type') || 'image/jpeg';
+  const data = Buffer.from(await response.arrayBuffer()).toString('base64');
+  return { mimeType, data };
 }
 
 function uniqueList(input: string[] = []) {
@@ -46,6 +122,7 @@ export async function POST(req: Request) {
   try {
     const body = (await req.json()) as Payload;
     const image = body.image || '';
+    const referenceImages = Array.isArray(body.referenceImages) ? body.referenceImages.slice(0, 6) : [];
     const theme = body.theme || '小红书爆款风';
     const constraints = uniqueList(body.constraints || []);
     const requirements = uniqueList(body.requirements || []);
@@ -65,7 +142,32 @@ export async function POST(req: Request) {
     const model = process.env.GEMINI_IMAGE_MODEL || 'gemini-2.5-flash-image';
     // Use pre-composed prompt if available, otherwise fall back to legacy buildPrompt
     const prompt = body.composedPrompt || buildPrompt(theme, constraints, requirements);
-    const base64Image = stripDataUrl(image);
+    const sourceImage = await resolveImagePart(image, req);
+    const referenceParts: Array<{ inline_data: { mime_type: string; data: string } }> = [];
+
+    for (const ref of referenceImages) {
+      try {
+        const resolved = await resolveImagePart(ref, req);
+        referenceParts.push({
+          inline_data: {
+            mime_type: resolved.mimeType,
+            data: resolved.data,
+          },
+        });
+      } catch {
+        // Skip a broken reference silently; main generation should still run.
+      }
+    }
+
+    const promptWithReferenceGuard =
+      referenceParts.length > 0
+        ? `${prompt}
+
+[REFERENCE_STYLE_GUARD]
+- Attached reference images are style anchors only.
+- Borrow mood, color rhythm, material feel, and light hierarchy.
+- Keep the source room structure, perspective, and major furniture layout unchanged.`
+        : prompt;
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
@@ -80,13 +182,14 @@ export async function POST(req: Request) {
             {
               role: 'user',
               parts: [
-                { text: prompt },
+                { text: promptWithReferenceGuard },
                 {
                   inline_data: {
-                    mime_type: 'image/jpeg',
-                    data: base64Image,
+                    mime_type: sourceImage.mimeType,
+                    data: sourceImage.data,
                   },
                 },
+                ...referenceParts,
               ],
             },
           ],
@@ -121,7 +224,7 @@ export async function POST(req: Request) {
     const cost = estimateCost({
       api: 'generate',
       model,
-      inputImages: 1,
+      inputImages: 1 + referenceParts.length,
       inputImageAvgSize: 1000,
       promptLength: prompt.length,
       outputImages: 1,
@@ -130,6 +233,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       imageUrl: `data:${mimeType};base64,${data}`,
       provider: 'gemini',
+      referenceImagesUsed: referenceParts.length,
       evaluation: body.evaluation || buildEvaluation(theme, requirements),
       suggestions: body.suggestions || buildSuggestions(theme),
       cost,

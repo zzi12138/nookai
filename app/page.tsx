@@ -202,17 +202,18 @@ export default function Page() {
         const controller = new AbortController();
         const timer = window.setTimeout(() => controller.abort(), 80000);
         try {
-          response = await fetch('/api/generate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              image: imageBase64,
-              composedPrompt: composeData.prompt,
-              evaluation: composeData.evaluation,
-              suggestions: composeData.suggestions,
-            }),
-            signal: controller.signal,
-          });
+              response = await fetch('/api/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  image: imageBase64,
+                  composedPrompt: composeData.prompt,
+                  referenceImages: composeData.referenceImages || [],
+                  evaluation: composeData.evaluation,
+                  suggestions: composeData.suggestions,
+                }),
+                signal: controller.signal,
+              });
 
           data = await response.json().catch(() => null);
           if (response.ok && data?.imageUrl) {
@@ -249,6 +250,9 @@ export default function Page() {
         if (planningPackage) sessionStorage.setItem('nookai_planning_package', JSON.stringify(planningPackage));
         if (dynamicAnswers) sessionStorage.setItem('nookai_dynamic_answers', JSON.stringify(dynamicAnswers));
         if (composeData?.designPlan) sessionStorage.setItem('nookai_design_plan', JSON.stringify(composeData.designPlan));
+        if (composeData?.referenceImageMeta) {
+          sessionStorage.setItem('nookai_reference_meta', JSON.stringify(composeData.referenceImageMeta));
+        }
       } catch { /* ignore */ }
 
       try {
