@@ -18,6 +18,15 @@ type Payload = {
   userAnswers: Record<string, string | string[]>;
 };
 
+type ComposeAIOutput = {
+  primary: string[];
+  secondary: string[];
+  declutter?: string;
+  moodLight?: string;
+  evaluation: string;
+  suggestions: string;
+};
+
 const WORD_LIMIT = 300;
 
 function trimToWordLimit(text: string, limit = WORD_LIMIT) {
@@ -137,6 +146,31 @@ ${moodLight || `Keep ${pkg.generationGuidance.targetAtmosphere} mood with layere
   return trimToWordLimit(compact);
 }
 
+function buildFallbackComposeOutput(pkg: PlanningPackage, answerText: string): ComposeAIOutput {
+  const focal = pkg.designStrategy.focalPoint || 'bed area';
+  const color = pkg.designStrategy.colorDirection || 'warm neutral';
+  const atmosphere = pkg.generationGuidance.targetAtmosphere || 'warm and calm';
+
+  return {
+    primary: [
+      `Place a warm 3000K floor lamp beside the ${focal}.`,
+      `Drape a linen throw in ${color} tones over bed or sofa edge.`,
+    ],
+    secondary: [
+      `Add a low-saturation area rug under the focal seating zone.`,
+      `Hang one simple framed artwork near the focal wall center.`,
+      `Place one medium green plant beside desk or window side.`,
+    ],
+    declutter: 'Clear visible clutter first, then keep desk and floor surfaces tidy.',
+    moodLight: `Keep ${atmosphere} mood with layered side lighting and gentle local shadows.`,
+    evaluation: '已根据你的房间条件生成稳妥可落地的改造指令。重点会放在灯光层次与焦点区域氛围建立。',
+    suggestions:
+      answerText && answerText.trim().length > 0
+        ? `建议先按你的偏好落地主变化，再逐步添加辅助软装。若想更大胆，可再次提高改动强度并重生成。`
+        : '建议先落地主灯与床区软装，再逐步补充地毯与墙面装饰。若你愿意，可补充偏好后再次生成更个性版本。',
+  };
+}
+
 // ─── Handler ────────────────────────────────────────────────────────────────
 
 export async function POST(req: Request) {
@@ -152,100 +186,100 @@ export async function POST(req: Request) {
     }
 
     const apiKey = process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: 'Missing KIMI_API_KEY (or MOONSHOT_API_KEY)' },
-        { status: 500 },
-      );
-    }
-
     const baseUrl = (process.env.MOONSHOT_BASE_URL || 'https://api.moonshot.cn/v1').replace(/\/$/, '');
     const model = process.env.KIMI_TEXT_MODEL || 'kimi-k2.5';
     const selectedReferences = selectReferenceImages(planningPackage, userAnswers, 1);
     const metaPrompt = buildMetaPrompt(planningPackage, userAnswers, selectedReferences);
+    const answerText = resolveAnswers(planningPackage, userAnswers);
 
-    const { response, raw: rawApiBody, json: result } = await fetchMoonshotJson({
-      url: `${baseUrl}/chat/completions`,
-      apiKey,
-      timeoutMs: 13_000,
-      body: {
-        model,
-        response_format: {
-          type: 'json_object',
-        },
-        messages: [
-          {
-            role: 'system',
-            content: 'You are an interior prompt-composer assistant. Return valid JSON only.',
+    let aiOutput: ComposeAIOutput | null = null;
+    let fallbackReason: string | null = null;
+
+    if (!apiKey) {
+      fallbackReason = 'Missing KIMI_API_KEY (or MOONSHOT_API_KEY)';
+    } else {
+      try {
+        const { response, raw: rawApiBody, json: result } = await fetchMoonshotJson({
+          url: `${baseUrl}/chat/completions`,
+          apiKey,
+          timeoutMs: 20_000,
+          body: {
+            model,
+            response_format: {
+              type: 'json_object',
+            },
+            messages: [
+              {
+                role: 'system',
+                content: 'You are an interior prompt-composer assistant. Return valid JSON only.',
+              },
+              {
+                role: 'user',
+                content: metaPrompt,
+              },
+            ],
           },
-          {
-            role: 'user',
-            content: metaPrompt,
-          },
-        ],
-      },
-    });
-    if (!response.ok) {
-      return NextResponse.json(
-        { error: moonshotErrorMessage(result, rawApiBody, 'Compose failed') },
-        { status: 500 },
-      );
+        });
+        if (!response.ok) {
+          throw new Error(moonshotErrorMessage(result, rawApiBody, 'Compose failed'));
+        }
+
+        const rawContent = moonshotMessageText(result);
+        if (!rawContent) {
+          throw new Error('No text response from model');
+        }
+
+        const parsed = parseFirstJSONObject<ComposeAIOutput>(rawContent);
+        if (!parsed) {
+          throw new Error(`Failed to parse compose JSON: ${rawContent.slice(0, 120)}`);
+        }
+
+        aiOutput = parsed;
+      } catch (error) {
+        fallbackReason = error instanceof Error ? error.message : 'Compose failed';
+      }
     }
 
-    const rawContent = moonshotMessageText(result);
-
-    if (!rawContent) {
-      return NextResponse.json(
-        { error: 'No text response from model' },
-        { status: 500 },
-      );
+    if (!aiOutput) {
+      aiOutput = buildFallbackComposeOutput(planningPackage, answerText);
     }
-
-    let aiOutput: {
-      primary: string[];
-      secondary: string[];
-      declutter?: string;
-      moodLight?: string;
-      evaluation: string;
-      suggestions: string;
-    };
-
-    const parsed = parseFirstJSONObject<typeof aiOutput>(rawContent);
-    if (!parsed) {
-      return NextResponse.json(
-        { error: 'Failed to parse compose JSON', raw: rawContent.slice(0, 500) },
-        { status: 500 },
-      );
-    }
-    aiOutput = parsed;
 
     // Validate & cap: primary ≤ 2, secondary ≤ 3
     const primary = (Array.isArray(aiOutput.primary) ? aiOutput.primary : []).slice(0, 2);
     const secondary = (Array.isArray(aiOutput.secondary) ? aiOutput.secondary : []).slice(0, 3);
-    const declutter =
-      (aiOutput.declutter || '').trim() ||
-      'Clear visible clutter first. Make bed and surfaces neat before styling.';
-    const moodLight =
-      (aiOutput.moodLight || '').trim() ||
-      `Keep ${planningPackage.generationGuidance.targetAtmosphere} mood with layered light and a clear focal center.`;
 
     if (primary.length === 0 && secondary.length === 0) {
-      return NextResponse.json(
-        { error: 'Empty design rules from model', raw: rawContent.slice(0, 500) },
-        { status: 500 },
-      );
+      const local = buildFallbackComposeOutput(planningPackage, answerText);
+      aiOutput = local;
     }
 
     // Assemble final prompt
-    const prompt = assemblePrompt(planningPackage, primary, secondary, selectedReferences, declutter, moodLight);
+    const fallbackPrimary = (Array.isArray(aiOutput.primary) ? aiOutput.primary : []).slice(0, 2);
+    const fallbackSecondary = (Array.isArray(aiOutput.secondary) ? aiOutput.secondary : []).slice(0, 3);
+    const fallbackDeclutter =
+      (aiOutput.declutter || '').trim() ||
+      'Clear visible clutter first. Make bed and surfaces neat before styling.';
+    const fallbackMoodLight =
+      (aiOutput.moodLight || '').trim() ||
+      `Keep ${planningPackage.generationGuidance.targetAtmosphere} mood with layered light and a clear focal center.`;
+
+    const prompt = assemblePrompt(
+      planningPackage,
+      fallbackPrimary.length ? fallbackPrimary : primary,
+      fallbackSecondary.length ? fallbackSecondary : secondary,
+      selectedReferences,
+      fallbackDeclutter,
+      fallbackMoodLight,
+    );
 
     return NextResponse.json({
       prompt,
       evaluation: aiOutput.evaluation || '',
       suggestions: aiOutput.suggestions || '',
-      modelProvider: 'moonshot',
+      modelProvider: fallbackReason ? 'local_fallback' : 'moonshot',
       model,
       modelRequestPrompt: metaPrompt,
+      fallbackReason,
       referenceImages: selectedReferences.map((ref) => ref.url),
       referenceImageMeta: selectedReferences.map((ref) => ({
         id: ref.id,
@@ -253,7 +287,7 @@ export async function POST(req: Request) {
         category: ref.category,
       })),
       // Debug info
-      designPlan: { primary, secondary },
+      designPlan: { primary: fallbackPrimary, secondary: fallbackSecondary },
     });
   } catch (err) {
     return NextResponse.json(

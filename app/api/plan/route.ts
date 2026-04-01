@@ -83,6 +83,20 @@ export type PlanningPackage = {
   generationGuidance: GenerationGuidance;
 };
 
+type PlanAIOutput = {
+  sceneAnalysis: SceneAnalysis;
+  designStrategy: DesignStrategy;
+  dynamicQuestions: Array<{
+    id: string;
+    question: string;
+    purpose: string;
+    options: Array<{ value: string; label: string; desc: string }>;
+    allowMultiple?: boolean;
+    fallbackOption?: string;
+  }>;
+  generationGuidance: Omit<GenerationGuidance, 'qualityBaseline'>;
+};
+
 // ─── Prompt ─────────────────────────────────────────────────────────────────
 
 function buildPlanPrompt() {
@@ -116,6 +130,8 @@ type Payload = {
   image?: string;
 };
 
+const AI_DECIDE_OPTION = { value: 'ai_decide', label: '你来决定', desc: '交给 AI 自动判断' };
+
 function parseDataUrl(value: string) {
   const match = value.match(/^data:(.*?);base64,(.*)$/);
   if (!match) {
@@ -130,6 +146,111 @@ function parseDataUrl(value: string) {
   };
 }
 
+function buildFallbackQuestionnaire(): DynamicQuestion[] {
+  const templates: Array<{
+    question: string;
+    options: Array<{ value: string; label: string; desc: string }>;
+    allowMultiple?: boolean;
+  }> = [
+    {
+      question: '这个房间你最常用来做什么？',
+      options: [
+        { value: 'sleep', label: '休息睡眠', desc: '更放松更助眠' },
+        { value: 'work', label: '工作学习', desc: '更专注更高效' },
+        { value: 'mixed', label: '两者都要', desc: '兼顾休息与办公' },
+      ],
+      allowMultiple: true,
+    },
+    {
+      question: '你更想要哪种整体感觉？',
+      options: [
+        { value: 'warm', label: '温暖治愈', desc: '放松、柔和、有安全感' },
+        { value: 'calm', label: '安静克制', desc: '干净、沉稳、不吵闹' },
+        { value: 'vivid', label: '有氛围感', desc: '更有层次、更出片' },
+      ],
+    },
+    {
+      question: '你更喜欢什么色彩方向？',
+      options: [
+        { value: 'light_wood', label: '浅木米白', desc: '明亮自然，耐看' },
+        { value: 'warm_earth', label: '大地暖色', desc: '焦糖、棕调、柔和' },
+        { value: 'contrast', label: '黑白灰点缀', desc: '更现代有对比' },
+      ],
+    },
+    {
+      question: '这次你想小改，还是希望变化明显？',
+      options: [
+        { value: 'light_touch', label: '小改就好', desc: '保守升级，风险低' },
+        { value: 'medium_change', label: '中等改动', desc: '看得出变化' },
+        { value: 'bold_change', label: '明显改造', desc: '希望焕然一新' },
+      ],
+    },
+    {
+      question: '看这张图，你最想先处理哪一块？',
+      options: [
+        { value: 'bed_zone', label: '床区', desc: '床品和床边氛围' },
+        { value: 'desk_zone', label: '桌面/工作区', desc: '更整洁更有质感' },
+        { value: 'window_zone', label: '窗边与灯光', desc: '提高层次和氛围' },
+      ],
+    },
+    {
+      question: '有你不喜欢、想弱化或替换的东西吗？',
+      options: [
+        { value: 'dislike_desk', label: '桌子存在感太强', desc: '想弱化或重新协调' },
+        { value: 'dislike_clutter', label: '杂乱感明显', desc: '想更干净有秩序' },
+        { value: 'dislike_light', label: '光线单一', desc: '想要更有层次' },
+      ],
+    },
+  ];
+
+  return QUESTION_FRAMEWORK.map((frame, idx) => {
+    const t = templates[idx] || templates[0];
+    return {
+      id: frame.id,
+      question: t.question,
+      purpose: frame.prompt,
+      options: [...t.options, AI_DECIDE_OPTION],
+      allowMultiple: Boolean(t.allowMultiple),
+      fallbackOption: '你来决定',
+    };
+  });
+}
+
+function buildFallbackPlanningPackage(): PlanningPackage {
+  return {
+    sceneAnalysis: {
+      roomType: '卧室/一体空间',
+      estimatedSize: '小户型',
+      existingFurniture: ['床', '桌子', '椅子', '窗帘'],
+      layout: '保持原有布局，围绕床区与工作区建立视觉层次',
+      lightCondition: '自然光一般，夜间需要补充暖光层次',
+      clutterLevel: 'medium',
+      keyAreas: ['床区', '桌面', '窗边'],
+    },
+    designStrategy: {
+      focalPoint: '床区与床侧灯光',
+      lightingApproach: '主灯+辅助灯+氛围灯，形成局部亮、局部暗',
+      softFurnishingApproach: '用床品、毯子、地毯和小件软装统一材质与色系',
+      colorDirection: '米白、木色、低饱和暖色点缀',
+      risks: ['避免装饰堆叠', '避免过冷光源'],
+      styleMapping: {
+        calm_warm: 'warm_healing',
+        clean_simple: 'clean_minimal',
+        dark_focus: 'dark_moody',
+        natural_light: 'light_natural',
+      },
+    },
+    dynamicQuestionnaire: buildFallbackQuestionnaire(),
+    generationGuidance: {
+      targetAtmosphere: '温暖、安静、克制、有生活感',
+      focalPointHint: '优先让床区成为第一视觉中心',
+      lightingHint: '保留自然光，同时增加暖光侧光与局部氛围光',
+      mustAvoid: ['不改硬装结构', '不刷墙', '不大动家具'],
+      qualityBaseline: QUALITY_BASELINE,
+    },
+  };
+}
+
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as Payload;
@@ -140,102 +261,88 @@ export async function POST(req: Request) {
     }
 
     const apiKey = process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: 'Missing KIMI_API_KEY (or MOONSHOT_API_KEY)' },
-        { status: 500 }
-      );
-    }
-
     const baseUrl = (process.env.MOONSHOT_BASE_URL || 'https://api.moonshot.cn/v1').replace(/\/$/, '');
     const model = process.env.KIMI_TEXT_MODEL || 'kimi-k2.5';
     const prompt = buildPlanPrompt();
     const imageData = parseDataUrl(image);
+    let aiOutput: PlanAIOutput | null = null;
+    let fallbackReason: string | null = null;
 
-    const { response, raw: rawApiBody, json: result } = await fetchMoonshotJson({
-      url: `${baseUrl}/chat/completions`,
-      apiKey,
-      timeoutMs: 13_000,
-      body: {
-        model,
-        response_format: {
-          type: 'json_object',
-        },
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a precise interior-planning assistant. Return valid JSON only.',
-          },
-          {
-            role: 'user',
-            content: [
+    if (!apiKey) {
+      fallbackReason = 'Missing KIMI_API_KEY (or MOONSHOT_API_KEY)';
+    } else {
+      try {
+        const { response, raw: rawApiBody, json: result } = await fetchMoonshotJson({
+          url: `${baseUrl}/chat/completions`,
+          apiKey,
+          timeoutMs: 20_000,
+          body: {
+            model,
+            response_format: {
+              type: 'json_object',
+            },
+            messages: [
               {
-                type: 'text',
-                text: prompt,
+                role: 'system',
+                content: 'You are a precise interior-planning assistant. Return valid JSON only.',
               },
               {
-                type: 'image_url',
-                image_url: {
-                  url: `data:${imageData.mimeType};base64,${imageData.data}`,
-                },
+                role: 'user',
+                content: [
+                  {
+                    type: 'text',
+                    text: prompt,
+                  },
+                  {
+                    type: 'image_url',
+                    image_url: {
+                      url: `data:${imageData.mimeType};base64,${imageData.data}`,
+                    },
+                  },
+                ],
               },
             ],
           },
-        ],
-      },
-    });
+        });
 
-    if (!response.ok) {
-      return NextResponse.json(
-        { error: moonshotErrorMessage(result, rawApiBody, 'Plan generation failed') },
-        { status: 500 }
-      );
+        if (!response.ok) {
+          throw new Error(moonshotErrorMessage(result, rawApiBody, 'Plan generation failed'));
+        }
+
+        const rawContent = moonshotMessageText(result);
+        if (!rawContent) {
+          throw new Error('No text response from model');
+        }
+
+        const parsed = parseFirstJSONObject<PlanAIOutput>(rawContent);
+        if (!parsed) {
+          throw new Error(`Failed to parse JSON: ${rawContent.slice(0, 120)}`);
+        }
+        if (!parsed.sceneAnalysis || !parsed.designStrategy || !parsed.generationGuidance) {
+          throw new Error('Incomplete response from model');
+        }
+
+        aiOutput = parsed;
+      } catch (error) {
+        fallbackReason = error instanceof Error ? error.message : 'Plan generation failed';
+      }
     }
 
-    const rawContent = moonshotMessageText(result);
-
-    if (!rawContent) {
-      return NextResponse.json(
-        { error: 'No text response from model' },
-        { status: 500 }
-      );
-    }
-
-    let aiOutput: {
-      sceneAnalysis: SceneAnalysis;
-      designStrategy: DesignStrategy;
-      dynamicQuestions: Array<{
-        id: string;
-        question: string;
-        purpose: string;
-        options: Array<{ value: string; label: string; desc: string }>;
-        allowMultiple?: boolean;
-        fallbackOption?: string;
-      }>;
-      generationGuidance: Omit<GenerationGuidance, 'qualityBaseline'>;
-    };
-
-    const parsed = parseFirstJSONObject<typeof aiOutput>(rawContent);
-    if (!parsed) {
-      return NextResponse.json(
-        { error: 'Failed to parse JSON', raw: rawContent.slice(0, 500) },
-        { status: 500 }
-      );
-    }
-    aiOutput = parsed;
-
-    // Validate core fields exist
-    if (!aiOutput.sceneAnalysis || !aiOutput.designStrategy || !aiOutput.generationGuidance) {
-      return NextResponse.json(
-        { error: 'Incomplete response', raw: rawContent.slice(0, 500) },
-        { status: 500 }
-      );
+    if (!aiOutput) {
+      const planningPackage = buildFallbackPlanningPackage();
+      return NextResponse.json({
+        planningPackage,
+        modelProvider: 'local_fallback',
+        model,
+        modelRequestPrompt: prompt,
+        fallbackReason,
+        degraded: true,
+      });
     }
 
     // ── Assemble final PlanningPackage ──
 
     // Normalize AI questions into 4-6 items, keep framework order when possible.
-    const AI_DECIDE_OPTION = { value: 'ai_decide', label: '你来决定', desc: '交给 AI 自动判断' };
     const rawQuestions = aiOutput.dynamicQuestions || [];
     const byId = new Map(rawQuestions.map((q) => [q.id, q]));
     const orderedQuestions = QUESTION_FRAMEWORK
