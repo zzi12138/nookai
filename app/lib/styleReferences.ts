@@ -118,7 +118,6 @@ function getPlanSignalText(
   userAnswers: Record<string, string | string[]>
 ) {
   const guidance = planningPackage.generationGuidance;
-  const visual = guidance.visualImpactRules;
   return [
     planningPackage.sceneAnalysis.roomType,
     planningPackage.sceneAnalysis.lightCondition,
@@ -129,11 +128,6 @@ function getPlanSignalText(
     guidance.targetAtmosphere,
     guidance.focalPointHint,
     guidance.lightingHint,
-    visual.lightingContrast,
-    visual.focalPriority,
-    visual.emotionalTone,
-    visual.minimalismDiscipline,
-    visual.livedInFeeling,
     getSelectedAnswerText(planningPackage, userAnswers),
   ]
     .filter(Boolean)

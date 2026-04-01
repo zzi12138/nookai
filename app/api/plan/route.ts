@@ -66,13 +66,6 @@ export type GenerationGuidance = {
   targetAtmosphere: string;
   focalPointHint: string;
   lightingHint: string;
-  visualImpactRules: {
-    lightingContrast: string;
-    focalPriority: string;
-    emotionalTone: string;
-    minimalismDiscipline: string;
-    livedInFeeling: string;
-  };
   mustAvoid: string[];
   qualityBaseline: readonly string[];
 };
@@ -87,151 +80,28 @@ export type PlanningPackage = {
 // ─── Prompt ─────────────────────────────────────────────────────────────────
 
 function buildPlanPrompt() {
-  const frameworkJSON = QUESTION_FRAMEWORK.map((q) => ({
-    id: q.id,
-    type: q.type,
-    instruction: q.prompt,
-  }));
+  return `Analyze the rental-room photo and output JSON only.
 
-  return `You are an expert interior designer analyzing a rental apartment photo.
+Output fields:
+sceneAnalysis: roomType, estimatedSize, existingFurniture(4-8 CN nouns), layout(1 sentence), lightCondition(1 sentence), clutterLevel, keyAreas(1-3).
+designStrategy: focalPoint, lightingApproach, softFurnishingApproach, colorDirection, risks(<=2), styleMapping(4 combos, tags only from ${STYLE_TAGS.join(', ')}).
+dynamicQuestions: 4-6 Chinese questions (friendly, conversational, simple, warm). Each question has id, question, purpose, options, allowMultiple, fallbackOption.
+generationGuidance: targetAtmosphere, focalPointHint, lightingHint, mustAvoid(2-4).
 
-Return a JSON object with EXACTLY this structure. No markdown, no code fences — ONLY raw JSON.
+Core direction:
+- Give one clear visual center and one clear mood.
+- Keep guidance short and image-oriented, not a rule document.
+- Mention concrete design actions through wording in lightingApproach + softFurnishingApproach (3-5 actionable moves total, with object/color/placement hints).
+- Keep rental-safe boundaries in mind: no structural change, no repaint, no major furniture replacement.
 
-{
-  "sceneAnalysis": {
-    "roomType": "<卧室/客厅/书房/工作室/etc>",
-    "estimatedSize": "<e.g. '约12㎡'>",
-    "existingFurniture": ["<3-8 main items, Chinese>"],
-    "layout": "<one sentence: spatial arrangement>",
-    "lightCondition": "<one sentence: current lighting>",
-    "clutterLevel": "<整洁/轻度杂乱/中度杂乱/严重杂乱>",
-    "keyAreas": ["<1-3 areas with renovation potential>"]
-  },
-  "designStrategy": {
-    "focalPoint": "<specific area as visual center, max 15 words>",
-    "lightingApproach": "<specific lamp types to add, max 20 words>",
-    "softFurnishingApproach": "<specific items: throws, cushions, rug, etc. Max 20 words>",
-    "colorDirection": "<3-4 color names, e.g. '米白基底+焦糖棕+雾霾蓝点缀'>",
-    "risks": ["<2-3 risks for THIS room>"],
-    "styleMapping": {
-      "<combo1>": "<tag from: ${STYLE_TAGS.join(', ')}>",
-      "<combo2>": "<tag>",
-      "<combo3>": "<tag>",
-      "<combo4>": "<tag>"
-    }
-  },
-  "dynamicQuestions": [
-    // EXACTLY 6 questions, one for each type below
-  ],
-  "generationGuidance": {
-    "targetAtmosphere": "<one sentence>",
-    "focalPointHint": "<one sentence>",
-    "lightingHint": "<one sentence>",
-    "visualImpactRules": {
-      "lightingContrast": "<one sentence about light and shadow structure>",
-      "focalPriority": "<one sentence about visual center and surrounding hierarchy>",
-      "emotionalTone": "<one sentence about the emotional mood of the frame>",
-      "minimalismDiscipline": "<one sentence about restraint and fewer-but-stronger additions>",
-      "livedInFeeling": "<one sentence about natural, lived-in realism>"
-    },
-    "mustAvoid": ["<3-5 items>"]
-  }
-}
+Question goals:
+- Discover use scenario, desired feeling, color/depth preference, change intensity, and one disliked visible object/area.
+- At least one question must ask what the user dislikes or wants to weaken/replace visually.
+- q5 should reference a real visible object/area in the photo.
+- Options must be useful for image generation.
+- Last option of every question must use value "ai_decide" with natural label/desc.
 
-=== DYNAMIC QUESTIONNAIRE (CRITICAL) ===
-
-You must generate EXACTLY 6 questions, following this fixed type framework:
-${JSON.stringify(frameworkJSON, null, 2)}
-
-QUESTIONNAIRE GOAL:
-- The questionnaire should feel like a warm, natural conversation with someone who has taste, not a survey or form.
-- Its job is to uncover the few preferences that most strongly change the generated image.
-- Prioritize discovering: what feeling the user wants, what color/depth direction they prefer, what in the current room they dislike, whether they want a subtle refresh or obvious change, and which visible area/object matters most.
-- The questions should help reveal both positive preferences and negative reactions.
-- Every answer must be useful for the next prompt stage. Do not ask anything that will not influence generation.
-
-TONE + EXPERIENCE:
-- All questions must be Chinese only, natural, spoken, simple, and warm.
-- The assistant should sound friendly, aesthetically sensitive, and easy to talk to.
-- Do NOT sound like a questionnaire, product survey, or professional interview.
-- Avoid stiff phrasing, labels, and abstract wording. The user should feel like they are being guided, not examined.
-
-QUESTION QUALITY RULES:
-- Follow the type and id from the framework above (q1-q6 in order).
-- Keep total questions at exactly 6, but make them feel light and purposeful.
-- Have 3-6 options per question (label max 6 Chinese chars, desc max 15 Chinese chars).
-- The LAST option of EVERY question must ALWAYS use value "ai_decide", but its label/desc should feel natural and relaxed rather than mechanical.
-- Use allowMultiple only when it truly helps the user express something meaningful.
-- Options must be concrete, easy to understand, and directly usable by scene 2.
-
-CONTENT DIRECTION:
-- q1 should quickly clarify how the room should mainly serve daily life.
-- q2 should uncover the emotional direction of the final image, especially whether the user values atmosphere, calmness, cleanliness, personality, or liveliness.
-- q3 and q4 together should produce actionable image cues, especially brightness, warmth, depth, contrast, dark-vs-light preference, and specific color-family leanings.
-- At least one question must reveal dislike, annoyance, weakening intent, or replacement intent — not only “what do you like”.
-- q5 must reference a REAL visible object or area from the current photo by name, such as bed, desk, sofa, curtains, cabinet, or empty wall. It should help reveal whether the user wants to keep it, soften it, hide it visually, or give it a different feeling.
-- q6 should be a high-value follow-up that helps clarify change intensity, first-priority area, or the thing the user most wants to fix.
-
-COLOR REQUIREMENT:
-- Color questions must be specific enough that scene 2 can infer useful prompt instructions.
-- The answers should make it possible to infer things like:
-  - black / gray / white / wood / warm brown / red accents / green accents
-  - light vs dark
-  - low saturation vs stronger contrast
-  - unified palette vs one accent color
-- Do not keep color at the level of vague “tone preference”.
-
-IMPORTANT BEHAVIOR:
-- Different rooms should produce noticeably different questions and options.
-- Do not make every question optimistic-only; the model must be able to discover what the user wants to weaken or change.
-- All questions must be answerable by someone with zero design knowledge.
-- Do NOT ask about “style” or “风格”.
-- Do NOT use design jargon.
-
-=== STYLE MAPPING ===
-- Map 4 likely user-preference combos to tags
-- ONLY use: ${STYLE_TAGS.join(', ')}
-- Keys: combo of q2_value+q3_value+q4_value (e.g. "warm_cozy+soft_warm+light_warm")
-
-=== DESIGN STRATEGY ===
-- Short, specific, actionable — concrete nouns not vague adjectives
-- "落地灯+台灯组合" not "增加灯光层次"
-
-=== GENERATION GUIDANCE ===
-- mustAvoid: based on THIS room's actual problems
-- All hints specific to THIS room
-
-=== VISUAL IMPACT RULES (NEW, VERY IMPORTANT) ===
-You must define what makes the final image feel "editorial", "Xiaohongshu-ready", and visually striking.
-
-This section is NOT about objects, shopping, or style labels.
-It is about image-making principles — as if guiding a photographer or interior stylist.
-
-visualImpactRules must contain exactly these 5 fields:
-- lightingContrast
-- focalPriority
-- emotionalTone
-- minimalismDiscipline
-- livedInFeeling
-
-Rules for visualImpactRules:
-- Write only visual principles, not shopping suggestions.
-- Do NOT mention specific objects like lamp / rug / sofa / cushion.
-- Do NOT mention style words like 日式 / 北欧 / 法式.
-- Focus on how the image should work, not what to buy.
-
-Each field should define:
-- lightingContrast: clear light source, visible bright-dark contrast, local glow plus local shadow, never evenly lit.
-- focalPriority: one obvious visual center, brighter/richer focal area, surrounding areas intentionally weaker.
-- emotionalTone: the frame must communicate one clear feeling, such as warm / calm / relaxed / immersive, not just "pretty".
-- minimalismDiscipline: fewer but stronger, no over-decoration, every added element must earn its place.
-- livedInFeeling: realistic, slightly imperfect, slightly relaxed, never showroom-stiff.
-
-Goal:
-- After scene 1, scene 2 should naturally move toward images with stronger light hierarchy, clearer focus, stronger emotional tone, and more editorial tension.
-- The output should define what makes the frame impressive, not just reasonable.
-
-Return ONLY the JSON.`;
+Return raw JSON only.`;
 }
 
 // ─── Handler ────────────────────────────────────────────────────────────────
@@ -352,62 +222,63 @@ export async function POST(req: Request) {
 
     // ── Assemble final PlanningPackage ──
 
-    // All 6 questions from AI, enforce structure
+    // Normalize AI questions into 4-6 items, keep framework order when possible.
     const AI_DECIDE_OPTION = { value: 'ai_decide', label: '你来决定', desc: '交给 AI 自动判断' };
     const rawQuestions = aiOutput.dynamicQuestions || [];
-    const dynamicQuestionnaire: DynamicQuestion[] = QUESTION_FRAMEWORK.map((frame, i) => {
-      const aiQ = rawQuestions.find((q) => q.id === frame.id) || rawQuestions[i];
-      if (aiQ) {
-        // Cap at 6 options, ensure "你来决定" is always the last option
-        let options = (aiQ.options || []).slice(0, 6).filter((o) => o.value !== 'ai_decide');
-        options.push(AI_DECIDE_OPTION);
-        return {
-          id: frame.id,
-          question: aiQ.question || `关于${frame.label}的偏好？`,
-          purpose: aiQ.purpose || frame.prompt,
-          options,
-          allowMultiple: aiQ.allowMultiple ?? false,
-          fallbackOption: '你来决定',
-        };
-      }
-      // Fallback if AI missed this question
+    const byId = new Map(rawQuestions.map((q) => [q.id, q]));
+    const orderedQuestions = QUESTION_FRAMEWORK
+      .map((frame, i) => byId.get(frame.id) || rawQuestions[i] || null)
+      .filter(Boolean) as Array<{
+      id: string;
+      question: string;
+      purpose: string;
+      options: Array<{ value: string; label: string; desc: string }>;
+      allowMultiple?: boolean;
+    }>;
+
+    const normalizedQuestions: DynamicQuestion[] = orderedQuestions.slice(0, 6).map((aiQ, i) => {
+      const frame = QUESTION_FRAMEWORK[i] || QUESTION_FRAMEWORK[0];
+      const options = (aiQ.options || [])
+        .slice(0, 5)
+        .filter((o) => o.value !== 'ai_decide')
+        .map((o) => ({
+          value: o.value || `option_${Math.random().toString(36).slice(2, 7)}`,
+          label: (o.label || '默认选项').slice(0, 8),
+          desc: (o.desc || '可用于生成').slice(0, 18),
+        }));
       return {
+        id: aiQ.id || frame.id,
+        question: aiQ.question || `关于${frame.label}你更偏向哪种？`,
+        purpose: aiQ.purpose || frame.prompt,
+        options: [...options, AI_DECIDE_OPTION],
+        allowMultiple: aiQ.allowMultiple ?? false,
+        fallbackOption: '你来决定',
+      };
+    });
+
+    while (normalizedQuestions.length < 4) {
+      const frame = QUESTION_FRAMEWORK[normalizedQuestions.length];
+      normalizedQuestions.push({
         id: frame.id,
-        question: `关于${frame.label}的偏好？`,
+        question: `关于${frame.label}你更偏向哪种？`,
         purpose: frame.prompt,
         options: [
-          { value: 'option_a', label: '选项A', desc: '默认选项' },
-          { value: 'option_b', label: '选项B', desc: '默认选项' },
+          { value: 'option_a', label: '选项A', desc: '偏向这个方向' },
+          { value: 'option_b', label: '选项B', desc: '另一种方向' },
           AI_DECIDE_OPTION,
         ],
         allowMultiple: false,
         fallbackOption: '你来决定',
-      };
-    });
+      });
+    }
+    const dynamicQuestionnaire = normalizedQuestions.slice(0, 6);
 
     // Force qualityBaseline to fixed constant
     const generationGuidance: GenerationGuidance = {
       targetAtmosphere: aiOutput.generationGuidance.targetAtmosphere || '',
       focalPointHint: aiOutput.generationGuidance.focalPointHint || '',
       lightingHint: aiOutput.generationGuidance.lightingHint || '',
-      visualImpactRules: {
-        lightingContrast:
-          aiOutput.generationGuidance.visualImpactRules?.lightingContrast ||
-          'Light should have a clear source and visible bright-dark contrast, never flat or evenly spread.',
-        focalPriority:
-          aiOutput.generationGuidance.visualImpactRules?.focalPriority ||
-          'The frame needs one obvious visual center, with richer detail there and quieter surrounding areas.',
-        emotionalTone:
-          aiOutput.generationGuidance.visualImpactRules?.emotionalTone ||
-          'The final image should communicate one clear mood instead of only looking neat or decorative.',
-        minimalismDiscipline:
-          aiOutput.generationGuidance.visualImpactRules?.minimalismDiscipline ||
-          'Use fewer but stronger additions, and avoid filling the room with unnecessary decorative noise.',
-        livedInFeeling:
-          aiOutput.generationGuidance.visualImpactRules?.livedInFeeling ||
-          'Keep a natural lived-in softness so the room feels real, relaxed, and not like a showroom.',
-      },
-      mustAvoid: (aiOutput.generationGuidance.mustAvoid || []).slice(0, 5),
+      mustAvoid: (aiOutput.generationGuidance.mustAvoid || []).slice(0, 4),
       qualityBaseline: QUALITY_BASELINE,
     };
 
