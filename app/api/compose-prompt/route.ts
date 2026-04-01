@@ -145,29 +145,43 @@ export async function POST(req: Request) {
       );
     }
 
-    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    const apiKey = process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY;
     if (!apiKey) {
-      return NextResponse.json({ error: 'Missing API key' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'Missing KIMI_API_KEY (or MOONSHOT_API_KEY)' },
+        { status: 500 },
+      );
     }
 
-    const model = process.env.GEMINI_TEXT_MODEL || 'gemini-3-flash-preview';
+    const baseUrl = (process.env.MOONSHOT_BASE_URL || 'https://api.moonshot.cn/v1').replace(/\/$/, '');
+    const model = process.env.KIMI_TEXT_MODEL || 'kimi-k2.5';
     const selectedReferences = selectReferenceImages(planningPackage, userAnswers, 1);
     const metaPrompt = buildMetaPrompt(planningPackage, userAnswers, selectedReferences);
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      `${baseUrl}/chat/completions`,
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey,
+          Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: metaPrompt }] }],
-          generationConfig: {
-            responseMimeType: 'application/json',
-            temperature: 0.3,
+          model,
+          temperature: 0.3,
+          response_format: {
+            type: 'json_object',
           },
+          messages: [
+            {
+              role: 'system',
+              content: 'You are an interior prompt-composer assistant. Return valid JSON only.',
+            },
+            {
+              role: 'user',
+              content: metaPrompt,
+            },
+          ],
         }),
       },
     );
@@ -180,18 +194,26 @@ export async function POST(req: Request) {
       );
     }
 
-    const textPart = result?.candidates?.[0]?.content?.parts?.find(
-      (p: { text?: string }) => typeof p.text === 'string',
-    );
+    const messageContent = result?.choices?.[0]?.message?.content;
+    const rawContent =
+      typeof messageContent === 'string'
+        ? messageContent
+        : Array.isArray(messageContent)
+          ? messageContent
+              .map((part: { type?: string; text?: string }) =>
+                part?.type === 'text' ? part.text || '' : '',
+              )
+              .join('\n')
+          : '';
 
-    if (!textPart?.text) {
+    if (!rawContent) {
       return NextResponse.json(
         { error: 'No text response from model' },
         { status: 500 },
       );
     }
 
-    let rawText = textPart.text.trim();
+    let rawText = rawContent.trim();
     if (rawText.startsWith('```')) {
       rawText = rawText.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
     }
@@ -238,6 +260,9 @@ export async function POST(req: Request) {
       prompt,
       evaluation: aiOutput.evaluation || '',
       suggestions: aiOutput.suggestions || '',
+      modelProvider: 'moonshot',
+      model,
+      modelRequestPrompt: metaPrompt,
       referenceImages: selectedReferences.map((ref) => ref.url),
       referenceImageMeta: selectedReferences.map((ref) => ({
         id: ref.id,

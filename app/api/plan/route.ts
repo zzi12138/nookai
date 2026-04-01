@@ -110,8 +110,18 @@ type Payload = {
   image?: string;
 };
 
-function stripDataUrl(value: string) {
-  return value.includes(',') ? value.split(',')[1] : value;
+function parseDataUrl(value: string) {
+  const match = value.match(/^data:(.*?);base64,(.*)$/);
+  if (!match) {
+    return {
+      mimeType: 'image/jpeg',
+      data: value,
+    };
+  }
+  return {
+    mimeType: match[1] || 'image/jpeg',
+    data: match[2] || '',
+  };
 }
 
 export async function POST(req: Request) {
@@ -123,42 +133,54 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing image' }, { status: 400 });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    const apiKey = process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY;
     if (!apiKey) {
-      return NextResponse.json({ error: 'Missing API key' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'Missing KIMI_API_KEY (or MOONSHOT_API_KEY)' },
+        { status: 500 }
+      );
     }
 
-    const model = process.env.GEMINI_TEXT_MODEL || 'gemini-3-flash-preview';
+    const baseUrl = (process.env.MOONSHOT_BASE_URL || 'https://api.moonshot.cn/v1').replace(/\/$/, '');
+    const model = process.env.KIMI_TEXT_MODEL || 'kimi-k2.5';
     const prompt = buildPlanPrompt();
-    const base64Image = stripDataUrl(image);
+    const imageData = parseDataUrl(image);
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      `${baseUrl}/chat/completions`,
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey,
+          Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          contents: [
+          model,
+          temperature: 0.3,
+          response_format: {
+            type: 'json_object',
+          },
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a precise interior-planning assistant. Return valid JSON only.',
+            },
             {
               role: 'user',
-              parts: [
-                { text: prompt },
+              content: [
                 {
-                  inline_data: {
-                    mime_type: 'image/jpeg',
-                    data: base64Image,
+                  type: 'text',
+                  text: prompt,
+                },
+                {
+                  type: 'image_url',
+                  image_url: {
+                    url: `data:${imageData.mimeType};base64,${imageData.data}`,
                   },
                 },
               ],
             },
           ],
-          generationConfig: {
-            responseMimeType: 'application/json',
-            temperature: 0.3,
-          },
         }),
       }
     );
@@ -172,11 +194,19 @@ export async function POST(req: Request) {
       );
     }
 
-    const textPart = result?.candidates?.[0]?.content?.parts?.find(
-      (p: { text?: string }) => typeof p.text === 'string'
-    );
+    const messageContent = result?.choices?.[0]?.message?.content;
+    const rawContent =
+      typeof messageContent === 'string'
+        ? messageContent
+        : Array.isArray(messageContent)
+          ? messageContent
+              .map((part: { type?: string; text?: string }) =>
+                part?.type === 'text' ? part.text || '' : ''
+              )
+              .join('\n')
+          : '';
 
-    if (!textPart?.text) {
+    if (!rawContent) {
       return NextResponse.json(
         { error: 'No text response from model' },
         { status: 500 }
@@ -184,7 +214,7 @@ export async function POST(req: Request) {
     }
 
     // Parse JSON
-    let rawText = textPart.text.trim();
+    let rawText = rawContent.trim();
     if (rawText.startsWith('```')) {
       rawText = rawText.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
     }
@@ -302,7 +332,12 @@ export async function POST(req: Request) {
       generationGuidance,
     };
 
-    return NextResponse.json({ planningPackage });
+    return NextResponse.json({
+      planningPackage,
+      modelProvider: 'moonshot',
+      model,
+      modelRequestPrompt: prompt,
+    });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Server error' },
