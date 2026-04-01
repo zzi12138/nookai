@@ -186,7 +186,7 @@ ${templateQuestion.options.map((opt) => `${opt.label}（${opt.desc}）`).join('�
     },
     body: JSON.stringify({
       model,
-      temperature: 0.4,
+      temperature: 1,
       response_format: { type: 'json_object' },
       messages: [
         {

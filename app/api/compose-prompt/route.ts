@@ -168,7 +168,7 @@ export async function POST(req: Request) {
         },
         body: JSON.stringify({
           model,
-          temperature: 0.3,
+          temperature: 1,
           response_format: {
             type: 'json_object',
           },
