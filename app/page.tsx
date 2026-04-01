@@ -13,7 +13,8 @@ import {
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { saveResult } from './lib/imageStore';
-import type { PlanningPackage, DynamicQuestion } from './api/plan/route';
+import type { PlanningPackage } from './api/plan/route';
+import type { DesignChatQuestion, DesignChatResponse, DesignChatState } from './lib/designChat';
 
 const TOTAL_STEPS = 5;
 const stepTitles = ['欢迎', '上传照片', 'AI 分析中', '个性化选择', '确认方案'];
@@ -75,6 +76,10 @@ export default function Page() {
   const [isPlanLoading, setIsPlanLoading] = useState(false);
   const [planError, setPlanError] = useState('');
   const [dynamicAnswers, setDynamicAnswers] = useState<Record<string, string | string[]>>({});
+  const [chatState, setChatState] = useState<DesignChatState | null>(null);
+  const [activeQuestion, setActiveQuestion] = useState<DesignChatQuestion | null>(null);
+  const [isChatLoading, setIsChatLoading] = useState(false);
+  const [chatError, setChatError] = useState('');
 
   const percent = Math.round((step / TOTAL_STEPS) * 100);
   const canGenerate = Boolean(imageBase64) && Boolean(planningPackage);
@@ -112,6 +117,12 @@ export default function Page() {
 
       setPreviewUrl(resized);
       setImageBase64(dataUrlToBase64(resized));
+      setPlanningPackage(null);
+      setDynamicAnswers({});
+      setChatState(null);
+      setActiveQuestion(null);
+      setChatError('');
+      setPlanError('');
     } catch (err) {
       setError(err instanceof Error ? err.message : '上传失败，请重试');
     }
@@ -135,7 +146,9 @@ export default function Page() {
       }
       setPlanningPackage(data.planningPackage);
       setDynamicAnswers({});
-      setStep(4); // Move to dynamic questions
+      setChatState(null);
+      setActiveQuestion(null);
+      await startDesignChat(data.planningPackage);
     } catch (err) {
       setPlanError(err instanceof Error ? err.message : 'AI 分析失败，请重试');
       setStep(2); // Go back to upload
@@ -150,11 +163,16 @@ export default function Page() {
       fetchPlan();
       return;
     }
+    if (step === 4) {
+      continueDesignChat();
+      return;
+    }
     setStep((prev) => Math.min(TOTAL_STEPS, prev + 1));
   };
   const goPrev = () => {
     if (step === 4) {
       // From dynamic questions, go back to upload (skip AI loading step)
+      setChatError('');
       setStep(2);
       return;
     }
@@ -170,6 +188,71 @@ export default function Page() {
       }
       return { ...prev, [qId]: [...current, value] };
     });
+  };
+
+  const startDesignChat = async (pkg: PlanningPackage) => {
+    setIsChatLoading(true);
+    setChatError('');
+    try {
+      const res = await fetch('/api/design-chat/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ planningPackage: pkg }),
+      });
+      const data = (await res.json()) as DesignChatResponse & { error?: string };
+      if (!res.ok || data.mode !== 'ask') {
+        throw new Error((data as { error?: string })?.error || '问答初始化失败');
+      }
+      setChatState(data.chatState);
+      setActiveQuestion(data.question);
+      setStep(4);
+    } catch (err) {
+      setChatError(err instanceof Error ? err.message : '问答初始化失败，请重试');
+      setStep(2);
+    } finally {
+      setIsChatLoading(false);
+    }
+  };
+
+  const continueDesignChat = async () => {
+    if (!planningPackage || !chatState || !activeQuestion) return;
+    const answer = dynamicAnswers[activeQuestion.id];
+    if (!answer || (Array.isArray(answer) && answer.length === 0)) {
+      setChatError('请先选择一个答案再继续');
+      return;
+    }
+
+    setIsChatLoading(true);
+    setChatError('');
+    try {
+      const res = await fetch('/api/design-chat/next', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          planningPackage,
+          chatState,
+          answer,
+        }),
+      });
+      const data = (await res.json()) as DesignChatResponse & { error?: string };
+      if (!res.ok) {
+        throw new Error((data as { error?: string })?.error || '问答继续失败');
+      }
+
+      if (data.mode === 'final') {
+        setChatState(data.chatState);
+        setActiveQuestion(null);
+        setStep(5);
+        return;
+      }
+
+      setChatState(data.chatState);
+      setActiveQuestion(data.question);
+    } catch (err) {
+      setChatError(err instanceof Error ? err.message : '问答继续失败，请重试');
+    } finally {
+      setIsChatLoading(false);
+    }
   };
 
   const handleGenerate = async () => {
@@ -462,7 +545,7 @@ export default function Page() {
               <div className="mb-6">
                 <span className="text-sm font-bold uppercase tracking-widest text-[#8f4d2c]">Step 02 / {TOTAL_STEPS.toString().padStart(2, '0')}</span>
                 <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-[#52372d]">告诉我们你的理想房间</h1>
-                <p className="mt-2 text-base text-[#504440]">AI 根据你的房间生成了以下问题，帮助精准匹配方案</p>
+                <p className="mt-2 text-base text-[#504440]">我们一次只问一个问题，快速抓住你最关键的偏好</p>
               </div>
 
               {/* Design strategy summary card */}
@@ -476,27 +559,41 @@ export default function Page() {
                 </div>
               </div>
 
-              {/* Dynamic questions */}
-              <div className="space-y-5">
-                {planningPackage.dynamicQuestionnaire.map((q, qi) => (
-                  <div key={q.id} className="rounded-3xl bg-white p-6">
-                    <h3 className="mb-1 text-base font-bold text-[#52372d]">
-                      {qi + 1}. {q.question}
-                    </h3>
-                    {q.allowMultiple && (
+              {/* Single dynamic question flow */}
+              <div className="rounded-3xl bg-white p-6">
+                <div className="mb-4 flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-[#8f4d2c]">
+                    进度 {chatState?.askedQuestionIds.length || 0} / {planningPackage.dynamicQuestionnaire.length}
+                  </p>
+                  <p className="text-xs text-[#827470]">
+                    已识别关键偏好 {Object.values(chatState?.slots || {}).filter(Boolean).length} / 6
+                  </p>
+                </div>
+
+                {isChatLoading && !activeQuestion ? (
+                  <div className="flex min-h-[180px] items-center justify-center">
+                    <div className="flex items-center gap-2 text-sm text-[#504440]">
+                      <Sparkles className="h-4 w-4 animate-pulse text-[#8f4d2c]" />
+                      正在准备你的下一问...
+                    </div>
+                  </div>
+                ) : activeQuestion ? (
+                  <>
+                    <h3 className="mb-1 text-base font-bold text-[#52372d]">{activeQuestion.question}</h3>
+                    {activeQuestion.allowMultiple && (
                       <p className="mb-3 text-xs text-[#827470]">可多选</p>
                     )}
                     <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
-                      {q.options.map((opt) => {
-                        const currentAnswer = dynamicAnswers[q.id];
-                        const isSelected = q.allowMultiple
+                      {activeQuestion.options.map((opt) => {
+                        const currentAnswer = dynamicAnswers[activeQuestion.id];
+                        const isSelected = activeQuestion.allowMultiple
                           ? Array.isArray(currentAnswer) && currentAnswer.includes(opt.value)
                           : currentAnswer === opt.value;
                         return (
                           <button
                             key={opt.value}
                             type="button"
-                            onClick={() => setDynamicAnswer(q.id, opt.value, q.allowMultiple)}
+                            onClick={() => setDynamicAnswer(activeQuestion.id, opt.value, activeQuestion.allowMultiple)}
                             className={`flex flex-col items-start rounded-2xl border px-4 py-3 text-left text-sm transition ${
                               isSelected
                                 ? 'border-[#52372d] bg-[#f7edde] font-semibold text-[#52372d]'
@@ -509,9 +606,15 @@ export default function Page() {
                         );
                       })}
                     </div>
+                  </>
+                ) : (
+                  <div className="flex min-h-[160px] items-center justify-center text-sm text-[#827470]">
+                    信息采集完成，准备进入确认阶段...
                   </div>
-                ))}
+                )}
               </div>
+
+              {chatError && <p className="mt-4 text-center text-sm text-[#ba1a1a]">{chatError}</p>}
             </motion.section>
           )}
 
@@ -619,6 +722,30 @@ export default function Page() {
             >
               AI 分析
               <Sparkles className="h-4 w-4" />
+            </button>
+          ) : step === 4 ? (
+            <button
+              type="button"
+              onClick={continueDesignChat}
+              disabled={
+                isChatLoading ||
+                !activeQuestion ||
+                !dynamicAnswers[activeQuestion.id] ||
+                (Array.isArray(dynamicAnswers[activeQuestion.id]) &&
+                  (dynamicAnswers[activeQuestion.id] as string[]).length === 0)
+              }
+              className={`flex items-center gap-2 rounded-2xl px-10 py-3 font-bold transition-all active:scale-95 ${
+                !isChatLoading &&
+                activeQuestion &&
+                dynamicAnswers[activeQuestion.id] &&
+                (!Array.isArray(dynamicAnswers[activeQuestion.id]) ||
+                  (dynamicAnswers[activeQuestion.id] as string[]).length > 0)
+                  ? 'bg-[#52372d] text-white shadow-lg shadow-[#52372d]/20 hover:bg-[#6b4e43]'
+                  : 'cursor-not-allowed bg-[#d4c3be] text-[#827470]'
+              }`}
+            >
+              {isChatLoading ? '处理中...' : '继续'}
+              <ArrowRight className="h-4 w-4" />
             </button>
           ) : step === 5 ? (
             <button
