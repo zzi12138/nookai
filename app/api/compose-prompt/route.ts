@@ -187,13 +187,14 @@ export async function POST(req: Request) {
 
     const apiKey = process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY;
     const baseUrl = (process.env.MOONSHOT_BASE_URL || 'https://api.moonshot.cn/v1').replace(/\/$/, '');
-    const model = process.env.KIMI_TEXT_MODEL || 'kimi-k2.5';
+    const model = process.env.KIMI_COMPOSE_MODEL || process.env.KIMI_TEXT_MODEL || 'kimi-k2-turbo-preview';
     const selectedReferences = selectReferenceImages(planningPackage, userAnswers, 1);
     const metaPrompt = buildMetaPrompt(planningPackage, userAnswers, selectedReferences);
     const answerText = resolveAnswers(planningPackage, userAnswers);
 
     let aiOutput: ComposeAIOutput | null = null;
     let fallbackReason: string | null = null;
+    let kimiRetryModel: string | null = null;
 
     if (!apiKey) {
       fallbackReason = 'Missing KIMI_API_KEY (or MOONSHOT_API_KEY)';
@@ -202,9 +203,10 @@ export async function POST(req: Request) {
         const { response, raw: rawApiBody, json: result } = await fetchMoonshotJson({
           url: `${baseUrl}/chat/completions`,
           apiKey,
-          timeoutMs: 20_000,
+          timeoutMs: 12_000,
           body: {
             model,
+            max_tokens: 900,
             response_format: {
               type: 'json_object',
             },
@@ -237,6 +239,47 @@ export async function POST(req: Request) {
         aiOutput = parsed;
       } catch (error) {
         fallbackReason = error instanceof Error ? error.message : 'Compose failed';
+      }
+    }
+
+    // Retry once with a faster Kimi model before local fallback
+    if (!aiOutput && apiKey) {
+      const retryModel = 'kimi-k2-turbo-preview';
+      try {
+        const { response, raw: rawApiBody, json: result } = await fetchMoonshotJson({
+          url: `${baseUrl}/chat/completions`,
+          apiKey,
+          timeoutMs: 8_000,
+          body: {
+            model: retryModel,
+            max_tokens: 900,
+            response_format: {
+              type: 'json_object',
+            },
+            messages: [
+              {
+                role: 'system',
+                content: 'You are an interior prompt-composer assistant. Return valid JSON only.',
+              },
+              {
+                role: 'user',
+                content: metaPrompt,
+              },
+            ],
+          },
+        });
+        if (!response.ok) {
+          throw new Error(moonshotErrorMessage(result, rawApiBody, 'Compose retry failed'));
+        }
+        const rawContent = moonshotMessageText(result);
+        if (!rawContent) throw new Error('No text response from retry model');
+        const parsed = parseFirstJSONObject<ComposeAIOutput>(rawContent);
+        if (!parsed) throw new Error('Retry model returned invalid JSON');
+        aiOutput = parsed;
+        kimiRetryModel = retryModel;
+        fallbackReason = null;
+      } catch (error) {
+        fallbackReason = `${fallbackReason || 'compose_failed'} | retry: ${error instanceof Error ? error.message : String(error)}`;
       }
     }
 
@@ -277,9 +320,10 @@ export async function POST(req: Request) {
       evaluation: aiOutput.evaluation || '',
       suggestions: aiOutput.suggestions || '',
       modelProvider: fallbackReason ? 'local_fallback' : 'moonshot',
-      model,
+      model: kimiRetryModel || model,
       modelRequestPrompt: metaPrompt,
       fallbackReason,
+      degraded: Boolean(fallbackReason) || Boolean(kimiRetryModel),
       referenceImages: selectedReferences.map((ref) => ref.url),
       referenceImageMeta: selectedReferences.map((ref) => ({
         id: ref.id,

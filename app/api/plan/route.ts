@@ -100,28 +100,21 @@ type PlanAIOutput = {
 // ─── Prompt ─────────────────────────────────────────────────────────────────
 
 function buildPlanPrompt() {
-  return `Analyze the rental-room photo and output JSON only.
+  return `Analyze this rental room and return JSON only.
 
-Output fields:
-sceneAnalysis: roomType, estimatedSize, existingFurniture(4-8 CN nouns), layout(1 sentence), lightCondition(1 sentence), clutterLevel, keyAreas(1-3).
-designStrategy: focalPoint, lightingApproach, softFurnishingApproach, colorDirection, risks(<=2), styleMapping(4 combos, tags only from ${STYLE_TAGS.join(', ')}).
-dynamicQuestions: 4-6 Chinese questions (friendly, conversational, simple, warm). Each question has id, question, purpose, options, allowMultiple, fallbackOption.
-generationGuidance: targetAtmosphere, focalPointHint, lightingHint, mustAvoid(2-4).
+Need:
+1) sceneAnalysis: roomType, estimatedSize, existingFurniture(4-8 Chinese nouns), layout(one Chinese sentence), lightCondition(one Chinese sentence), clutterLevel, keyAreas(1-3).
+2) designStrategy: focalPoint, lightingApproach, softFurnishingApproach, colorDirection, risks(<=2), styleMapping(4 entries, values only from ${STYLE_TAGS.join(', ')}).
+3) dynamicQuestions: 4-6 warm conversational Chinese questions. Each has id, question, purpose, options, allowMultiple, fallbackOption.
+4) generationGuidance: targetAtmosphere, focalPointHint, lightingHint, mustAvoid(2-4).
 
-Core direction:
-- Give one clear visual center and one clear mood.
-- Keep guidance short and image-oriented, not a rule document.
-- Mention concrete design actions through wording in lightingApproach + softFurnishingApproach (3-5 actionable moves total, with object/color/placement hints).
-- Keep rental-safe boundaries in mind: no structural change, no repaint, no major furniture replacement.
+Rules:
+- Keep room structure unchanged, rental-safe.
+- Questions must cover: usage, emotion, color/depth, change intensity, disliked visible object/area.
+- At least one question asks what user dislikes or wants to weaken/replace.
+- Last option of each question uses value "ai_decide".
 
-Question goals:
-- Discover use scenario, desired feeling, color/depth preference, change intensity, and one disliked visible object/area.
-- At least one question must ask what the user dislikes or wants to weaken/replace visually.
-- q5 should reference a real visible object/area in the photo.
-- Options must be useful for image generation.
-- Last option of every question must use value "ai_decide" with natural label/desc.
-
-Return raw JSON only.`;
+Return pure JSON.`;
 }
 
 // ─── Handler ────────────────────────────────────────────────────────────────
@@ -262,11 +255,12 @@ export async function POST(req: Request) {
 
     const apiKey = process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY;
     const baseUrl = (process.env.MOONSHOT_BASE_URL || 'https://api.moonshot.cn/v1').replace(/\/$/, '');
-    const model = process.env.KIMI_TEXT_MODEL || 'kimi-k2.5';
+    const model = process.env.KIMI_PLAN_MODEL || process.env.KIMI_TEXT_MODEL || 'kimi-k2-turbo-preview';
     const prompt = buildPlanPrompt();
     const imageData = parseDataUrl(image);
     let aiOutput: PlanAIOutput | null = null;
     let fallbackReason: string | null = null;
+    let kimiMode: 'vision' | 'text_retry' | 'none' = 'none';
 
     if (!apiKey) {
       fallbackReason = 'Missing KIMI_API_KEY (or MOONSHOT_API_KEY)';
@@ -275,9 +269,10 @@ export async function POST(req: Request) {
         const { response, raw: rawApiBody, json: result } = await fetchMoonshotJson({
           url: `${baseUrl}/chat/completions`,
           apiKey,
-          timeoutMs: 20_000,
+          timeoutMs: 18_000,
           body: {
             model,
+            max_tokens: 1200,
             response_format: {
               type: 'json_object',
             },
@@ -323,8 +318,56 @@ export async function POST(req: Request) {
         }
 
         aiOutput = parsed;
+        kimiMode = 'vision';
       } catch (error) {
         fallbackReason = error instanceof Error ? error.message : 'Plan generation failed';
+      }
+    }
+
+    // Retry with text-only Kimi if vision attempt failed (still prefer Kimi over local fallback)
+    if (!aiOutput && apiKey) {
+      try {
+        const { response, raw: rawApiBody, json: result } = await fetchMoonshotJson({
+          url: `${baseUrl}/chat/completions`,
+          apiKey,
+          timeoutMs: 10_000,
+          body: {
+            model,
+            max_tokens: 1000,
+            response_format: {
+              type: 'json_object',
+            },
+            messages: [
+              {
+                role: 'system',
+                content: 'You are a precise interior-planning assistant. Return valid JSON only.',
+              },
+              {
+                role: 'user',
+                content: `${prompt}
+
+Note: If image understanding is limited, infer a safe rental-room plan with clear assumptions.`,
+              },
+            ],
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(moonshotErrorMessage(result, rawApiBody, 'Plan text retry failed'));
+        }
+
+        const rawContent = moonshotMessageText(result);
+        if (!rawContent) {
+          throw new Error('No text response from model (text retry)');
+        }
+        const parsed = parseFirstJSONObject<PlanAIOutput>(rawContent);
+        if (!parsed || !parsed.sceneAnalysis || !parsed.designStrategy || !parsed.generationGuidance) {
+          throw new Error('Invalid JSON in text retry');
+        }
+        aiOutput = parsed;
+        kimiMode = 'text_retry';
+      } catch (error) {
+        fallbackReason = `${fallbackReason || 'plan_failed'} | retry: ${error instanceof Error ? error.message : String(error)}`;
       }
     }
 
@@ -337,6 +380,7 @@ export async function POST(req: Request) {
         modelRequestPrompt: prompt,
         fallbackReason,
         degraded: true,
+        kimiMode,
       });
     }
 
@@ -426,6 +470,8 @@ export async function POST(req: Request) {
       modelProvider: 'moonshot',
       model,
       modelRequestPrompt: prompt,
+      kimiMode,
+      degraded: kimiMode === 'text_retry',
     });
   } catch (err) {
     return NextResponse.json(

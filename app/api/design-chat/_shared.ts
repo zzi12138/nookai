@@ -56,7 +56,7 @@ export function getKimiConfig(): KimiConfig {
   return {
     apiKey,
     baseUrl: (process.env.MOONSHOT_BASE_URL || 'https://api.moonshot.cn/v1').replace(/\/$/, ''),
-    model: process.env.KIMI_TEXT_MODEL || 'kimi-k2.5',
+    model: process.env.KIMI_CHAT_MODEL || process.env.KIMI_TEXT_MODEL || 'kimi-k2-turbo-preview',
   };
 }
 
