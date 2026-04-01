@@ -141,7 +141,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const baseUrl = (process.env.MOONSHOT_BASE_URL || 'https://api.moonshot.cn/v1').replace(/\/$/, '');
+    const baseUrl = (process.env.MOONSHOT_BASE_URL || 'https://api.moonshot.ai/v1').replace(/\/$/, '');
     const model = process.env.KIMI_TEXT_MODEL || 'kimi-k2.5';
     const prompt = buildPlanPrompt();
     const imageData = parseDataUrl(image);
