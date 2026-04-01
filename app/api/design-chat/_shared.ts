@@ -6,10 +6,10 @@ import {
   type DesignChatState,
 } from '../../lib/designChat';
 import {
+  fetchMoonshotJson,
   moonshotErrorMessage,
   moonshotMessageText,
   parseFirstJSONObject,
-  readMoonshotResponse,
 } from '../../lib/server/moonshot';
 
 const DISLIKE_KEYWORDS = [
@@ -184,13 +184,11 @@ ${templateQuestion.question}
 选项（仅供你理解意图）：
 ${templateQuestion.options.map((opt) => `${opt.label}（${opt.desc}）`).join('；')}`;
 
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
+  const { response, raw: rawApiBody, json: result } = await fetchMoonshotJson({
+    url: `${baseUrl}/chat/completions`,
+    apiKey,
+    timeoutMs: 7_000,
+    body: {
       model,
       response_format: { type: 'json_object' },
       messages: [
@@ -203,10 +201,8 @@ ${templateQuestion.options.map((opt) => `${opt.label}（${opt.desc}）`).join('�
           content: prompt,
         },
       ],
-    }),
+    },
   });
-
-  const { raw: rawApiBody, json: result } = await readMoonshotResponse(response);
   if (!response.ok) {
     throw new Error(moonshotErrorMessage(result, rawApiBody, 'Kimi question rewrite failed'));
   }

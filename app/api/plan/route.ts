@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import {
+  fetchMoonshotJson,
   moonshotErrorMessage,
   moonshotMessageText,
   parseFirstJSONObject,
-  readMoonshotResponse,
 } from '../../lib/server/moonshot';
 
 export const runtime = 'nodejs';
@@ -152,44 +152,38 @@ export async function POST(req: Request) {
     const prompt = buildPlanPrompt();
     const imageData = parseDataUrl(image);
 
-    const response = await fetch(
-      `${baseUrl}/chat/completions`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
+    const { response, raw: rawApiBody, json: result } = await fetchMoonshotJson({
+      url: `${baseUrl}/chat/completions`,
+      apiKey,
+      timeoutMs: 13_000,
+      body: {
+        model,
+        response_format: {
+          type: 'json_object',
         },
-        body: JSON.stringify({
-          model,
-          response_format: {
-            type: 'json_object',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a precise interior-planning assistant. Return valid JSON only.',
           },
-          messages: [
-            {
-              role: 'system',
-              content: 'You are a precise interior-planning assistant. Return valid JSON only.',
-            },
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'text',
-                  text: prompt,
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: prompt,
+              },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: `data:${imageData.mimeType};base64,${imageData.data}`,
                 },
-                {
-                  type: 'image_url',
-                  image_url: {
-                    url: `data:${imageData.mimeType};base64,${imageData.data}`,
-                  },
-                },
-              ],
-            },
-          ],
-        }),
-      }
-    );
-    const { raw: rawApiBody, json: result } = await readMoonshotResponse(response);
+              },
+            ],
+          },
+        ],
+      },
+    });
 
     if (!response.ok) {
       return NextResponse.json(

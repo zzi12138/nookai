@@ -9,6 +9,38 @@ export async function readMoonshotResponse(response: Response) {
   return { raw, json };
 }
 
+export async function fetchMoonshotJson(opts: {
+  url: string;
+  apiKey: string;
+  body: unknown;
+  timeoutMs?: number;
+}) {
+  const controller = new AbortController();
+  const timeoutMs = opts.timeoutMs ?? 12_000;
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(opts.url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${opts.apiKey}`,
+      },
+      body: JSON.stringify(opts.body),
+      signal: controller.signal,
+    });
+    const parsed = await readMoonshotResponse(response);
+    return { response, ...parsed };
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`Moonshot request timeout after ${timeoutMs}ms`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export function moonshotErrorMessage(json: any, raw: string, fallback: string) {
   return (
     json?.error?.message ||

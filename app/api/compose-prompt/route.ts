@@ -2,10 +2,10 @@ import { NextResponse } from 'next/server';
 import type { PlanningPackage } from '../plan/route';
 import { selectReferenceImages, type StyleReference } from '../../lib/styleReferences';
 import {
+  fetchMoonshotJson,
   moonshotErrorMessage,
   moonshotMessageText,
   parseFirstJSONObject,
-  readMoonshotResponse,
 } from '../../lib/server/moonshot';
 
 export const runtime = 'nodejs';
@@ -164,34 +164,27 @@ export async function POST(req: Request) {
     const selectedReferences = selectReferenceImages(planningPackage, userAnswers, 1);
     const metaPrompt = buildMetaPrompt(planningPackage, userAnswers, selectedReferences);
 
-    const response = await fetch(
-      `${baseUrl}/chat/completions`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
+    const { response, raw: rawApiBody, json: result } = await fetchMoonshotJson({
+      url: `${baseUrl}/chat/completions`,
+      apiKey,
+      timeoutMs: 13_000,
+      body: {
+        model,
+        response_format: {
+          type: 'json_object',
         },
-        body: JSON.stringify({
-          model,
-          response_format: {
-            type: 'json_object',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are an interior prompt-composer assistant. Return valid JSON only.',
           },
-          messages: [
-            {
-              role: 'system',
-              content: 'You are an interior prompt-composer assistant. Return valid JSON only.',
-            },
-            {
-              role: 'user',
-              content: metaPrompt,
-            },
-          ],
-        }),
+          {
+            role: 'user',
+            content: metaPrompt,
+          },
+        ],
       },
-    );
-
-    const { raw: rawApiBody, json: result } = await readMoonshotResponse(response);
+    });
     if (!response.ok) {
       return NextResponse.json(
         { error: moonshotErrorMessage(result, rawApiBody, 'Compose failed') },
