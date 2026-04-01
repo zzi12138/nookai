@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import type { PlanningPackage } from '../plan/route';
 import { selectReferenceImages, type StyleReference } from '../../lib/styleReferences';
+import {
+  moonshotErrorMessage,
+  moonshotMessageText,
+  parseFirstJSONObject,
+  readMoonshotResponse,
+} from '../../lib/server/moonshot';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -153,7 +159,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const baseUrl = (process.env.MOONSHOT_BASE_URL || 'https://api.moonshot.ai/v1').replace(/\/$/, '');
+    const baseUrl = (process.env.MOONSHOT_BASE_URL || 'https://api.moonshot.cn/v1').replace(/\/$/, '');
     const model = process.env.KIMI_TEXT_MODEL || 'kimi-k2.5';
     const selectedReferences = selectReferenceImages(planningPackage, userAnswers, 1);
     const metaPrompt = buildMetaPrompt(planningPackage, userAnswers, selectedReferences);
@@ -168,7 +174,6 @@ export async function POST(req: Request) {
         },
         body: JSON.stringify({
           model,
-          temperature: 1,
           response_format: {
             type: 'json_object',
           },
@@ -186,36 +191,21 @@ export async function POST(req: Request) {
       },
     );
 
-    const result = await response.json().catch(() => ({}));
+    const { raw: rawApiBody, json: result } = await readMoonshotResponse(response);
     if (!response.ok) {
       return NextResponse.json(
-        { error: result?.error?.message || 'Compose failed' },
+        { error: moonshotErrorMessage(result, rawApiBody, 'Compose failed') },
         { status: 500 },
       );
     }
 
-    const messageContent = result?.choices?.[0]?.message?.content;
-    const rawContent =
-      typeof messageContent === 'string'
-        ? messageContent
-        : Array.isArray(messageContent)
-          ? messageContent
-              .map((part: { type?: string; text?: string }) =>
-                part?.type === 'text' ? part.text || '' : '',
-              )
-              .join('\n')
-          : '';
+    const rawContent = moonshotMessageText(result);
 
     if (!rawContent) {
       return NextResponse.json(
         { error: 'No text response from model' },
         { status: 500 },
       );
-    }
-
-    let rawText = rawContent.trim();
-    if (rawText.startsWith('```')) {
-      rawText = rawText.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
     }
 
     let aiOutput: {
@@ -227,14 +217,14 @@ export async function POST(req: Request) {
       suggestions: string;
     };
 
-    try {
-      aiOutput = JSON.parse(rawText);
-    } catch {
+    const parsed = parseFirstJSONObject<typeof aiOutput>(rawContent);
+    if (!parsed) {
       return NextResponse.json(
-        { error: 'Failed to parse compose JSON', raw: rawText.slice(0, 500) },
+        { error: 'Failed to parse compose JSON', raw: rawContent.slice(0, 500) },
         { status: 500 },
       );
     }
+    aiOutput = parsed;
 
     // Validate & cap: primary ≤ 2, secondary ≤ 3
     const primary = (Array.isArray(aiOutput.primary) ? aiOutput.primary : []).slice(0, 2);
@@ -248,7 +238,7 @@ export async function POST(req: Request) {
 
     if (primary.length === 0 && secondary.length === 0) {
       return NextResponse.json(
-        { error: 'Empty design rules from model', raw: rawText.slice(0, 500) },
+        { error: 'Empty design rules from model', raw: rawContent.slice(0, 500) },
         { status: 500 },
       );
     }

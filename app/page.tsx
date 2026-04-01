@@ -21,6 +21,16 @@ const stepTitles = ['欢迎', '上传照片', 'AI 分析中', '个性化选择',
 
 const loadingLines = ['正在理解你的风格偏好...', '正在生成改造效果图...', '正在整理购物指南...'];
 
+async function readJsonSafe<T>(res: Response): Promise<{ data: T | null; raw: string }> {
+  const raw = await res.text();
+  if (!raw) return { data: null, raw: '' };
+  try {
+    return { data: JSON.parse(raw) as T, raw };
+  } catch {
+    return { data: null, raw };
+  }
+}
+
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -140,9 +150,10 @@ export default function Page() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image: imageBase64 }),
       });
-      const data = await res.json();
-      if (!res.ok || !data.planningPackage) {
-        throw new Error(data.error || 'AI 分析失败');
+      const { data, raw } = await readJsonSafe<{ planningPackage?: PlanningPackage; error?: string }>(res);
+      if (!res.ok || !data?.planningPackage) {
+        const fallback = raw ? `服务返回异常：${raw.slice(0, 120)}` : 'AI 分析失败';
+        throw new Error(data?.error || fallback);
       }
       setPlanningPackage(data.planningPackage);
       setDynamicAnswers({});
@@ -199,9 +210,10 @@ export default function Page() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ planningPackage: pkg }),
       });
-      const data = (await res.json()) as DesignChatResponse & { error?: string };
-      if (!res.ok || data.mode !== 'ask') {
-        throw new Error((data as { error?: string })?.error || '问答初始化失败');
+      const { data, raw } = await readJsonSafe<DesignChatResponse & { error?: string }>(res);
+      if (!res.ok || !data || data.mode !== 'ask') {
+        const fallback = raw ? `服务返回异常：${raw.slice(0, 120)}` : '问答初始化失败';
+        throw new Error(data?.error || fallback);
       }
       setChatState(data.chatState);
       setActiveQuestion(data.question);
@@ -234,9 +246,10 @@ export default function Page() {
           answer,
         }),
       });
-      const data = (await res.json()) as DesignChatResponse & { error?: string };
-      if (!res.ok) {
-        throw new Error((data as { error?: string })?.error || '问答继续失败');
+      const { data, raw } = await readJsonSafe<DesignChatResponse & { error?: string }>(res);
+      if (!res.ok || !data) {
+        const fallback = raw ? `服务返回异常：${raw.slice(0, 120)}` : '问答继续失败';
+        throw new Error(data?.error || fallback);
       }
 
       if (data.mode === 'final') {
@@ -271,9 +284,18 @@ export default function Page() {
           userAnswers: dynamicAnswers,
         }),
       });
-      const composeData = await composeRes.json().catch(() => null);
+      const { data: composeData, raw: composeRaw } = await readJsonSafe<{
+        prompt?: string;
+        error?: string;
+        referenceImages?: string[];
+        evaluation?: string;
+        suggestions?: string;
+        designPlan?: any;
+        referenceImageMeta?: any;
+      }>(composeRes);
       if (!composeRes.ok || !composeData?.prompt) {
-        throw new Error(composeData?.error || '方案生成失败');
+        const fallback = composeRaw ? `服务返回异常：${composeRaw.slice(0, 120)}` : '方案生成失败';
+        throw new Error(composeData?.error || fallback);
       }
 
       // ── Stage 3: generate image ──
@@ -298,7 +320,8 @@ export default function Page() {
                 signal: controller.signal,
               });
 
-          data = await response.json().catch(() => null);
+          const parsed = await readJsonSafe<any>(response);
+          data = parsed.data;
           if (response.ok && data?.imageUrl) {
             break;
           }

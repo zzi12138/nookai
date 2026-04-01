@@ -1,4 +1,10 @@
 import { NextResponse } from 'next/server';
+import {
+  moonshotErrorMessage,
+  moonshotMessageText,
+  parseFirstJSONObject,
+  readMoonshotResponse,
+} from '../../lib/server/moonshot';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -141,7 +147,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const baseUrl = (process.env.MOONSHOT_BASE_URL || 'https://api.moonshot.ai/v1').replace(/\/$/, '');
+    const baseUrl = (process.env.MOONSHOT_BASE_URL || 'https://api.moonshot.cn/v1').replace(/\/$/, '');
     const model = process.env.KIMI_TEXT_MODEL || 'kimi-k2.5';
     const prompt = buildPlanPrompt();
     const imageData = parseDataUrl(image);
@@ -156,7 +162,6 @@ export async function POST(req: Request) {
         },
         body: JSON.stringify({
           model,
-          temperature: 1,
           response_format: {
             type: 'json_object',
           },
@@ -184,39 +189,22 @@ export async function POST(req: Request) {
         }),
       }
     );
-
-    const result = await response.json().catch(() => ({}));
+    const { raw: rawApiBody, json: result } = await readMoonshotResponse(response);
 
     if (!response.ok) {
       return NextResponse.json(
-        { error: result?.error?.message || 'Plan generation failed' },
+        { error: moonshotErrorMessage(result, rawApiBody, 'Plan generation failed') },
         { status: 500 }
       );
     }
 
-    const messageContent = result?.choices?.[0]?.message?.content;
-    const rawContent =
-      typeof messageContent === 'string'
-        ? messageContent
-        : Array.isArray(messageContent)
-          ? messageContent
-              .map((part: { type?: string; text?: string }) =>
-                part?.type === 'text' ? part.text || '' : ''
-              )
-              .join('\n')
-          : '';
+    const rawContent = moonshotMessageText(result);
 
     if (!rawContent) {
       return NextResponse.json(
         { error: 'No text response from model' },
         { status: 500 }
       );
-    }
-
-    // Parse JSON
-    let rawText = rawContent.trim();
-    if (rawText.startsWith('```')) {
-      rawText = rawText.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
     }
 
     let aiOutput: {
@@ -233,19 +221,19 @@ export async function POST(req: Request) {
       generationGuidance: Omit<GenerationGuidance, 'qualityBaseline'>;
     };
 
-    try {
-      aiOutput = JSON.parse(rawText);
-    } catch {
+    const parsed = parseFirstJSONObject<typeof aiOutput>(rawContent);
+    if (!parsed) {
       return NextResponse.json(
-        { error: 'Failed to parse JSON', raw: rawText.slice(0, 500) },
+        { error: 'Failed to parse JSON', raw: rawContent.slice(0, 500) },
         { status: 500 }
       );
     }
+    aiOutput = parsed;
 
     // Validate core fields exist
     if (!aiOutput.sceneAnalysis || !aiOutput.designStrategy || !aiOutput.generationGuidance) {
       return NextResponse.json(
-        { error: 'Incomplete response', raw: rawText.slice(0, 500) },
+        { error: 'Incomplete response', raw: rawContent.slice(0, 500) },
         { status: 500 }
       );
     }

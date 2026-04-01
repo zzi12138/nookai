@@ -5,6 +5,12 @@ import {
   type ChatSlots,
   type DesignChatState,
 } from '../../lib/designChat';
+import {
+  moonshotErrorMessage,
+  moonshotMessageText,
+  parseFirstJSONObject,
+  readMoonshotResponse,
+} from '../../lib/server/moonshot';
 
 const DISLIKE_KEYWORDS = [
   '不喜欢',
@@ -49,7 +55,7 @@ export function getKimiConfig(): KimiConfig {
   }
   return {
     apiKey,
-    baseUrl: (process.env.MOONSHOT_BASE_URL || 'https://api.moonshot.ai/v1').replace(/\/$/, ''),
+    baseUrl: (process.env.MOONSHOT_BASE_URL || 'https://api.moonshot.cn/v1').replace(/\/$/, ''),
     model: process.env.KIMI_TEXT_MODEL || 'kimi-k2.5',
   };
 }
@@ -186,7 +192,6 @@ ${templateQuestion.options.map((opt) => `${opt.label}（${opt.desc}）`).join('�
     },
     body: JSON.stringify({
       model,
-      temperature: 1,
       response_format: { type: 'json_object' },
       messages: [
         {
@@ -201,30 +206,25 @@ ${templateQuestion.options.map((opt) => `${opt.label}（${opt.desc}）`).join('�
     }),
   });
 
-  const result = await response.json().catch(() => ({}));
+  const { raw: rawApiBody, json: result } = await readMoonshotResponse(response);
   if (!response.ok) {
-    throw new Error(result?.error?.message || 'Kimi question rewrite failed');
+    throw new Error(moonshotErrorMessage(result, rawApiBody, 'Kimi question rewrite failed'));
   }
 
-  const content = result?.choices?.[0]?.message?.content;
-  const raw =
-    typeof content === 'string'
-      ? content
-      : Array.isArray(content)
-        ? content
-            .map((part: { type?: string; text?: string }) => (part.type === 'text' ? part.text || '' : ''))
-            .join('\n')
-        : '';
+  const raw = moonshotMessageText(result);
 
   if (!raw) return templateQuestion.question;
-  try {
-    const parsed = JSON.parse(raw.trim());
-    if (typeof parsed?.question === 'string' && parsed.question.trim()) {
-      return parsed.question.trim();
-    }
-  } catch {
-    // fallback to template below
+  const parsed = parseFirstJSONObject<{ question?: string }>(raw);
+  if (typeof parsed?.question === 'string' && parsed.question.trim()) {
+    return parsed.question.trim();
   }
+
+  // fallback: if model accidentally returns plain question sentence
+  const plain = raw.replace(/^["'\s]+|["'\s]+$/g, '').trim();
+  if (plain && plain.length <= 80 && !plain.includes('{') && !plain.includes('}')) {
+    return plain;
+  }
+
   return templateQuestion.question;
 }
 
