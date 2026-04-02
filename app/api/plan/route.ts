@@ -223,6 +223,64 @@ function isOptionSetUsable(options: Array<{ value: string; label: string; desc: 
   return true;
 }
 
+function containsAny(text: string, keywords: string[]) {
+  return keywords.some((kw) => text.includes(kw));
+}
+
+function optionsMatchQuestionType(
+  questionId: string,
+  options: Array<{ value: string; label: string; desc: string }>,
+  scene: Pick<SceneAnalysis, 'existingFurniture' | 'keyAreas'> | undefined,
+) {
+  const joined = options.map((o) => `${o.label} ${o.desc}`).join(' ');
+  const matched = options.filter((o) => {
+    const text = `${o.label} ${o.desc}`;
+    switch (questionId) {
+      case 'q1':
+        return containsAny(text, ['休息', '睡眠', '工作', '学习', '阅读', '社交', '放松']);
+      case 'q2':
+        return containsAny(text, ['温暖', '治愈', '安静', '沉稳', '活力', '氛围', '清爽']);
+      case 'q3':
+        return containsAny(text, ['暖光', '明亮', '通透', '电影', '对比', '层次', '照明']);
+      case 'q4':
+        return containsAny(text, ['暖色', '冷色', '黑白灰', '木色', '米色', '灰蓝', '跳色']);
+      case 'q5':
+        return containsAny(text, ['保留', '弱化', '替换', '重做', '改造']) || containsAny(text, ['床', '桌', '窗', '沙发', '墙']);
+      case 'q6':
+        return containsAny(text, ['收纳', '桌面', '窗边', '床品', '细节', '角落', '地毯', '装饰']);
+      default:
+        return text.length > 0;
+    }
+  }).length;
+
+  if (matched < 2) return false;
+
+  if (questionId === 'q5' || questionId === 'q6') {
+    const roomTokens = [...(scene?.existingFurniture || []), ...(scene?.keyAreas || [])]
+      .map((s) => s.trim())
+      .filter((s) => s.length >= 1);
+    if (roomTokens.length > 0) {
+      const hasRoomMention = roomTokens.some((token) => joined.includes(token));
+      if (!hasRoomMention) return false;
+    }
+  }
+
+  return true;
+}
+
+function isTooSimilarToPrevious(
+  options: Array<{ value: string; label: string; desc: string }>,
+  previousLabelSets: string[][],
+) {
+  const labels = options.map((o) => o.label.trim()).filter(Boolean);
+  if (labels.length < 3) return true;
+
+  return previousLabelSets.some((prev) => {
+    const overlap = labels.filter((l) => prev.includes(l)).length;
+    return overlap >= 2;
+  });
+}
+
 function parseDataUrl(value: string) {
   const match = value.match(/^data:(.*?);base64,(.*)$/);
   if (!match) {
@@ -499,6 +557,7 @@ Note: If image understanding is limited, infer a safe rental-room plan with clea
 
     const defaultOptionsByQuestion = buildDefaultOptionsByQuestion(aiOutput.sceneAnalysis);
     const usedSignatures = new Set<string>();
+    const previousLabelSets: string[][] = [];
 
     const normalizedQuestions: DynamicQuestion[] = orderedQuestions.slice(0, 6).map((aiQ, i) => {
       const frame = QUESTION_FRAMEWORK[i] || QUESTION_FRAMEWORK[0];
@@ -512,6 +571,8 @@ Note: If image understanding is limited, infer a safe rental-room plan with clea
       let optionsCore = aiOptions;
       const shouldFallback =
         !isOptionSetUsable(aiOptions) ||
+        !optionsMatchQuestionType(questionId, aiOptions, aiOutput.sceneAnalysis) ||
+        isTooSimilarToPrevious(aiOptions, previousLabelSets) ||
         !aiSignature ||
         usedSignatures.has(aiSignature);
 
@@ -521,6 +582,7 @@ Note: If image understanding is limited, infer a safe rental-room plan with clea
 
       const finalSignature = optionsCore.map((o) => o.label).join('|');
       if (finalSignature) usedSignatures.add(finalSignature);
+      previousLabelSets.push(optionsCore.map((o) => o.label.trim()).filter(Boolean));
 
       return {
         id: questionId,
