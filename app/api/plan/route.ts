@@ -102,40 +102,66 @@ type PlanAIOutput = {
 function buildPlanPrompt() {
   return `你是一位资深室内设计师，请基于这张房间图输出 JSON（仅 JSON）。
 
-目标：给出“可用于后续生图”的简洁规划，不要写成长文档。
+目标：给出”可用于后续生图”的简洁规划。
 
-请输出：
-1) sceneAnalysis
-- roomType, estimatedSize
-- existingFurniture（4-8个中文名词）
-- layout（1句中文）
-- lightCondition（1句中文）
-- clutterLevel, keyAreas（1-3个）
+严格按以下 JSON 结构输出：
 
-2) designStrategy
-- focalPoint（明确主角区域）
-- lightingApproach（简洁可执行）
-- softFurnishingApproach
-- colorDirection
-- risks（最多2条）
-- styleMapping（4项，值仅可用：${STYLE_TAGS.join(', ')}）
+{
+  “sceneAnalysis”: {
+    “roomType”: “卧室”,
+    “estimatedSize”: “12平米”,
+    “existingFurniture”: [“床”,”书桌”,”椅子”,”衣柜”],
+    “layout”: “一句话描述布局”,
+    “lightCondition”: “一句话描述光线”,
+    “clutterLevel”: “low/medium/high”,
+    “keyAreas”: [“床区”,”桌面区”]
+  },
+  “designStrategy”: {
+    “focalPoint”: “主视觉焦点区域”,
+    “lightingApproach”: “简洁灯光方案”,
+    “softFurnishingApproach”: “软装方向”,
+    “colorDirection”: “色彩方向”,
+    “risks”: [“风险1”],
+    “styleMapping”: {“key1”: “${STYLE_TAGS[0]}”, “key2”: “${STYLE_TAGS[1]}”}
+  },
+  “dynamicQuestions”: [
+    {
+      “id”: “q1”,
+      “question”: “这个房间你平时主要拿来干嘛？”,
+      “purpose”: “了解使用目的”,
+      “options”: [
+        {“value”: “sleep”, “label”: “睡觉休息”, “desc”: “安安静静躺平”},
+        {“value”: “work”, “label”: “办公学习”, “desc”: “需要专注高效”},
+        {“value”: “chill”, “label”: “追剧发呆”, “desc”: “纯放松不动脑”},
+        {“value”: “ai_decide”, “label”: “你来决定”, “desc”: “交给 AI 自动判断”}
+      ],
+      “allowMultiple”: true
+    }
+  ],
+  “generationGuidance”: {
+    “targetAtmosphere”: “整体氛围”,
+    “focalPointHint”: “焦点提示”,
+    “lightingHint”: “灯光提示”,
+    “mustAvoid”: [“禁忌1”,”禁忌2”]
+  }
+}
 
-3) dynamicQuestions（4-6题）
-- 问法口语化、有温度、像聊天
-- 每题只问一件事，选项简短实用
-- 必须覆盖：使用目的、想要感觉、颜色/深浅、改动强度、反感或想替换的具体物件/区域
-- 至少1题明确问“不喜欢什么/想弱化或替换什么”
-- 每题都保留 ai_decide 选项
-- 每一题的 options 必须和该题主题强相关，且不同题之间不要重复同一组选项
-- q5/q6 需要尽量引用图中真实可见物件或区域（如床、桌、窗边、沙发、墙面空区）
+dynamicQuestions 要求（重要！！！）：
+- 生成 4-6 题，id 依次为 q1, q2, q3, q4, q5, q6
+- 每题 options 数组 3-5 个选项，最后一个固定为 {“value”:”ai_decide”,”label”:”你来决定”,”desc”:”交给 AI 自动判断”}
+- 每个 option 必须有 value, label, desc 三个字段
+- label 2-6个中文字，desc 4-10个中文字
+- 问法口语化、有温度、像聊天，不要”关于XX的偏好”这种模板句
+- 必须覆盖：使用目的、想要感觉、颜色/深浅、改动强度、反感或想替换的具体物件
+- 至少1题问”不喜欢什么/想弱化或替换什么”
+- 每题选项必须不同！不同题之间不能出现重复的 label
+- q5/q6 选项要引用图中真实可见的物件或区域名称
 
-4) generationGuidance
-- targetAtmosphere, focalPointHint, lightingHint, mustAvoid（2-4条）
+styleMapping 的值只能是：${STYLE_TAGS.join(', ')}
 
-边界：
-- 仅做租房友好改造，不改结构，不改硬装布局。
+边界：仅做租房友好改造，不改结构，不改硬装布局。
 
-只返回纯 JSON。`;
+只返回纯 JSON，不要任何解释。`;
 }
 
 // ─── Handler ────────────────────────────────────────────────────────────────
@@ -599,6 +625,19 @@ Note: If image understanding is limited, infer a safe rental-room plan with clea
       generationGuidance,
     };
 
+    // Debug: track which questions used AI options vs fallback
+    const optionSources: Record<string, string> = {};
+    for (const q of dynamicQuestionnaire) {
+      const defaultOpts = defaultOptionsByQuestion[q.id];
+      if (!defaultOpts) {
+        optionSources[q.id] = 'ai';
+      } else {
+        const defaultLabels = defaultOpts.map((o) => o.label).sort().join('|');
+        const actualLabels = q.options.filter((o) => o.value !== 'ai_decide').map((o) => o.label).sort().join('|');
+        optionSources[q.id] = actualLabels === defaultLabels ? 'fallback' : 'ai';
+      }
+    }
+
     return NextResponse.json({
       planningPackage,
       modelProvider: 'moonshot',
@@ -606,6 +645,13 @@ Note: If image understanding is limited, infer a safe rental-room plan with clea
       modelRequestPrompt: prompt,
       kimiMode,
       degraded: kimiMode === 'text_retry',
+      _debug: {
+        optionSources,
+        rawQuestionCount: rawQuestions.length,
+        rawQuestionIds: rawQuestions.map((q) => q.id),
+        rawQ1OptionsCount: rawQuestions[0]?.options?.length ?? 0,
+        rawQ1OptionsSample: (rawQuestions[0]?.options || []).slice(0, 2),
+      },
     });
   } catch (err) {
     return NextResponse.json(
