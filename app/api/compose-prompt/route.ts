@@ -186,7 +186,7 @@ export async function POST(req: Request) {
 
     const apiKey = process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY;
     const baseUrl = (process.env.MOONSHOT_BASE_URL || 'https://api.moonshot.cn/v1').replace(/\/$/, '');
-    const model = process.env.KIMI_COMPOSE_MODEL || process.env.KIMI_TEXT_MODEL || 'kimi-latest';
+    const model = process.env.KIMI_COMPOSE_MODEL || process.env.KIMI_TEXT_MODEL || 'kimi-k2-turbo-preview';
     const selectedReferences = selectReferenceImages(planningPackage, userAnswers, 1);
     const metaPrompt = buildMetaPrompt(planningPackage, userAnswers, selectedReferences);
     const answerText = resolveAnswers(planningPackage, userAnswers);
@@ -243,7 +243,7 @@ export async function POST(req: Request) {
 
     // Retry once with a faster Kimi model before local fallback
     if (!aiOutput && apiKey) {
-      const retryModel = 'kimi-latest';
+      const retryModel = 'kimi-k2-turbo-preview';
       try {
         const { response, raw: rawApiBody, json: result } = await fetchMoonshotJson({
           url: `${baseUrl}/chat/completions`,
