@@ -85,6 +85,7 @@ export default function Page() {
   const [planningPackage, setPlanningPackage] = useState<PlanningPackage | null>(null);
   const [isPlanLoading, setIsPlanLoading] = useState(false);
   const [planError, setPlanError] = useState('');
+  const [planDebug, setPlanDebug] = useState<string>('');
   const [dynamicAnswers, setDynamicAnswers] = useState<Record<string, string | string[]>>({});
   const [chatState, setChatState] = useState<DesignChatState | null>(null);
   const [activeQuestion, setActiveQuestion] = useState<DesignChatQuestion | null>(null);
@@ -150,11 +151,19 @@ export default function Page() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image: imageBase64 }),
       });
-      const { data, raw } = await readJsonSafe<{ planningPackage?: PlanningPackage; error?: string }>(res);
+      const { data, raw } = await readJsonSafe<{ planningPackage?: PlanningPackage; error?: string; degraded?: boolean; fallbackReason?: string; kimiMode?: string; _debug?: unknown }>(res);
       if (!res.ok || !data?.planningPackage) {
         const fallback = raw ? `服务返回异常：${raw.slice(0, 120)}` : 'AI 分析失败';
         throw new Error(data?.error || fallback);
       }
+      // Debug: surface plan API status
+      const debugParts: string[] = [];
+      if (data.degraded) debugParts.push(`降级模式`);
+      if (data.fallbackReason) debugParts.push(`原因: ${data.fallbackReason}`);
+      if (data.kimiMode) debugParts.push(`kimiMode: ${data.kimiMode}`);
+      if (data._debug) debugParts.push(JSON.stringify(data._debug));
+      setPlanDebug(debugParts.join(' | '));
+      console.info('[NookAI Plan]', { degraded: data.degraded, fallbackReason: data.fallbackReason, kimiMode: data.kimiMode, _debug: data._debug });
       setPlanningPackage(data.planningPackage);
       setDynamicAnswers({});
       setChatState(null);
@@ -572,6 +581,11 @@ export default function Page() {
               </div>
 
               {/* Design strategy summary card */}
+              {planDebug && (
+                <div className="mb-3 rounded-lg bg-red-50 border border-red-200 p-3 text-xs text-red-700 break-all">
+                  <span className="font-bold">DEBUG: </span>{planDebug}
+                </div>
+              )}
               <div className="mb-6 rounded-2xl border border-[#ebe1d3] bg-[#fcf2e4] p-5">
                 <h3 className="mb-2 text-sm font-bold text-[#8f4d2c]">AI 初步方案</h3>
                 <div className="grid grid-cols-1 gap-2 text-xs text-[#504440] md:grid-cols-2">
