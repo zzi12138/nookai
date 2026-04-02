@@ -209,25 +209,6 @@ function normalizeOption(
   };
 }
 
-function shouldUseDefaultOptions(
-  options: Array<{ value: string; label: string; desc: string }>,
-  seenSignatures: Set<string>,
-) {
-  if (options.length < 3) return true;
-  const normalizedLabels = options.map((o) => o.label.trim()).filter(Boolean);
-  const uniqueCount = new Set(normalizedLabels).size;
-  if (uniqueCount < 3) return true;
-
-  const genericPattern = /^(选项|方案|方式|方向|偏好)[A-D\d一二三四五六七八九十]*$/;
-  const tooGeneric = normalizedLabels.every((label) => genericPattern.test(label) || label.length <= 1);
-  if (tooGeneric) return true;
-
-  const signature = normalizedLabels.join('|');
-  if (seenSignatures.has(signature)) return true;
-
-  return false;
-}
-
 function parseDataUrl(value: string) {
   const match = value.match(/^data:(.*?);base64,(.*)$/);
   if (!match) {
@@ -503,22 +484,21 @@ Note: If image understanding is limited, infer a safe rental-room plan with clea
     }>;
 
     const defaultOptionsByQuestion = buildDefaultOptionsByQuestion(aiOutput.sceneAnalysis);
-    const seenOptionSignatures = new Set<string>();
 
     const normalizedQuestions: DynamicQuestion[] = orderedQuestions.slice(0, 6).map((aiQ, i) => {
       const frame = QUESTION_FRAMEWORK[i] || QUESTION_FRAMEWORK[0];
-      const aiOptions = (aiQ.options || [])
-        .slice(0, 5)
-        .filter((o) => o.value !== 'ai_decide')
-        .map((o, index) => normalizeOption(o, index));
-
-      const defaults = defaultOptionsByQuestion[aiQ.id || frame.id] || defaultOptionsByQuestion[frame.id] || [];
-      const optionsCore = shouldUseDefaultOptions(aiOptions, seenOptionSignatures) ? defaults : aiOptions;
-      const signature = optionsCore.map((o) => o.label.trim()).join('|');
-      if (signature) seenOptionSignatures.add(signature);
+      const questionId = frame.id;
+      const defaults = defaultOptionsByQuestion[questionId] || [];
+      // 强制按题型使用专属选项，避免模型返回同构选项导致“每题都一样”
+      const optionsCore = defaults.length
+        ? defaults
+        : (aiQ.options || [])
+            .slice(0, 5)
+            .filter((o) => o.value !== 'ai_decide')
+            .map((o, index) => normalizeOption(o, index));
 
       return {
-        id: aiQ.id || frame.id,
+        id: questionId,
         question: aiQ.question || `关于${frame.label}你更偏向哪种？`,
         purpose: aiQ.purpose || frame.prompt,
         options: [...optionsCore.slice(0, 5), AI_DECIDE_OPTION],
