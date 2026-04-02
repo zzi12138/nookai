@@ -144,6 +144,90 @@ type Payload = {
 
 const AI_DECIDE_OPTION = { value: 'ai_decide', label: '你来决定', desc: '交给 AI 自动判断' };
 
+function pickRoomObject(
+  scene: Pick<SceneAnalysis, 'existingFurniture' | 'keyAreas'> | undefined,
+  index: number,
+  fallback: string,
+) {
+  const furniture = (scene?.existingFurniture || []).filter(Boolean);
+  const keyAreas = (scene?.keyAreas || []).filter(Boolean);
+  const pool = [...furniture, ...keyAreas].filter((item) => item && item.length <= 8);
+  return pool[index] || fallback;
+}
+
+function buildDefaultOptionsByQuestion(
+  scene: Pick<SceneAnalysis, 'existingFurniture' | 'keyAreas'> | undefined,
+): Record<string, Array<{ value: string; label: string; desc: string }>> {
+  const objA = pickRoomObject(scene, 0, '床区');
+  const objB = pickRoomObject(scene, 1, '桌面');
+  const objC = pickRoomObject(scene, 2, '窗边');
+
+  return {
+    q1: [
+      { value: 'sleep', label: '休息睡眠', desc: '更放松更助眠' },
+      { value: 'work', label: '工作学习', desc: '更专注更高效' },
+      { value: 'mixed', label: '两者都要', desc: '兼顾休息与办公' },
+    ],
+    q2: [
+      { value: 'warm', label: '温暖治愈', desc: '暖暖的很放松' },
+      { value: 'calm', label: '安静克制', desc: '干净沉稳不吵闹' },
+      { value: 'vivid', label: '有氛围感', desc: '更有层次更出片' },
+    ],
+    q3: [
+      { value: 'warm_glow', label: '昏黄暖光', desc: '局部点亮，很有情调' },
+      { value: 'bright_clear', label: '明亮通透', desc: '光线充足，视线清晰' },
+      { value: 'cinematic', label: '电影质感', desc: '明暗对比强烈，有层次' },
+    ],
+    q4: [
+      { value: 'earth_warm', label: '大地暖色', desc: '米色、棕色与木质调' },
+      { value: 'cool_gray_blue', label: '冷调灰蓝', desc: '保留蓝色调，更显高级' },
+      { value: 'bw_clean', label: '纯净黑白灰', desc: '经典简约，永不过时' },
+    ],
+    q5: [
+      { value: 'keep_current', label: `${objA}保留现状`, desc: '它是必要功能位' },
+      { value: 'weaken_visual', label: `${objB}视觉弱化`, desc: '用软装遮盖或减弱存在感' },
+      { value: 'restyle_replace', label: `${objC}风格重做`, desc: '换成更轻盈统一的感觉' },
+    ],
+    q6: [
+      { value: 'fix_clutter', label: `${objB}有点乱`, desc: '想要更清爽的收纳感' },
+      { value: 'need_texture', label: `${objC}太空了`, desc: '想补一点温暖层次' },
+      { value: 'soft_upgrade', label: `${objA}不够舒服`, desc: '想增强软装和触感' },
+    ],
+  };
+}
+
+function normalizeOption(
+  option: { value?: string; label?: string; desc?: string },
+  index: number,
+) {
+  const label = (option.label || '').trim();
+  const desc = (option.desc || '').trim();
+  return {
+    value: (option.value || `option_${index + 1}`).trim(),
+    label: (label || `选项${index + 1}`).slice(0, 10),
+    desc: (desc || '用于生成方案').slice(0, 24),
+  };
+}
+
+function shouldUseDefaultOptions(
+  options: Array<{ value: string; label: string; desc: string }>,
+  seenSignatures: Set<string>,
+) {
+  if (options.length < 3) return true;
+  const normalizedLabels = options.map((o) => o.label.trim()).filter(Boolean);
+  const uniqueCount = new Set(normalizedLabels).size;
+  if (uniqueCount < 3) return true;
+
+  const genericPattern = /^(选项|方案|方式|方向|偏好)[A-D\d一二三四五六七八九十]*$/;
+  const tooGeneric = normalizedLabels.every((label) => genericPattern.test(label) || label.length <= 1);
+  if (tooGeneric) return true;
+
+  const signature = normalizedLabels.join('|');
+  if (seenSignatures.has(signature)) return true;
+
+  return false;
+}
+
 function parseDataUrl(value: string) {
   const match = value.match(/^data:(.*?);base64,(.*)$/);
   if (!match) {
@@ -418,21 +502,26 @@ Note: If image understanding is limited, infer a safe rental-room plan with clea
       allowMultiple?: boolean;
     }>;
 
+    const defaultOptionsByQuestion = buildDefaultOptionsByQuestion(aiOutput.sceneAnalysis);
+    const seenOptionSignatures = new Set<string>();
+
     const normalizedQuestions: DynamicQuestion[] = orderedQuestions.slice(0, 6).map((aiQ, i) => {
       const frame = QUESTION_FRAMEWORK[i] || QUESTION_FRAMEWORK[0];
-      const options = (aiQ.options || [])
+      const aiOptions = (aiQ.options || [])
         .slice(0, 5)
         .filter((o) => o.value !== 'ai_decide')
-        .map((o) => ({
-          value: o.value || `option_${Math.random().toString(36).slice(2, 7)}`,
-          label: (o.label || '默认选项').slice(0, 8),
-          desc: (o.desc || '可用于生成').slice(0, 18),
-        }));
+        .map((o, index) => normalizeOption(o, index));
+
+      const defaults = defaultOptionsByQuestion[aiQ.id || frame.id] || defaultOptionsByQuestion[frame.id] || [];
+      const optionsCore = shouldUseDefaultOptions(aiOptions, seenOptionSignatures) ? defaults : aiOptions;
+      const signature = optionsCore.map((o) => o.label.trim()).join('|');
+      if (signature) seenOptionSignatures.add(signature);
+
       return {
         id: aiQ.id || frame.id,
         question: aiQ.question || `关于${frame.label}你更偏向哪种？`,
         purpose: aiQ.purpose || frame.prompt,
-        options: [...options, AI_DECIDE_OPTION],
+        options: [...optionsCore.slice(0, 5), AI_DECIDE_OPTION],
         allowMultiple: aiQ.allowMultiple ?? false,
         fallbackOption: '你来决定',
       };
