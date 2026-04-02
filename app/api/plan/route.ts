@@ -398,12 +398,13 @@ export async function POST(req: Request) {
     const apiKey = process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY;
     const baseUrl = (process.env.MOONSHOT_BASE_URL || 'https://api.moonshot.cn/v1').replace(/\/$/, '');
     // Vision call needs a vision-capable model; text retry uses the text model
-    const visionModel = process.env.KIMI_VISION_MODEL || 'moonshot-v1-8k-vision-preview';
+    const visionModel = process.env.KIMI_VISION_MODEL || 'kimi-k2.5';
     const textModel = process.env.KIMI_PLAN_MODEL || process.env.KIMI_TEXT_MODEL || 'kimi-k2-turbo-preview';
     const prompt = buildPlanPrompt();
     const imageData = parseDataUrl(image);
     let aiOutput: PlanAIOutput | null = null;
     let fallbackReason: string | null = null;
+    let visionError: string | null = null;
     let kimiMode: 'vision' | 'text_retry' | 'none' = 'none';
 
     if (!apiKey) {
@@ -416,27 +417,24 @@ export async function POST(req: Request) {
           timeoutMs: 20_000,
           body: {
             model: visionModel,
-            max_tokens: 1800,
-            response_format: {
-              type: 'json_object',
-            },
+            max_tokens: 2048,
             messages: [
               {
                 role: 'system',
-                content: '你是资深室内设计规划助手，只输出有效 JSON。',
+                content: '你是资深室内设计规划助手，只输出有效 JSON，不要输出任何其他内容。',
               },
               {
                 role: 'user',
                 content: [
                   {
-                    type: 'text',
-                    text: prompt,
-                  },
-                  {
                     type: 'image_url',
                     image_url: {
                       url: `data:${imageData.mimeType};base64,${imageData.data}`,
                     },
+                  },
+                  {
+                    type: 'text',
+                    text: prompt,
                   },
                 ],
               },
@@ -464,7 +462,8 @@ export async function POST(req: Request) {
         aiOutput = parsed;
         kimiMode = 'vision';
       } catch (error) {
-        fallbackReason = error instanceof Error ? error.message : 'Plan generation failed';
+        visionError = error instanceof Error ? error.message : 'Plan generation failed';
+        fallbackReason = visionError;
       }
     }
 
@@ -647,7 +646,10 @@ Note: If image understanding is limited, infer a safe rental-room plan with clea
       modelRequestPrompt: prompt,
       kimiMode,
       degraded: kimiMode === 'text_retry',
+      fallbackReason: kimiMode === 'text_retry' ? (visionError || fallbackReason) : null,
       _debug: {
+        visionModel,
+        visionError,
         optionSources,
         rawQuestionCount: rawQuestions.length,
         rawQuestionIds: rawQuestions.map((q) => q.id),
