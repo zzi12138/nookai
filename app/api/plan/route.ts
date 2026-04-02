@@ -126,6 +126,8 @@ function buildPlanPrompt() {
 - 必须覆盖：使用目的、想要感觉、颜色/深浅、改动强度、反感或想替换的具体物件/区域
 - 至少1题明确问“不喜欢什么/想弱化或替换什么”
 - 每题都保留 ai_decide 选项
+- 每一题的 options 必须和该题主题强相关，且不同题之间不要重复同一组选项
+- q5/q6 需要尽量引用图中真实可见物件或区域（如床、桌、窗边、沙发、墙面空区）
 
 4) generationGuidance
 - targetAtmosphere, focalPointHint, lightingHint, mustAvoid（2-4条）
@@ -207,6 +209,18 @@ function normalizeOption(
     label: (label || `选项${index + 1}`).slice(0, 10),
     desc: (desc || '用于生成方案').slice(0, 24),
   };
+}
+
+function isOptionSetUsable(options: Array<{ value: string; label: string; desc: string }>) {
+  if (options.length < 3) return false;
+  const labels = options.map((o) => o.label.trim()).filter(Boolean);
+  if (labels.length < 3) return false;
+  const unique = new Set(labels).size;
+  if (unique < 3) return false;
+  const genericPattern = /^(选项|方案|方式|方向|偏好)[A-D\d一二三四五六七八九十]*$/;
+  const tooGeneric = labels.every((label) => genericPattern.test(label) || label.length <= 1);
+  if (tooGeneric) return false;
+  return true;
 }
 
 function parseDataUrl(value: string) {
@@ -484,18 +498,29 @@ Note: If image understanding is limited, infer a safe rental-room plan with clea
     }>;
 
     const defaultOptionsByQuestion = buildDefaultOptionsByQuestion(aiOutput.sceneAnalysis);
+    const usedSignatures = new Set<string>();
 
     const normalizedQuestions: DynamicQuestion[] = orderedQuestions.slice(0, 6).map((aiQ, i) => {
       const frame = QUESTION_FRAMEWORK[i] || QUESTION_FRAMEWORK[0];
       const questionId = frame.id;
-      const defaults = defaultOptionsByQuestion[questionId] || [];
-      // 强制按题型使用专属选项，避免模型返回同构选项导致“每题都一样”
-      const optionsCore = defaults.length
-        ? defaults
-        : (aiQ.options || [])
-            .slice(0, 5)
-            .filter((o) => o.value !== 'ai_decide')
-            .map((o, index) => normalizeOption(o, index));
+      const aiOptions = (aiQ.options || [])
+        .slice(0, 5)
+        .filter((o) => o.value !== 'ai_decide')
+        .map((o, index) => normalizeOption(o, index));
+      const aiSignature = aiOptions.map((o) => o.label).join('|');
+
+      let optionsCore = aiOptions;
+      const shouldFallback =
+        !isOptionSetUsable(aiOptions) ||
+        !aiSignature ||
+        usedSignatures.has(aiSignature);
+
+      if (shouldFallback) {
+        optionsCore = defaultOptionsByQuestion[questionId] || aiOptions;
+      }
+
+      const finalSignature = optionsCore.map((o) => o.label).join('|');
+      if (finalSignature) usedSignatures.add(finalSignature);
 
       return {
         id: questionId,
