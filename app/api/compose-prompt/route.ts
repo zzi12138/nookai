@@ -69,9 +69,7 @@ function buildMetaPrompt(
     ? `${references[0].label} (${references[0].category})`
     : 'none';
 
-  const prompt = `You are an interior art director. Return JSON only.
-
-Create a compact image-prompt plan for a rental-room makeover.
+  const prompt = `You are composing a concise interior image prompt. Return JSON only.
 
 Scene:
 room=${pkg.sceneAnalysis.roomType}, size=${pkg.sceneAnalysis.estimatedSize}
@@ -81,30 +79,31 @@ focal=${pkg.designStrategy.focalPoint}
 mood=${pkg.generationGuidance.targetAtmosphere}
 color=${pkg.designStrategy.colorDirection}
 reference=${referenceText}
-user_choices=${answerText}
+user_choices=${answerText || 'none'}
 
 Write:
-1) primary: exactly 2 actions.
-2) secondary: 2-3 actions.
+1) primary: exactly 2 strongest visual actions.
+2) secondary: 2-3 supporting actions.
 3) declutter: 1 short sentence.
 4) moodLight: 1 short sentence.
 5) evaluation: 2 Chinese sentences.
 6) suggestions: 2 Chinese sentences.
 
-Action rules:
+Action format:
 - Start with Add / Place / Drape / Hang.
-- Include object + color/material + placement.
-- Keep each action under 15 words.
-- No explanations, no policy text.
+- One short sentence, max 15 words.
+- Include item + color/material + placement.
+- Concrete visual moves only, no explanations.
 
 Boundaries:
-- Keep room structure and camera unchanged.
-- No repaint, no structural edits, no major furniture replacement.
+- Same room, same layout, same camera.
+- Rental-safe only.
+- No repaint, no structural change, no major furniture replacement.
 
 Return JSON:
 {
-  "primary": ["...", "..."],
-  "secondary": ["...", "...", "..."],
+  "primary": ["...","..."],
+  "secondary": ["...","...","..."],
   "declutter": "...",
   "moodLight": "...",
   "evaluation": "...",
@@ -187,7 +186,7 @@ export async function POST(req: Request) {
 
     const apiKey = process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY;
     const baseUrl = (process.env.MOONSHOT_BASE_URL || 'https://api.moonshot.cn/v1').replace(/\/$/, '');
-    const model = process.env.KIMI_COMPOSE_MODEL || process.env.KIMI_TEXT_MODEL || 'kimi-k2-turbo-preview';
+    const model = process.env.KIMI_COMPOSE_MODEL || process.env.KIMI_TEXT_MODEL || 'kimi-latest';
     const selectedReferences = selectReferenceImages(planningPackage, userAnswers, 1);
     const metaPrompt = buildMetaPrompt(planningPackage, userAnswers, selectedReferences);
     const answerText = resolveAnswers(planningPackage, userAnswers);
@@ -244,7 +243,7 @@ export async function POST(req: Request) {
 
     // Retry once with a faster Kimi model before local fallback
     if (!aiOutput && apiKey) {
-      const retryModel = 'kimi-k2-turbo-preview';
+      const retryModel = 'kimi-latest';
       try {
         const { response, raw: rawApiBody, json: result } = await fetchMoonshotJson({
           url: `${baseUrl}/chat/completions`,

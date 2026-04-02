@@ -100,21 +100,40 @@ type PlanAIOutput = {
 // ─── Prompt ─────────────────────────────────────────────────────────────────
 
 function buildPlanPrompt() {
-  return `Analyze this rental room and return JSON only.
+  return `你是一位资深室内设计师，请基于这张房间图输出 JSON（仅 JSON）。
 
-Need:
-1) sceneAnalysis: roomType, estimatedSize, existingFurniture(4-8 Chinese nouns), layout(one Chinese sentence), lightCondition(one Chinese sentence), clutterLevel, keyAreas(1-3).
-2) designStrategy: focalPoint, lightingApproach, softFurnishingApproach, colorDirection, risks(<=2), styleMapping(4 entries, values only from ${STYLE_TAGS.join(', ')}).
-3) dynamicQuestions: 4-6 warm conversational Chinese questions. Each has id, question, purpose, options, allowMultiple, fallbackOption.
-4) generationGuidance: targetAtmosphere, focalPointHint, lightingHint, mustAvoid(2-4).
+目标：给出“可用于后续生图”的简洁规划，不要写成长文档。
 
-Rules:
-- Keep room structure unchanged, rental-safe.
-- Questions must cover: usage, emotion, color/depth, change intensity, disliked visible object/area.
-- At least one question asks what user dislikes or wants to weaken/replace.
-- Last option of each question uses value "ai_decide".
+请输出：
+1) sceneAnalysis
+- roomType, estimatedSize
+- existingFurniture（4-8个中文名词）
+- layout（1句中文）
+- lightCondition（1句中文）
+- clutterLevel, keyAreas（1-3个）
 
-Return pure JSON.`;
+2) designStrategy
+- focalPoint（明确主角区域）
+- lightingApproach（简洁可执行）
+- softFurnishingApproach
+- colorDirection
+- risks（最多2条）
+- styleMapping（4项，值仅可用：${STYLE_TAGS.join(', ')}）
+
+3) dynamicQuestions（4-6题）
+- 问法口语化、有温度、像聊天
+- 每题只问一件事，选项简短实用
+- 必须覆盖：使用目的、想要感觉、颜色/深浅、改动强度、反感或想替换的具体物件/区域
+- 至少1题明确问“不喜欢什么/想弱化或替换什么”
+- 每题都保留 ai_decide 选项
+
+4) generationGuidance
+- targetAtmosphere, focalPointHint, lightingHint, mustAvoid（2-4条）
+
+边界：
+- 仅做租房友好改造，不改结构，不改硬装布局。
+
+只返回纯 JSON。`;
 }
 
 // ─── Handler ────────────────────────────────────────────────────────────────
@@ -255,7 +274,7 @@ export async function POST(req: Request) {
 
     const apiKey = process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY;
     const baseUrl = (process.env.MOONSHOT_BASE_URL || 'https://api.moonshot.cn/v1').replace(/\/$/, '');
-    const model = process.env.KIMI_PLAN_MODEL || process.env.KIMI_TEXT_MODEL || 'kimi-k2-turbo-preview';
+    const model = process.env.KIMI_PLAN_MODEL || process.env.KIMI_TEXT_MODEL || 'kimi-latest';
     const prompt = buildPlanPrompt();
     const imageData = parseDataUrl(image);
     let aiOutput: PlanAIOutput | null = null;
@@ -279,7 +298,7 @@ export async function POST(req: Request) {
             messages: [
               {
                 role: 'system',
-                content: 'You are a precise interior-planning assistant. Return valid JSON only.',
+                content: '你是资深室内设计规划助手，只输出有效 JSON。',
               },
               {
                 role: 'user',
@@ -340,7 +359,7 @@ export async function POST(req: Request) {
             messages: [
               {
                 role: 'system',
-                content: 'You are a precise interior-planning assistant. Return valid JSON only.',
+                content: '你是资深室内设计规划助手，只输出有效 JSON。',
               },
               {
                 role: 'user',
