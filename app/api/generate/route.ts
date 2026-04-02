@@ -176,9 +176,9 @@ export async function POST(req: Request) {
         ? `${prompt}
 
 [REFERENCE_STYLE_GUARD]
-- Attached reference images are style anchors only.
-- Borrow mood, color rhythm, material feel, and light hierarchy.
-- Keep the source room structure, perspective, and major furniture layout unchanged.`
+- Reference images are for COLOR and MOOD inspiration ONLY.
+- Do NOT copy the reference room's layout, furniture, or architecture.
+- The output must still be the SAME room as the source photo — same walls, same floor, same furniture positions.`
         : prompt;
 
     const response = await fetch(

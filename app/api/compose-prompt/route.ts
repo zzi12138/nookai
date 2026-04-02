@@ -126,9 +126,15 @@ function assemblePrompt(
   const scene = pkg.sceneAnalysis;
   const anchor = references[0];
   const designLines = [...primary.slice(0, 2), ...secondary.slice(0, 3)];
-  const compact = `[BASE + SCENE]
-Same room, same layout, same camera perspective.
-Rental-safe refresh only. No repaint, no structural change, no major furniture replacement.
+  const compact = `[CRITICAL — ROOM IDENTITY]
+This is a photo-edit task. The output MUST look like the SAME room after a soft makeover.
+- Keep the EXACT same walls, floor, ceiling, doors, windows, and camera angle.
+- Keep ALL existing large furniture (bed, desk, wardrobe, sofa) in the SAME position and shape.
+- Do NOT change room dimensions, wall color, or floor material.
+- Do NOT add or remove walls, windows, or doors.
+- The viewer must instantly recognize this as the same room.
+
+[SCENE]
 Room: ${scene.roomType}, ${scene.estimatedSize}. ${scene.layout}
 Light now: ${scene.lightCondition}
 Focal zone: ${pkg.designStrategy.focalPoint}
@@ -137,11 +143,14 @@ ${anchor ? `Style anchor: ${anchor.label}.` : ''}
 [DECLUTTER]
 ${declutter || 'Clear visible clutter first. Make bed and surfaces neat before styling.'}
 
-[DESIGN]
+[DESIGN — only add/change these items]
 ${designLines.map((line) => `- ${line}`).join('\n')}
 
 [MOOD + LIGHT]
-${moodLight || `Keep ${pkg.generationGuidance.targetAtmosphere} mood with layered light and clear focal contrast.`}`;
+${moodLight || `Keep ${pkg.generationGuidance.targetAtmosphere} mood with layered light and clear focal contrast.`}
+
+[FINAL CHECK]
+If ANY wall, floor, furniture position, or room shape looks different from the input photo, the output is WRONG. Redo it.`;
   return trimToWordLimit(compact);
 }
 

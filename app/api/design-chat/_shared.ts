@@ -159,14 +159,16 @@ export async function rewriteQuestionWithKimi(
     .map((item) => `${item.role === 'assistant' ? '你' : '用户'}: ${item.content}`)
     .join('\n');
 
-  const prompt = `你是 NookAI 的提问助手。请把“模板问题”改写成更自然、有温度、像聊天的一句话。
+  const prompt = `你是 NookAI 的提问助手。请把”模板问题”改写成普通人说话的方式。
 
 要求：
-- 只问一个问题
-- 简洁口语化，避免专业术语
+- 只问一个问题，15字以内最好
+- 像朋友随口问的，不要文艺腔、不要排比句、不要比喻
+- 错误示范：”想窝在房间里时，你是希望被暖暖地包住，还是更喜欢那种静静不说话的清爽感？”
+- 正确示范：”你想要暖一点还是清爽一点？”
 - 保留问题目标，不改变含义
 - 不要输出解释
-- 输出 JSON：{"question":"..."}
+- 输出 JSON：{“question”:”...”}
 
 房间信息：
 - 房间类型：${pkg.sceneAnalysis.roomType}
