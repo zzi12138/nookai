@@ -206,78 +206,38 @@ function normalizeOption(
   const desc = (option.desc || '').trim();
   return {
     value: (option.value || `option_${index + 1}`).trim(),
-    label: (label || `选项${index + 1}`).slice(0, 10),
-    desc: (desc || '用于生成方案').slice(0, 24),
+    label: (label || `选项${index + 1}`).slice(0, 15),
+    desc: (desc || '用于生成方案').slice(0, 30),
   };
 }
 
 function isOptionSetUsable(options: Array<{ value: string; label: string; desc: string }>) {
-  if (options.length < 3) return false;
+  if (options.length < 2) return false;
   const labels = options.map((o) => o.label.trim()).filter(Boolean);
-  if (labels.length < 3) return false;
+  if (labels.length < 2) return false;
   const unique = new Set(labels).size;
-  if (unique < 3) return false;
+  if (unique < 2) return false;
+  // Only reject if ALL labels are placeholder-style garbage
   const genericPattern = /^(选项|方案|方式|方向|偏好)[A-D\d一二三四五六七八九十]*$/;
   const tooGeneric = labels.every((label) => genericPattern.test(label) || label.length <= 1);
   if (tooGeneric) return false;
   return true;
 }
 
-function containsAny(text: string, keywords: string[]) {
-  return keywords.some((kw) => text.includes(kw));
-}
-
-function optionsMatchQuestionType(
-  questionId: string,
-  options: Array<{ value: string; label: string; desc: string }>,
-  scene: Pick<SceneAnalysis, 'existingFurniture' | 'keyAreas'> | undefined,
-) {
-  const joined = options.map((o) => `${o.label} ${o.desc}`).join(' ');
-  const matched = options.filter((o) => {
-    const text = `${o.label} ${o.desc}`;
-    switch (questionId) {
-      case 'q1':
-        return containsAny(text, ['休息', '睡眠', '工作', '学习', '阅读', '社交', '放松']);
-      case 'q2':
-        return containsAny(text, ['温暖', '治愈', '安静', '沉稳', '活力', '氛围', '清爽']);
-      case 'q3':
-        return containsAny(text, ['暖光', '明亮', '通透', '电影', '对比', '层次', '照明']);
-      case 'q4':
-        return containsAny(text, ['暖色', '冷色', '黑白灰', '木色', '米色', '灰蓝', '跳色']);
-      case 'q5':
-        return containsAny(text, ['保留', '弱化', '替换', '重做', '改造']) || containsAny(text, ['床', '桌', '窗', '沙发', '墙']);
-      case 'q6':
-        return containsAny(text, ['收纳', '桌面', '窗边', '床品', '细节', '角落', '地毯', '装饰']);
-      default:
-        return text.length > 0;
-    }
-  }).length;
-
-  if (matched < 2) return false;
-
-  if (questionId === 'q5' || questionId === 'q6') {
-    const roomTokens = [...(scene?.existingFurniture || []), ...(scene?.keyAreas || [])]
-      .map((s) => s.trim())
-      .filter((s) => s.length >= 1);
-    if (roomTokens.length > 0) {
-      const hasRoomMention = roomTokens.some((token) => joined.includes(token));
-      if (!hasRoomMention) return false;
-    }
-  }
-
-  return true;
-}
+// Removed overly strict optionsMatchQuestionType — it was rejecting valid AI options
+// and forcing all questions to use hardcoded fallback options.
 
 function isTooSimilarToPrevious(
   options: Array<{ value: string; label: string; desc: string }>,
   previousLabelSets: string[][],
 ) {
   const labels = options.map((o) => o.label.trim()).filter(Boolean);
-  if (labels.length < 3) return true;
+  if (labels.length < 2) return true;
 
+  // Only reject if the MAJORITY of labels are duplicated from a single previous question
   return previousLabelSets.some((prev) => {
     const overlap = labels.filter((l) => prev.includes(l)).length;
-    return overlap >= 2;
+    return overlap >= Math.ceil(labels.length * 0.7);
   });
 }
 
@@ -428,7 +388,7 @@ export async function POST(req: Request) {
           timeoutMs: 18_000,
           body: {
             model,
-            max_tokens: 1200,
+            max_tokens: 1800,
             response_format: {
               type: 'json_object',
             },
@@ -489,7 +449,7 @@ export async function POST(req: Request) {
           timeoutMs: 10_000,
           body: {
             model,
-            max_tokens: 1000,
+            max_tokens: 1500,
             response_format: {
               type: 'json_object',
             },
@@ -571,7 +531,6 @@ Note: If image understanding is limited, infer a safe rental-room plan with clea
       let optionsCore = aiOptions;
       const shouldFallback =
         !isOptionSetUsable(aiOptions) ||
-        !optionsMatchQuestionType(questionId, aiOptions, aiOutput.sceneAnalysis) ||
         isTooSimilarToPrevious(aiOptions, previousLabelSets) ||
         !aiSignature ||
         usedSignatures.has(aiSignature);
