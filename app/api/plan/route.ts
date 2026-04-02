@@ -397,7 +397,9 @@ export async function POST(req: Request) {
 
     const apiKey = process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY;
     const baseUrl = (process.env.MOONSHOT_BASE_URL || 'https://api.moonshot.cn/v1').replace(/\/$/, '');
-    const model = process.env.KIMI_PLAN_MODEL || process.env.KIMI_TEXT_MODEL || 'kimi-latest';
+    // Vision call needs a vision-capable model; text retry uses the text model
+    const visionModel = process.env.KIMI_VISION_MODEL || 'kimi-latest';
+    const textModel = process.env.KIMI_PLAN_MODEL || process.env.KIMI_TEXT_MODEL || 'kimi-latest';
     const prompt = buildPlanPrompt();
     const imageData = parseDataUrl(image);
     let aiOutput: PlanAIOutput | null = null;
@@ -411,9 +413,9 @@ export async function POST(req: Request) {
         const { response, raw: rawApiBody, json: result } = await fetchMoonshotJson({
           url: `${baseUrl}/chat/completions`,
           apiKey,
-          timeoutMs: 18_000,
+          timeoutMs: 20_000,
           body: {
-            model,
+            model: visionModel,
             max_tokens: 1800,
             response_format: {
               type: 'json_object',
@@ -472,9 +474,9 @@ export async function POST(req: Request) {
         const { response, raw: rawApiBody, json: result } = await fetchMoonshotJson({
           url: `${baseUrl}/chat/completions`,
           apiKey,
-          timeoutMs: 10_000,
+          timeoutMs: 18_000,
           body: {
-            model,
+            model: textModel,
             max_tokens: 1500,
             response_format: {
               type: 'json_object',
@@ -518,7 +520,7 @@ Note: If image understanding is limited, infer a safe rental-room plan with clea
       return NextResponse.json({
         planningPackage,
         modelProvider: 'local_fallback',
-        model,
+        model: `vision=${visionModel}, text=${textModel}`,
         modelRequestPrompt: prompt,
         fallbackReason,
         degraded: true,
@@ -641,7 +643,7 @@ Note: If image understanding is limited, infer a safe rental-room plan with clea
     return NextResponse.json({
       planningPackage,
       modelProvider: 'moonshot',
-      model,
+      model: kimiMode === 'vision' ? visionModel : textModel,
       modelRequestPrompt: prompt,
       kimiMode,
       degraded: kimiMode === 'text_retry',
