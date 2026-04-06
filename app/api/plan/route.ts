@@ -7,7 +7,7 @@ import {
 } from '../../lib/server/moonshot';
 
 export const runtime = 'nodejs';
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 // ─── Fixed constants (not AI-generated) ─────────────────────────────────────
 
@@ -150,8 +150,9 @@ dynamicQuestions 要求（重要！！！）：
 - 生成 4-6 题，id 依次为 q1, q2, q3, q4, q5, q6
 - 每题 options 数组 3-5 个选项，最后一个固定为 {“value”:”ai_decide”,”label”:”你来决定”,”desc”:”交给 AI 自动判断”}
 - 每个 option 必须有 value, label, desc 三个字段
-- label 2-6个中文字，desc 4-10个中文字
-- 问法口语化、有温度、像聊天，不要”关于XX的偏好”这种模板句
+- label 用直白的词，2-6个中文字（例：暖色调、冷色调、亮一点、暗一点、小改、大改）
+- desc 用简单说明，4-10个中文字（例：米色棕色为主、整体更亮更通透）
+- 禁止文艺比喻！不要出现”云朵””微风””森林””暖炉”这类抽象意象词
 - 必须覆盖：使用目的、想要感觉、颜色/深浅、改动强度、反感或想替换的具体物件
 - 至少1题问”不喜欢什么/想弱化或替换什么”
 - 每题选项必须不同！不同题之间不能出现重复的 label
@@ -414,7 +415,7 @@ export async function POST(req: Request) {
         const { response, raw: rawApiBody, json: result } = await fetchMoonshotJson({
           url: `${baseUrl}/chat/completions`,
           apiKey,
-          timeoutMs: 20_000,
+          timeoutMs: 25_000,
           body: {
             model: visionModel,
             max_tokens: 2048,
