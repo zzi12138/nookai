@@ -415,7 +415,7 @@ export async function POST(req: Request) {
         const { response, raw: rawApiBody, json: result } = await fetchMoonshotJson({
           url: `${baseUrl}/chat/completions`,
           apiKey,
-          timeoutMs: 25_000,
+          timeoutMs: 35_000,
           body: {
             model: visionModel,
             max_tokens: 2048,

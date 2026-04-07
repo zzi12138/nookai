@@ -121,9 +121,9 @@ export default function Page() {
 
     try {
       const raw = await fileToDataUrl(file);
-      let resized = await resizeDataUrl(raw, 1024, 0.8);
-      if (resized.length > 2_000_000) {
-        resized = await resizeDataUrl(resized, 768, 0.72);
+      let resized = await resizeDataUrl(raw, 768, 0.75);
+      if (resized.length > 1_500_000) {
+        resized = await resizeDataUrl(resized, 512, 0.65);
       }
 
       setPreviewUrl(resized);
