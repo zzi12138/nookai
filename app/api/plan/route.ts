@@ -399,7 +399,7 @@ export async function POST(req: Request) {
     const apiKey = process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY;
     const baseUrl = (process.env.MOONSHOT_BASE_URL || 'https://api.moonshot.cn/v1').replace(/\/$/, '');
     // Vision call needs a vision-capable model; text retry uses the text model
-    const visionModel = process.env.KIMI_VISION_MODEL || 'kimi-k2.5';
+    const visionModel = process.env.KIMI_VISION_MODEL || 'moonshot-v1-8k-vision-preview';
     const textModel = process.env.KIMI_PLAN_MODEL || process.env.KIMI_TEXT_MODEL || 'kimi-k2-turbo-preview';
     const prompt = buildPlanPrompt();
     const imageData = parseDataUrl(image);
