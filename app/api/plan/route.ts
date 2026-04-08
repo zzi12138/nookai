@@ -104,47 +104,49 @@ function buildPlanPrompt() {
 
 目标：给出”可用于后续生图”的简洁规划。
 
-严格按以下 JSON 结构输出：
+严格按以下 JSON 结构输出（所有值都必须根据你看到的图片填写，禁止照抄示例）：
 
 {
   “sceneAnalysis”: {
-    “roomType”: “卧室”,
-    “estimatedSize”: “12平米”,
-    “existingFurniture”: [“床”,”书桌”,”椅子”,”衣柜”],
-    “layout”: “一句话描述布局”,
-    “lightCondition”: “一句话描述光线”,
+    “roomType”: “(根据图片判断)”,
+    “estimatedSize”: “(估算面积)”,
+    “existingFurniture”: [“(图中实际可见的家具)”],
+    “layout”: “(描述图中实际布局)”,
+    “lightCondition”: “(描述图中实际光线)”,
     “clutterLevel”: “low/medium/high”,
-    “keyAreas”: [“床区”,”桌面区”]
+    “keyAreas”: [“(图中有改造潜力的区域)”]
   },
   “designStrategy”: {
-    “focalPoint”: “主视觉焦点区域”,
-    “lightingApproach”: “简洁灯光方案”,
-    “softFurnishingApproach”: “软装方向”,
-    “colorDirection”: “色彩方向”,
-    “risks”: [“风险1”],
-    “styleMapping”: {“key1”: “${STYLE_TAGS[0]}”, “key2”: “${STYLE_TAGS[1]}”}
+    “focalPoint”: “(根据图片选择焦点)”,
+    “lightingApproach”: “(根据现有光线建议)”,
+    “softFurnishingApproach”: “(根据现有软装建议)”,
+    “colorDirection”: “(根据现有颜色建议)”,
+    “risks”: [“(针对这个房间的风险)”],
+    “styleMapping”: {“组合1”: “${STYLE_TAGS[0]}”, “组合2”: “${STYLE_TAGS[1]}”}
   },
   “dynamicQuestions”: [
     {
       “id”: “q1”,
-      “question”: “这个房间你平时主要拿来干嘛？”,
-      “purpose”: “了解使用目的”,
+      “question”: “(根据房间类型写问题)”,
+      “purpose”: “(这题要了解什么)”,
       “options”: [
-        {“value”: “sleep”, “label”: “睡觉休息”, “desc”: “安安静静躺平”},
-        {“value”: “work”, “label”: “办公学习”, “desc”: “需要专注高效”},
-        {“value”: “chill”, “label”: “追剧发呆”, “desc”: “纯放松不动脑”},
+        {“value”: “opt_a”, “label”: “(2-6字)”, “desc”: “(4-10字说明)”},
+        {“value”: “opt_b”, “label”: “(2-6字)”, “desc”: “(4-10字说明)”},
+        {“value”: “opt_c”, “label”: “(2-6字)”, “desc”: “(4-10字说明)”},
         {“value”: “ai_decide”, “label”: “你来决定”, “desc”: “交给 AI 自动判断”}
       ],
       “allowMultiple”: true
     }
   ],
   “generationGuidance”: {
-    “targetAtmosphere”: “整体氛围”,
-    “focalPointHint”: “焦点提示”,
-    “lightingHint”: “灯光提示”,
-    “mustAvoid”: [“禁忌1”,”禁忌2”]
+    “targetAtmosphere”: “(根据图片写氛围)”,
+    “focalPointHint”: “(根据图片写焦点提示)”,
+    “lightingHint”: “(根据图片写灯光提示)”,
+    “mustAvoid”: [“(针对这个房间的禁忌)”]
   }
 }
+
+重要：以上括号内的内容是填写说明，不是答案！你必须根据图片内容自己生成，不要复制括号里的文字。
 
 dynamicQuestions 要求（重要！！！）：
 - 生成 4-6 题，id 依次为 q1, q2, q3, q4, q5, q6
