@@ -19,10 +19,11 @@ type Payload = {
 };
 
 type ComposeAIOutput = {
-  primary: string[];
-  secondary: string[];
-  declutter?: string;
-  moodLight?: string;
+  sceneVision: string;
+  lightingDesc: string;
+  textureAndColor: string;
+  focalDetail: string;
+  keepUnchanged: string;
   evaluation: string;
   suggestions: string;
 };
@@ -69,43 +70,50 @@ function buildMetaPrompt(
     ? `${references[0].label} (${references[0].category})`
     : 'none';
 
-  const prompt = `You are composing a concise interior image prompt. Return JSON only.
+  const prompt = `You are a world-class interior photographer describing the AFTER photo of a room makeover. Return JSON only.
 
-Scene:
-room=${pkg.sceneAnalysis.roomType}, size=${pkg.sceneAnalysis.estimatedSize}
+This room:
+type=${pkg.sceneAnalysis.roomType}, size=${pkg.sceneAnalysis.estimatedSize}
+furniture=${pkg.sceneAnalysis.existingFurniture.join(', ')}
 layout=${pkg.sceneAnalysis.layout}
-light=${pkg.sceneAnalysis.lightCondition}
-focal=${pkg.designStrategy.focalPoint}
-mood=${pkg.generationGuidance.targetAtmosphere}
-color=${pkg.designStrategy.colorDirection}
-reference=${referenceText}
-user_choices=${answerText || 'none'}
+current_light=${pkg.sceneAnalysis.lightCondition}
+focal_zone=${pkg.designStrategy.focalPoint}
+desired_mood=${pkg.generationGuidance.targetAtmosphere}
+color_direction=${pkg.designStrategy.colorDirection}
+soft_furnishing=${pkg.designStrategy.softFurnishingApproach}
+lighting_plan=${pkg.designStrategy.lightingApproach}
+reference_style=${referenceText}
+user_preferences=${answerText || 'AI decides all'}
 
-Write:
-1) primary: exactly 2 strongest visual actions.
-2) secondary: 2-3 supporting actions.
-3) declutter: 1 short sentence.
-4) moodLight: 1 short sentence.
-5) evaluation: 2 Chinese sentences.
-6) suggestions: 2 Chinese sentences.
+Your task: Describe the FINAL transformed scene as if you are looking at a stunning magazine photo. NOT a list of actions — paint the picture.
 
-Action format:
-- Start with Add / Place / Drape / Hang.
-- One short sentence, max 15 words.
-- Include item + color/material + placement.
-- Concrete visual moves only, no explanations.
+Write these fields:
+1) sceneVision: 2-3 sentences. Describe the overall atmosphere of the transformed room. What does it FEEL like to walk in? What catches your eye first? Use sensory language — light quality, warmth, depth, texture. Write as if captioning a beautiful interior photo.
 
-Boundaries:
-- Same room, same layout, same camera.
-- Rental-safe only.
-- No repaint, no structural change, no major furniture replacement.
+2) lightingDesc: 1-2 sentences. Describe the SPECIFIC lighting in the final scene. Name exact light sources (e.g. "a warm amber floor lamp casting a pool of gold on the bedside", "soft LED strip behind the headboard creating a halo glow"). Describe shadows, warmth, contrast. This is the most important part — lighting makes or breaks the photo.
+
+3) textureAndColor: 1-2 sentences. Describe the material palette visible in the scene — fabrics, wood grain, metal finishes. Name specific colors (not just "warm tones" but "cream linen, walnut wood, matte brass, sage green cushion").
+
+4) focalDetail: 1-2 sentences. Zoom into the hero area (${pkg.designStrategy.focalPoint}). Describe exactly what it looks like after transformation — specific items, their arrangement, their visual weight.
+
+5) keepUnchanged: 1 sentence. List what stays exactly the same (walls, floor, major furniture positions, ceiling, windows).
+
+6) evaluation: 2 sentences in Chinese. Evaluate what this room needs most.
+7) suggestions: 2 sentences in Chinese. Practical advice for the user.
+
+CRITICAL RULES:
+- The room MUST be recognizable as the same room. Same walls, floor, ceiling, windows, doors.
+- All large furniture (${pkg.sceneAnalysis.existingFurniture.slice(0, 4).join(', ')}) stays in the same position.
+- Be BOLD with styling but CONSERVATIVE with structure. Make it magazine-worthy.
+- Write in English for fields 1-5.
 
 Return JSON:
 {
-  "primary": ["...","..."],
-  "secondary": ["...","...","..."],
-  "declutter": "...",
-  "moodLight": "...",
+  "sceneVision": "...",
+  "lightingDesc": "...",
+  "textureAndColor": "...",
+  "focalDetail": "...",
+  "keepUnchanged": "...",
   "evaluation": "...",
   "suggestions": "..."
 }`;
@@ -117,65 +125,59 @@ Return JSON:
 
 function assemblePrompt(
   pkg: PlanningPackage,
-  primary: string[],
-  secondary: string[],
+  ai: ComposeAIOutput,
   references: StyleReference[],
-  declutter: string,
-  moodLight: string,
 ): string {
   const scene = pkg.sceneAnalysis;
   const anchor = references[0];
-  const designLines = [...primary.slice(0, 2), ...secondary.slice(0, 3)];
-  const compact = `[CRITICAL — ROOM IDENTITY]
-This is a photo-edit task. The output MUST look like the SAME room after a soft makeover.
-- Keep the EXACT same walls, floor, ceiling, doors, windows, and camera angle.
-- Keep ALL existing large furniture (bed, desk, wardrobe, sofa) in the SAME position and shape.
-- Do NOT change room dimensions, wall color, or floor material.
-- Do NOT add or remove walls, windows, or doors.
-- The viewer must instantly recognize this as the same room.
+  const compact = `You are editing a photo of a real room. Transform it into a magazine-worthy interior while keeping it recognizable as the SAME room.
 
-[SCENE]
-Room: ${scene.roomType}, ${scene.estimatedSize}. ${scene.layout}
-Light now: ${scene.lightCondition}
-Focal zone: ${pkg.designStrategy.focalPoint}
-${anchor ? `Style anchor: ${anchor.label}.` : ''}
+[KEEP UNCHANGED]
+${ai.keepUnchanged || `Same walls, floor, ceiling, windows, doors. ${scene.existingFurniture.slice(0, 4).join(', ')} stay in same positions.`}
 
-[DECLUTTER]
-${declutter || 'Clear visible clutter first. Make bed and surfaces neat before styling.'}
+[THE TRANSFORMED SCENE]
+${ai.sceneVision}
 
-[DESIGN — only add/change these items]
-${designLines.map((line) => `- ${line}`).join('\n')}
+[LIGHTING — THIS IS THE MOST IMPORTANT PART]
+${ai.lightingDesc}
+Make the lighting cinematic and layered. There should be warm pools of light, soft shadows, and depth. The image should look like it was shot during golden hour or with carefully designed interior lighting.
 
-[MOOD + LIGHT]
-${moodLight || `Keep ${pkg.generationGuidance.targetAtmosphere} mood with layered light and clear focal contrast.`}
+[TEXTURES & COLORS]
+${ai.textureAndColor}
 
-[FINAL CHECK]
-If ANY wall, floor, furniture position, or room shape looks different from the input photo, the output is WRONG. Redo it.`;
-  return trimToWordLimit(compact);
+[HERO AREA — ${pkg.designStrategy.focalPoint}]
+${ai.focalDetail}
+
+${anchor ? `[STYLE REFERENCE: ${anchor.label}]\nUse this as inspiration for color mood and styling taste only. Do NOT copy its layout.` : ''}
+
+[QUALITY REQUIREMENTS]
+- Final image must look like a professional interior photograph, not a 3D render.
+- Realistic materials: visible fabric weave, wood grain, soft textile draping.
+- Natural imperfections: a slightly rumpled throw, a book left open, lived-in warmth.
+- Depth of field: slight background softness to create photographic depth.
+- Color grading: cohesive warm or cool tone across the entire image.
+
+[ABSOLUTE RULES]
+- The room structure (walls, floor, ceiling, windows, doors) must be IDENTICAL to the input photo.
+- All major furniture must remain in the same position. You may style them (add throws, cushions, etc.) but not move or replace them.
+- Camera angle must match the input photo exactly.`;
+  return trimToWordLimit(compact, 500);
 }
 
-function buildFallbackComposeOutput(pkg: PlanningPackage, answerText: string): ComposeAIOutput {
+function buildFallbackComposeOutput(pkg: PlanningPackage): ComposeAIOutput {
   const focal = pkg.designStrategy.focalPoint || 'bed area';
-  const color = pkg.designStrategy.colorDirection || 'warm neutral';
-  const atmosphere = pkg.generationGuidance.targetAtmosphere || 'warm and calm';
+  const color = pkg.designStrategy.colorDirection || 'warm neutral tones';
+  const atmosphere = pkg.generationGuidance.targetAtmosphere || 'warm, calm, and inviting';
+  const furniture = pkg.sceneAnalysis.existingFurniture.slice(0, 4).join(', ') || 'bed, desk';
 
   return {
-    primary: [
-      `Place a warm 3000K floor lamp beside the ${focal}.`,
-      `Drape a linen throw in ${color} tones over bed or sofa edge.`,
-    ],
-    secondary: [
-      `Add a low-saturation area rug under the focal seating zone.`,
-      `Hang one simple framed artwork near the focal wall center.`,
-      `Place one medium green plant beside desk or window side.`,
-    ],
-    declutter: 'Clear visible clutter first, then keep desk and floor surfaces tidy.',
-    moodLight: `Keep ${atmosphere} mood with layered side lighting and gentle local shadows.`,
-    evaluation: '已根据你的房间条件生成稳妥可落地的改造指令。重点会放在灯光层次与焦点区域氛围建立。',
-    suggestions:
-      answerText && answerText.trim().length > 0
-        ? `建议先按你的偏好落地主变化，再逐步添加辅助软装。若想更大胆，可再次提高改动强度并重生成。`
-        : '建议先落地主灯与床区软装，再逐步补充地毯与墙面装饰。若你愿意，可补充偏好后再次生成更个性版本。',
+    sceneVision: `The room feels like a warm retreat — soft ambient light fills the space, drawing the eye to the ${focal} which now anchors the room with quiet confidence. Every surface has intention: layered textiles, gentle curves, and a palette of ${color} that ties the space together into a cohesive, magazine-worthy scene.`,
+    lightingDesc: `A warm 2700K floor lamp beside the ${focal} casts a golden pool of light across the textured throw. A subtle LED strip behind the headboard or shelf creates a soft halo glow, while the overhead light is dimmed to let the accent lighting do the storytelling.`,
+    textureAndColor: `The palette anchors on ${color} — think linen bedding, a chunky knit throw, matte ceramic, and raw wood grain. Small pops of muted sage or dusty rose add depth without competing.`,
+    focalDetail: `The ${focal} is now the undeniable hero: dressed in layered bedding with a textured throw casually draped, flanked by warm side lighting and a small curated vignette of objects that feel personal and lived-in.`,
+    keepUnchanged: `Walls, floor, ceiling, windows, doors remain identical. ${furniture} stay in the same positions.`,
+    evaluation: '这个空间有不错的改造基础，目前最大的问题是缺乏氛围感和视觉层次——灯光太平，软装太少，空间显得单调冷清。',
+    suggestions: '建议重点投入三件事：1) 增加 2-3 个不同高度的暖光源；2) 用织物（毯子、抱枕、床品）建立质感层次；3) 在焦点区域创造一个让人想拍照的"角落"。',
   };
 }
 
@@ -292,35 +294,18 @@ export async function POST(req: Request) {
     }
 
     if (!aiOutput) {
-      aiOutput = buildFallbackComposeOutput(planningPackage, answerText);
+      aiOutput = buildFallbackComposeOutput(planningPackage);
     }
 
-    // Validate & cap: primary ≤ 2, secondary ≤ 3
-    const primary = (Array.isArray(aiOutput.primary) ? aiOutput.primary : []).slice(0, 2);
-    const secondary = (Array.isArray(aiOutput.secondary) ? aiOutput.secondary : []).slice(0, 3);
-
-    if (primary.length === 0 && secondary.length === 0) {
-      const local = buildFallbackComposeOutput(planningPackage, answerText);
-      aiOutput = local;
+    // Validate essential fields
+    if (!aiOutput.sceneVision || !aiOutput.lightingDesc) {
+      aiOutput = buildFallbackComposeOutput(planningPackage);
     }
-
-    // Assemble final prompt
-    const fallbackPrimary = (Array.isArray(aiOutput.primary) ? aiOutput.primary : []).slice(0, 2);
-    const fallbackSecondary = (Array.isArray(aiOutput.secondary) ? aiOutput.secondary : []).slice(0, 3);
-    const fallbackDeclutter =
-      (aiOutput.declutter || '').trim() ||
-      'Clear visible clutter first. Make bed and surfaces neat before styling.';
-    const fallbackMoodLight =
-      (aiOutput.moodLight || '').trim() ||
-      `Keep ${planningPackage.generationGuidance.targetAtmosphere} mood with layered light and a clear focal center.`;
 
     const prompt = assemblePrompt(
       planningPackage,
-      fallbackPrimary.length ? fallbackPrimary : primary,
-      fallbackSecondary.length ? fallbackSecondary : secondary,
+      aiOutput,
       selectedReferences,
-      fallbackDeclutter,
-      fallbackMoodLight,
     );
 
     return NextResponse.json({
@@ -338,8 +323,11 @@ export async function POST(req: Request) {
         label: ref.label,
         category: ref.category,
       })),
-      // Debug info
-      designPlan: { primary: fallbackPrimary, secondary: fallbackSecondary },
+      designPlan: {
+        sceneVision: aiOutput.sceneVision,
+        lightingDesc: aiOutput.lightingDesc,
+        focalDetail: aiOutput.focalDetail,
+      },
     });
   } catch (err) {
     return NextResponse.json(
