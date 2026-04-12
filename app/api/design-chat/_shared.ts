@@ -123,15 +123,12 @@ export function shouldFinalize(state: DesignChatState, totalQuestions: number): 
   done: boolean;
   reason?: 'enough_info' | 'max_rounds' | 'question_exhausted';
 } {
-  const filled = countFilledSlots(state.slots);
-  if (filled >= 4 && state.slots.dislikeReplace) {
-    return { done: true, reason: 'enough_info' };
-  }
-  if (state.rounds >= 6) {
-    return { done: true, reason: 'max_rounds' };
-  }
+  // Always ask all questions — don't skip any
   if (state.askedQuestionIds.length >= totalQuestions) {
     return { done: true, reason: 'question_exhausted' };
+  }
+  if (state.rounds >= 8) {
+    return { done: true, reason: 'max_rounds' };
   }
   return { done: false };
 }
@@ -159,14 +156,12 @@ export async function rewriteQuestionWithKimi(
     .map((item) => `${item.role === 'assistant' ? '你' : '用户'}: ${item.content}`)
     .join('\n');
 
-  const prompt = `你是 NookAI 的提问助手。请把”模板问题”改写成普通人说话的方式。
+  const prompt = `你是 NookAI 的提问助手。请把”模板问题”改写得更贴合这个房间的实际情况。
 
 要求：
-- 只问一个问题，15字以内最好
-- 像朋友随口问的，不要文艺腔、不要排比句、不要比喻
-- 错误示范：”想窝在房间里时，你是希望被暖暖地包住，还是更喜欢那种静静不说话的清爽感？”
-- 正确示范：”你想要暖一点还是清爽一点？”
+- 只问一个问题
 - 保留问题目标，不改变含义
+- 可以根据房间信息让问题更具体
 - 不要输出解释
 - 输出 JSON：{“question”:”...”}
 

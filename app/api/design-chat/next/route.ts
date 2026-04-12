@@ -5,7 +5,6 @@ import {
   mergeSlotUpdates,
   pickNextQuestion,
   progressOf,
-  rewriteQuestionWithKimi,
   shouldFinalize,
   summarizeCollectedInfo,
 } from '../_shared';
@@ -72,17 +71,7 @@ export async function POST(req: Request) {
     }
 
     const askedQuestionIds = [...updatedState.askedQuestionIds, nextTemplate.id];
-    let rewritten = nextTemplate.question;
-    try {
-      rewritten = await rewriteQuestionWithKimi(pkg, nextTemplate, updatedState.history);
-    } catch {
-      // graceful fallback to template question
-    }
-
-    const askedQuestion = {
-      ...nextTemplate,
-      question: rewritten,
-    };
+    const askedQuestion = nextTemplate;
     const nextState = {
       ...updatedState,
       askedQuestionIds,
