@@ -129,38 +129,47 @@ function assemblePrompt(
   references: StyleReference[],
 ): string {
   const scene = pkg.sceneAnalysis;
+  const furnitureList = scene.existingFurniture.slice(0, 6).join(', ');
   const anchor = references[0];
-  const compact = `You are editing a photo of a real room. Transform it into a magazine-worthy interior while keeping it recognizable as the SAME room.
+  const compact = `TASK: Edit this photo. Add styling and lighting to make it beautiful. DO NOT generate a new room.
 
-[KEEP UNCHANGED]
-${ai.keepUnchanged || `Same walls, floor, ceiling, windows, doors. ${scene.existingFurniture.slice(0, 4).join(', ')} stay in same positions.`}
+=== RULE #1 (MOST IMPORTANT — violating this makes the output WRONG) ===
+This is a PHOTO EDITING task on the input image. The output must be the SAME room:
+- SAME walls (same color, same texture, same cracks/marks)
+- SAME floor (same material, same color)
+- SAME ceiling, windows, doors (same position, same shape)
+- SAME camera angle and perspective (exact match)
+- SAME major furniture in SAME positions: ${furnitureList}
+- You may ADD small items (lamps, pillows, plants, throws) and CHANGE lighting
+- You may NOT move, remove, or replace any existing furniture
+- You may NOT change wall color, floor material, or room dimensions
+If the output looks like a different room, it is WRONG.
+===
 
-[THE TRANSFORMED SCENE]
+Now, within these constraints, make the room look stunning:
+
+[SCENE VISION]
 ${ai.sceneVision}
 
-[LIGHTING — THIS IS THE MOST IMPORTANT PART]
+[LIGHTING]
 ${ai.lightingDesc}
-Make the lighting cinematic and layered. There should be warm pools of light, soft shadows, and depth. The image should look like it was shot during golden hour or with carefully designed interior lighting.
 
 [TEXTURES & COLORS]
 ${ai.textureAndColor}
 
-[HERO AREA — ${pkg.designStrategy.focalPoint}]
+[FOCUS AREA — ${pkg.designStrategy.focalPoint}]
 ${ai.focalDetail}
 
-${anchor ? `[STYLE REFERENCE: ${anchor.label}]\nUse this as inspiration for color mood and styling taste only. Do NOT copy its layout.` : ''}
+${anchor ? `[STYLE MOOD: ${anchor.label}]\nUse for color/mood inspiration only. Do NOT copy its room layout or furniture.` : ''}
 
-[QUALITY REQUIREMENTS]
-- Final image must look like a professional interior photograph, not a 3D render.
-- Realistic materials: visible fabric weave, wood grain, soft textile draping.
-- Natural imperfections: a slightly rumpled throw, a book left open, lived-in warmth.
-- Depth of field: slight background softness to create photographic depth.
-- Color grading: cohesive warm or cool tone across the entire image.
+[PHOTO QUALITY]
+- Must look like a real photograph, not a 3D render or AI art.
+- Realistic materials with visible texture (fabric weave, wood grain).
+- Slight lived-in feel: a casually draped throw, natural light falloff.
+- Cohesive color grading across the entire image.
 
-[ABSOLUTE RULES]
-- The room structure (walls, floor, ceiling, windows, doors) must be IDENTICAL to the input photo.
-- All major furniture must remain in the same position. You may style them (add throws, cushions, etc.) but not move or replace them.
-- Camera angle must match the input photo exactly.`;
+=== FINAL CHECK ===
+Compare your output with the input photo. If walls, floor, furniture positions, or camera angle changed: REDO. The viewer must instantly say "that's the same room, but nicer."`;
   return trimToWordLimit(compact, 500);
 }
 
