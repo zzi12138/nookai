@@ -28,14 +28,15 @@ const QUALITY_BASELINE = [
   'realistic and visually striking',
 ] as const;
 
-// Fixed question type framework — AI must follow this order and these types
+// Fixed question type framework — logical progression from understanding to action
+// Flow: 了解用途 → 找到痛点 → 确定方向 → 聚焦重点 → 明确边界 → 最后定调
 const QUESTION_FRAMEWORK = [
-  { id: 'q1', type: 'usage', label: '使用目的', prompt: 'What will this room mainly be used for? Adapt options to roomType.' },
-  { id: 'q2', type: 'emotion', label: '情绪感受', prompt: 'What feeling should the room evoke? Adapt to room size and current state.' },
-  { id: 'q3', type: 'lighting', label: '光线偏好', prompt: 'What lighting feel do they want? Adapt to current lightCondition.' },
-  { id: 'q4', type: 'color', label: '色调倾向', prompt: 'Color palette preference? Adapt to existing furniture colors and wall color.' },
-  { id: 'q5', type: 'boundary', label: '改造边界', prompt: 'What can/cannot be changed? Adapt to existing furniture situation.' },
-  { id: 'q6', type: 'detail', label: '房间细节偏好', prompt: 'Specific detail preference for THIS room. Must be unique to what is visible.' },
+  { id: 'q1', type: 'usage', label: '日常用途', prompt: '这个房间平时主要用来做什么？选项必须贴合房间类型和图中可见的功能区。' },
+  { id: 'q2', type: 'painpoint', label: '最大痛点', prompt: '你觉得这个房间目前最大的问题是什么？选项必须是图中可见的具体问题（如灯光太平、桌面太乱、配色不搭、空间显小等）。' },
+  { id: 'q3', type: 'focus', label: '重点区域', prompt: '你最想先改哪个区域？选项必须是图中实际可见的具体区域或家具（如床区、书桌周围、窗边、墙面等）。' },
+  { id: 'q4', type: 'mood', label: '想要的感觉', prompt: '改完之后你希望房间给你什么感觉？选项要具体，不要泛泛的形容词。' },
+  { id: 'q5', type: 'intensity', label: '改动程度', prompt: '你想大改还是小改？选项从保守到大胆，并说明每个程度大概意味着什么变化。' },
+  { id: 'q6', type: 'dislike', label: '不想要的', prompt: '有什么是你明确不想要或想去掉的？选项必须引用图中可见的具体东西（如某个颜色、某个物件、某种感觉）。' },
 ] as const;
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -149,27 +150,28 @@ function buildPlanPrompt() {
 重要：以上括号内的内容是填写说明，不是答案！你必须根据图片内容自己生成，不要复制括号里的文字。
 
 dynamicQuestions 要求（最重要！！！）：
-- 生成 4-6 题，id 依次为 q1, q2, q3, q4, q5, q6
-- 每题 options 数组 3-5 个选项，最后一个固定为 {“value”:”ai_decide”,”label”:”你来决定”,”desc”:”交给 AI 自动判断”}
+
+必须生成恰好 6 题，按以下顺序：
+q1 日常用途 → q2 最大痛点 → q3 重点区域 → q4 想要的感觉 → q5 改动程度 → q6 不想要的
+
+这个顺序是刻意设计的：先了解怎么用、哪里不好 → 再决定改哪里、改成什么样 → 最后确认改多少、不要什么。
+
+每题格式：
+- options 数组 3-5 个选项，最后一个固定为 {“value”:”ai_decide”,”label”:”你来决定”,”desc”:”交给 AI 自动判断”}
 - 每个 option 必须有 value, label, desc 三个字段
 - label 用直白的词，2-6个中文字
 - desc 用简单说明，4-10个中文字
 
-核心原则——每个选项都必须跟图中看到的东西有关：
-- 如果图中有书桌，选项里就该出现”书桌”
-- 如果图中光线很暗，选项里就该出现”补光”或”加灯”
-- 如果图中有绿色沙发，颜色选项里就该提到”配合绿色”或”换掉绿色”
-- 如果图中床品是白色的，就该问”要不要换个颜色”
-- 禁止出现图中根本看不到的东西！
+各题具体要求：
+q1（用途）：选项要贴合房间类型。卧室就问睡觉/工作/追剧，不要问”会客”。
+q2（痛点）：选项必须是图中能看到的具体问题！比如”灯光只有一盏顶灯”、”桌面东西太多”、”颜色不搭”、”空间显得挤”。不要写”缺少美感”这种空话。
+q3（重点区域）：选项必须是图中可见的具体位置！比如”床头那面墙”、”书桌周围”、”窗帘和窗边”。
+q4（感觉）：要具体。不要”温馨”，要”下班回来想直接瘫在床上的放松感”。不要”简约”，要”东西少、看着清爽”。
+q5（改动程度）：从小到大，每个选项说明具体意味着什么。比如”只加灯和抱枕”、”换床品加地毯加灯”、”软装全换风格统一”。
+q6（不想要的）：选项必须是图中实际存在的东西！比如”那个XX颜色太突兀”、”桌上的杂物”、”现在的窗帘”。
 
-检验标准：如果把选项给10个不同的房间用，应该只适合这一个房间。如果选项放到任何房间都说得通（比如”温馨””简约””明亮”），就是失败的。
-
-具体要求：
-- 必须覆盖：使用目的、想要感觉、颜色/深浅、改动强度、不喜欢什么
-- 至少1题直接问”图中的XX你觉得怎么样”（XX必须是图中可见的具体物件）
-- 至少1题问”不喜欢什么/想弱化或替换什么”，选项必须是图中实际存在的东西
-- 禁止文艺比喻！不要”云朵””微风””森林”这类词
-- 每题选项必须不同，不同题之间不能出现重复的 label
+检验标准：如果把这些选项给10个不同的房间用，应该只适合这一个房间。通用选项 = 失败。
+禁止文艺比喻！不要”云朵””微风””森林”这类词。
 
 styleMapping 的值只能是：${STYLE_TAGS.join(', ')}
 
@@ -302,52 +304,52 @@ function buildFallbackQuestionnaire(): DynamicQuestion[] {
     allowMultiple?: boolean;
   }> = [
     {
-      question: '这个房间你最常用来做什么？',
+      question: '这个房间你平时主要拿来干嘛？',
       options: [
-        { value: 'sleep', label: '休息睡眠', desc: '更放松更助眠' },
-        { value: 'work', label: '工作学习', desc: '更专注更高效' },
-        { value: 'mixed', label: '两者都要', desc: '兼顾休息与办公' },
+        { value: 'sleep', label: '睡觉休息', desc: '回来就想躺平' },
+        { value: 'work', label: '工作学习', desc: '需要安静专注' },
+        { value: 'mixed', label: '都有', desc: '睡觉工作都在这' },
       ],
       allowMultiple: true,
     },
     {
-      question: '你更想要哪种整体感觉？',
+      question: '你觉得这个房间目前最大的问题是？',
       options: [
-        { value: 'warm', label: '温暖治愈', desc: '放松、柔和、有安全感' },
-        { value: 'calm', label: '安静克制', desc: '干净、沉稳、不吵闹' },
-        { value: 'vivid', label: '有氛围感', desc: '更有层次、更出片' },
+        { value: 'flat_light', label: '灯光太平', desc: '就一盏大灯，没层次' },
+        { value: 'messy', label: '看着比较乱', desc: '东西多，不够整洁' },
+        { value: 'no_vibe', label: '没什么氛围', desc: '像毛坯房，冷冰冰' },
       ],
     },
     {
-      question: '你更喜欢什么色彩方向？',
+      question: '你最想先改哪个区域？',
       options: [
-        { value: 'light_wood', label: '浅木米白', desc: '明亮自然，耐看' },
-        { value: 'warm_earth', label: '大地暖色', desc: '焦糖、棕调、柔和' },
-        { value: 'contrast', label: '黑白灰点缀', desc: '更现代有对比' },
+        { value: 'bed_zone', label: '床周围', desc: '床品、床头、床边' },
+        { value: 'desk_zone', label: '桌面区域', desc: '更整洁更好用' },
+        { value: 'overall', label: '整体氛围', desc: '灯光和软装一起改' },
       ],
     },
     {
-      question: '这次你想小改，还是希望变化明显？',
+      question: '改完之后你希望是什么感觉？',
       options: [
-        { value: 'light_touch', label: '小改就好', desc: '保守升级，风险低' },
-        { value: 'medium_change', label: '中等改动', desc: '看得出变化' },
-        { value: 'bold_change', label: '明显改造', desc: '希望焕然一新' },
+        { value: 'cozy', label: '回家就放松', desc: '暖暖的窝在里面' },
+        { value: 'clean', label: '清爽干净', desc: '东西少看着舒服' },
+        { value: 'aesthetic', label: '好看能出片', desc: '朋友来了会夸' },
       ],
     },
     {
-      question: '看这张图，你最想先处理哪一块？',
+      question: '你想改多少？',
       options: [
-        { value: 'bed_zone', label: '床区', desc: '床品和床边氛围' },
-        { value: 'desk_zone', label: '桌面/工作区', desc: '更整洁更有质感' },
-        { value: 'window_zone', label: '窗边与灯光', desc: '提高层次和氛围' },
+        { value: 'light', label: '小改就好', desc: '加点灯和抱枕' },
+        { value: 'medium', label: '中等改动', desc: '换床品加地毯加灯' },
+        { value: 'bold', label: '大变样', desc: '软装全换风格统一' },
       ],
     },
     {
-      question: '有你不喜欢、想弱化或替换的东西吗？',
+      question: '有什么是你明确不想要的？',
       options: [
-        { value: 'dislike_desk', label: '桌子存在感太强', desc: '想弱化或重新协调' },
-        { value: 'dislike_clutter', label: '杂乱感明显', desc: '想更干净有秩序' },
-        { value: 'dislike_light', label: '光线单一', desc: '想要更有层次' },
+        { value: 'no_clutter', label: '杂物太多', desc: '想要更干净的桌面' },
+        { value: 'no_cold', label: '冷白光', desc: '不想要办公室的感觉' },
+        { value: 'no_boring', label: '太单调', desc: '墙面空空的没生气' },
       ],
     },
   ];

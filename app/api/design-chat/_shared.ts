@@ -109,12 +109,13 @@ export function mergeSlotUpdates(
 
   const next: ChatSlots = { ...prevSlots };
 
+  // New framework: q1=usage, q2=painpoint, q3=focus, q4=mood, q5=intensity, q6=dislike
   if (question.id === 'q1') next.usage = true;
-  if (question.id === 'q2') next.emotion = true;
-  if (question.id === 'q3' || question.id === 'q4') next.colorDepth = true;
+  if (question.id === 'q2' || hitAny(mergedText, DISLIKE_KEYWORDS)) next.dislikeReplace = true;
+  if (question.id === 'q3' || hitAny(mergedText, FOCUS_KEYWORDS)) next.focusArea = true;
+  if (question.id === 'q4') next.emotion = true;
   if (question.id === 'q5' || hitAny(mergedText, CHANGE_KEYWORDS)) next.changeIntensity = true;
-  if (question.id === 'q6' || hitAny(mergedText, FOCUS_KEYWORDS)) next.focusArea = true;
-  if (hitAny(mergedText, DISLIKE_KEYWORDS) || question.id === 'q5') next.dislikeReplace = true;
+  if (question.id === 'q6') { next.dislikeReplace = true; next.colorDepth = true; }
 
   return next;
 }
