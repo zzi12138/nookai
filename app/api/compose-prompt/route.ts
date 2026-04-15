@@ -45,14 +45,22 @@ function resolveAnswers(
   return pkg.dynamicQuestionnaire
     .map((q) => {
       const raw = answers[q.id];
-      if (!raw) return null;
-      const values = Array.isArray(raw) ? raw : [raw];
-      const labels = values.map((v) => {
-        if (v === 'ai_decide') return 'AI decides';
-        const opt = q.options.find((o) => o.value === v);
-        return opt ? opt.label : v;
-      });
-      return `${q.id}(${q.purpose.split('.')[0]}): ${labels.join(', ')}`;
+      const customText = (answers[`${q.id}_custom`] as string)?.trim();
+      if (!raw && !customText) return null;
+      const parts: string[] = [];
+      if (raw) {
+        const values = Array.isArray(raw) ? raw : [raw];
+        const labels = values.map((v) => {
+          if (v === 'ai_decide') return 'AI decides';
+          const opt = q.options.find((o) => o.value === v);
+          return opt ? opt.label : v;
+        });
+        parts.push(labels.join(', '));
+      }
+      if (customText) {
+        parts.push(`user wrote: "${customText}"`);
+      }
+      return `${q.id}(${q.purpose.split('.')[0]}): ${parts.join(' + ')}`;
     })
     .filter(Boolean)
     .join('\n');

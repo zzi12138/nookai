@@ -199,6 +199,10 @@ export default function Page() {
     setStep((prev) => Math.max(1, prev - 1));
   };
 
+  const setCustomAnswer = (qId: string, text: string) => {
+    setDynamicAnswers((prev) => ({ ...prev, [`${qId}_custom`]: text }));
+  };
+
   const setDynamicAnswer = (qId: string, value: string, allowMultiple: boolean) => {
     setDynamicAnswers((prev) => {
       if (!allowMultiple) return { ...prev, [qId]: value };
@@ -580,6 +584,13 @@ export default function Page() {
                 <p className="mt-2 text-base text-[#504440]">我们一次只问一个问题，快速抓住你最关键的偏好</p>
               </div>
 
+              {/* Original photo reference */}
+              {previewUrl && (
+                <div className="mb-5 overflow-hidden rounded-2xl border border-[#ebe1d3]">
+                  <img src={previewUrl} alt="你的房间" className="w-full object-cover" style={{ maxHeight: '220px' }} />
+                </div>
+              )}
+
               {/* Design strategy summary card */}
               {planDebug && (
                 <div className="mb-3 rounded-lg bg-red-50 border border-red-200 p-3 text-xs text-red-700 break-all">
@@ -620,7 +631,7 @@ export default function Page() {
                     {activeQuestion.allowMultiple && (
                       <p className="mb-3 text-xs text-[#827470]">可多选</p>
                     )}
-                    <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
+                    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                       {activeQuestion.options.map((opt) => {
                         const currentAnswer = dynamicAnswers[activeQuestion.id];
                         const isSelected = activeQuestion.allowMultiple
@@ -642,6 +653,16 @@ export default function Page() {
                           </button>
                         );
                       })}
+                    </div>
+                    {/* Custom free-text input */}
+                    <div className="mt-3">
+                      <input
+                        type="text"
+                        placeholder="或者，用自己的话说..."
+                        value={(dynamicAnswers[`${activeQuestion.id}_custom`] as string) || ''}
+                        onChange={(e) => setCustomAnswer(activeQuestion.id, e.target.value)}
+                        className="w-full rounded-2xl border border-[#d4c3be] bg-[#fff8f2] px-4 py-3 text-sm text-[#504440] placeholder-[#b8a89e] outline-none transition focus:border-[#52372d] focus:bg-[#f7edde]"
+                      />
                     </div>
                   </>
                 ) : (
