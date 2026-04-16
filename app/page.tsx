@@ -241,9 +241,15 @@ export default function Page() {
 
   const continueDesignChat = async () => {
     if (!planningPackage || !chatState || !activeQuestion) return;
-    const answer = dynamicAnswers[activeQuestion.id];
+    let answer = dynamicAnswers[activeQuestion.id];
+    const customText = (dynamicAnswers[`${activeQuestion.id}_custom`] as string)?.trim();
+    // For open questions (no options), use custom text as the answer
+    if ((!answer || (Array.isArray(answer) && answer.length === 0)) && customText) {
+      answer = customText;
+      setDynamicAnswers((prev) => ({ ...prev, [activeQuestion.id]: customText }));
+    }
     if (!answer || (Array.isArray(answer) && answer.length === 0)) {
-      setChatError('请先选择一个答案再继续');
+      setChatError(activeQuestion.options.length === 0 ? '请输入你的想法再继续' : '请先选择一个答案再继续');
       return;
     }
 
@@ -369,6 +375,7 @@ export default function Page() {
         if (planningPackage) sessionStorage.setItem('nookai_planning_package', JSON.stringify(planningPackage));
         if (dynamicAnswers) sessionStorage.setItem('nookai_dynamic_answers', JSON.stringify(dynamicAnswers));
         if (composeData?.designPlan) sessionStorage.setItem('nookai_design_plan', JSON.stringify(composeData.designPlan));
+        if (composeData?.prompt) sessionStorage.setItem('nookai_final_prompt', composeData.prompt);
         if (composeData?.referenceImageMeta) {
           sessionStorage.setItem('nookai_reference_meta', JSON.stringify(composeData.referenceImageMeta));
         }
@@ -628,37 +635,42 @@ export default function Page() {
                 ) : activeQuestion ? (
                   <>
                     <h3 className="mb-1 text-base font-bold text-[#52372d]">{activeQuestion.question}</h3>
-                    {activeQuestion.allowMultiple && (
+                    {activeQuestion.allowMultiple && activeQuestion.options.length > 0 && (
                       <p className="mb-3 text-xs text-[#827470]">可多选</p>
                     )}
-                    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                      {activeQuestion.options.map((opt) => {
-                        const currentAnswer = dynamicAnswers[activeQuestion.id];
-                        const isSelected = activeQuestion.allowMultiple
-                          ? Array.isArray(currentAnswer) && currentAnswer.includes(opt.value)
-                          : currentAnswer === opt.value;
-                        return (
-                          <button
-                            key={opt.value}
-                            type="button"
-                            onClick={() => setDynamicAnswer(activeQuestion.id, opt.value, activeQuestion.allowMultiple)}
-                            className={`flex flex-col items-start rounded-2xl border px-4 py-3 text-left text-sm transition ${
-                              isSelected
-                                ? 'border-[#52372d] bg-[#f7edde] font-semibold text-[#52372d]'
-                                : 'border-[#d4c3be] bg-[#fff8f2] text-[#504440] hover:border-[#b8a89e]'
-                            }`}
-                          >
-                            <span className={isSelected ? 'font-semibold' : 'font-medium'}>{opt.label}</span>
-                            <span className="mt-0.5 text-xs font-normal text-[#827470]">{opt.desc}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                    {/* Custom free-text input */}
+
+                    {/* Options grid (for closed questions) */}
+                    {activeQuestion.options.length > 0 && (
+                      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                        {activeQuestion.options.map((opt) => {
+                          const currentAnswer = dynamicAnswers[activeQuestion.id];
+                          const isSelected = activeQuestion.allowMultiple
+                            ? Array.isArray(currentAnswer) && currentAnswer.includes(opt.value)
+                            : currentAnswer === opt.value;
+                          return (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => setDynamicAnswer(activeQuestion.id, opt.value, activeQuestion.allowMultiple)}
+                              className={`flex flex-col items-start rounded-2xl border px-4 py-3 text-left text-sm transition ${
+                                isSelected
+                                  ? 'border-[#52372d] bg-[#f7edde] font-semibold text-[#52372d]'
+                                  : 'border-[#d4c3be] bg-[#fff8f2] text-[#504440] hover:border-[#b8a89e]'
+                              }`}
+                            >
+                              <span className={isSelected ? 'font-semibold' : 'font-medium'}>{opt.label}</span>
+                              <span className="mt-0.5 text-xs font-normal text-[#827470]">{opt.desc}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Text input — primary for open questions, supplementary for closed */}
                     <div className="mt-3">
                       <input
                         type="text"
-                        placeholder="或者，用自己的话说..."
+                        placeholder={activeQuestion.options.length === 0 ? "写下你的想法..." : "或者，用自己的话补充..."}
                         value={(dynamicAnswers[`${activeQuestion.id}_custom`] as string) || ''}
                         onChange={(e) => setCustomAnswer(activeQuestion.id, e.target.value)}
                         className="w-full rounded-2xl border border-[#d4c3be] bg-[#fff8f2] px-4 py-3 text-sm text-[#504440] placeholder-[#b8a89e] outline-none transition focus:border-[#52372d] focus:bg-[#f7edde]"

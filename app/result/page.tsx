@@ -450,6 +450,7 @@ function ResultPageContent() {
   const [previewItemId, setPreviewItemId] = useState<number | null>(null);
   const [showDebug, setShowDebug] = useState(debugParamEnabled || process.env.NODE_ENV !== 'production');
   const [costLedger, setCostLedger] = useState<Array<{ api: string; model: string; estimatedCost: number }>>([]);
+  const [finalPrompt, setFinalPrompt] = useState('');
 
   // Item preview hook — AI-only, quality-first, auto-retry
   const { previews, trace: previewTrace } = useItemPreviews(
@@ -457,7 +458,7 @@ function ResultPageContent() {
     stored?.generated || '',
   );
 
-  // Collect generate cost from sessionStorage
+  // Collect generate cost and final prompt from sessionStorage
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem('nookai_generate_cost');
@@ -466,6 +467,10 @@ function ResultPageContent() {
         setCostLedger((prev) => [...prev, { api: c.api, model: c.model, estimatedCost: c.estimatedCost }]);
         sessionStorage.removeItem('nookai_generate_cost');
       }
+    } catch { /* ignore */ }
+    try {
+      const prompt = sessionStorage.getItem('nookai_final_prompt');
+      if (prompt) setFinalPrompt(prompt);
     } catch { /* ignore */ }
   }, []);
 
@@ -904,6 +909,18 @@ function ResultPageContent() {
                 </p>
               </div>
             </div>
+
+            {/* Final generation prompt */}
+            {finalPrompt && (
+              <details className="rounded-2xl border border-[#ebe1d3]/50 bg-white p-5">
+                <summary className="cursor-pointer text-sm font-bold text-[#8f4d2c]">
+                  生图提示词 / Generation Prompt
+                </summary>
+                <pre className="mt-3 max-h-[400px] overflow-auto whitespace-pre-wrap break-words rounded-xl bg-[#faf5ef] p-4 text-xs leading-relaxed text-[#504440]">
+                  {finalPrompt}
+                </pre>
+              </details>
+            )}
           </section>
 
           <aside className="lg:col-span-5 lg:sticky lg:top-24">
